@@ -1,20 +1,21 @@
-import { Camera, Map, List, User } from 'lucide-react';
+import { Camera, Map, List, User, Route } from 'lucide-react';
 
 interface BottomNavProps {
-    currentTab: 'scanner' | 'map' | 'records' | 'profile';
-    setTab: (tab: 'scanner' | 'map' | 'records' | 'profile') => void;
+    currentTab: 'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute';
+    setTab: (tab: 'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute') => void;
 }
 
 export const BottomNav = ({ currentTab, setTab }: BottomNavProps) => {
     const tabs = [
         { id: 'scanner', icon: Camera, label: 'SCAN' },
+        { id: 'dailyRoute', icon: Route, label: 'ROTA' },
         { id: 'map', icon: Map, label: 'MAPA' },
-        { id: 'records', icon: List, label: 'MEUS ENDEREÇOS' },
+        { id: 'records', icon: List, label: 'ENDEREÇOS' },
         { id: 'profile', icon: User, label: 'CONTA' },
     ] as const;
 
     return (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm h-16 bg-zinc-950/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] flex justify-around items-center z-[9999] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-md h-16 bg-zinc-950/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] flex justify-around items-center z-[9999] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden">
             {/* High-tech accent line */}
             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
 

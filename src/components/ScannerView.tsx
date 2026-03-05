@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { Camera, MapPin, ScanLine, X, Loader2, SwitchCamera, LocateFixed, Database, Sparkles, ChevronUp } from 'lucide-react';
-import { getRecords, saveRecord, addPointToActiveRoute } from '../services/db';
+import { getRecords, saveRecord, addPointToActiveRoute, addToDailyRoute } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
@@ -10,9 +10,10 @@ import { LoadingOverlay } from './LoadingOverlay';
 interface ScannerProps {
     onNavigateToMap: () => void;
     onNavigateToRecords: () => void;
+    onNavigateToDailyRoute: () => void;
 }
 
-export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerProps) => {
+export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateToDailyRoute }: ScannerProps) => {
     const webcamRef = useRef<Webcam>(null);
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
@@ -279,6 +280,18 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                 }
             );
 
+            // Also add to daily route
+            await addToDailyRoute({
+                id: Date.now().toString(),
+                name: addressInput.trim(),
+                lat: isNaN(lat) ? null : lat,
+                lng: isNaN(lng) ? null : lng,
+                scannedAt: Date.now(),
+                notes: notesInput.trim(),
+                neighborhood: neighborhoodInput.trim(),
+                city: cityInput.trim(),
+            });
+
             // Animate and switch
             setIsSendingToRoute(true);
             setTimeout(() => {
@@ -287,7 +300,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                 setRegisterImage(null);
                 setRegisterFeatures(null);
                 setAddressInput('');
-                onNavigateToRecords();
+                onNavigateToDailyRoute();
             }, 2000);
         } catch (err) {
             console.error(err);

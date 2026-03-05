@@ -247,6 +247,38 @@ export const clearActiveRoute = async (): Promise<void> => {
     await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).removeItem('route');
 };
 
+// --- DAILY ROUTE (Rota do Dia) ---
+
+const dailyRouteStore = localforage.createInstance({ name: 'RouteImageApp', storeName: 'dailyRoute' });
+
+export const getDailyRoute = async (): Promise<RoutePoint[]> => {
+    return await dailyRouteStore.getItem<RoutePoint[]>('points') || [];
+};
+
+export const addToDailyRoute = async (point: RoutePoint): Promise<RoutePoint[]> => {
+    const current = await getDailyRoute();
+    // Avoid duplicates
+    if (current.some(p => p.id === point.id)) return current;
+    const updated = [...current, point];
+    await dailyRouteStore.setItem('points', updated);
+    return updated;
+};
+
+export const updateDailyRoute = async (points: RoutePoint[]): Promise<void> => {
+    await dailyRouteStore.setItem('points', points);
+};
+
+export const removeFromDailyRoute = async (id: string): Promise<RoutePoint[]> => {
+    const current = await getDailyRoute();
+    const updated = current.filter(p => p.id !== id);
+    await dailyRouteStore.setItem('points', updated);
+    return updated;
+};
+
+export const clearDailyRoute = async (): Promise<void> => {
+    await dailyRouteStore.removeItem('points');
+};
+
 // --- SETTINGS ---
 
 export const getSettings = async (): Promise<AppSettings> => {

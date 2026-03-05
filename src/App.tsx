@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ScannerView } from './components/ScannerView';
 import { MapView } from './components/MapView';
 import { RecordsView } from './components/RecordsView';
+import { DailyRouteView } from './components/DailyRouteView';
 import { BottomNav } from './components/BottomNav';
 import { AuthView } from './components/AuthView';
 import { ProfileView } from './components/ProfileView';
@@ -10,7 +11,7 @@ import { ScanEye } from 'lucide-react';
 import { LoadingOverlay } from './components/LoadingOverlay';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile'>('map');
+  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute'>('map');
   const [modelLoading, setModelLoading] = useState(true);
   const [mapVersion, setMapVersion] = useState(0);
 
@@ -43,7 +44,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []); // Intentionally leaving currentTab out of deps so it registers the initial handler
 
-  const changeTab = (tab: 'scanner' | 'map' | 'records' | 'profile') => {
+  const changeTab = (tab: 'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute') => {
     if (tab === currentTab) return;
     window.history.pushState({ tab }, '');
     if (tab === 'map') setMapVersion(v => v + 1);
@@ -73,11 +74,17 @@ export default function App() {
           <ScannerView
             onNavigateToMap={() => changeTab('map')}
             onNavigateToRecords={() => changeTab('records')}
+            onNavigateToDailyRoute={() => changeTab('dailyRoute')}
           />
         )}
         {currentTab === 'map' && <MapView key={mapVersion} />}
         {currentTab === 'records' && (
           <RecordsView
+            onNavigateToMap={() => changeTab('map')}
+          />
+        )}
+        {currentTab === 'dailyRoute' && (
+          <DailyRouteView
             onNavigateToMap={() => changeTab('map')}
           />
         )}
