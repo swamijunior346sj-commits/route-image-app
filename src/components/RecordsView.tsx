@@ -24,7 +24,7 @@ export const RecordsView = () => {
     const [photoActionTarget, setPhotoActionTarget] = useState<'main' | 'extra' | null>(null);
 
     // Multi-selection and Search
-    const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
     const [isSendingRoute, setIsSendingRoute] = useState(false);

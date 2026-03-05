@@ -1,7 +1,7 @@
 import { getRecords, importRecords as processImportDB } from './db';
 import type { LocationRecord } from './db';
 import { saveAs } from 'file-saver';
-import Papa from 'papaparse';
+
 
 export const exportRecords = async () => {
     const records = await getRecords();

@@ -44,8 +44,9 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
 
     const toggleSetting = async (category: 'notifications' | 'mapPreferences', field: string) => {
         if (!settings) return;
-        const newCat = { ...settings[category], [field]: !(settings[category] as any)[field] };
-        const updated = await updateSettings({ ...settings, [category]: newCat });
+        const categoryData = settings[category] as any;
+        const newCat = { ...categoryData, [field]: !categoryData[field] };
+        const updated = await updateSettings({ ...settings, [category]: newCat } as AppSettings);
         setSettings(updated);
         if (navigator.vibrate) navigator.vibrate(10);
     };

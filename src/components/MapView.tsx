@@ -69,9 +69,9 @@ export const MapView = () => {
     const [undoVisible, setUndoVisible] = useState(false);
     const [lastCompletedPoint, setLastCompletedPoint] = useState<RoutePoint | null>(null);
     const [undoCountdown, setUndoCountdown] = useState(2);
-    const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const autocompleteTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const autocompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Silently try to get location on mount for better search suggestions
     useEffect(() => {
