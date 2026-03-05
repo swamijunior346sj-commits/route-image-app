@@ -1,19 +1,27 @@
 import { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getActiveRoute, updateActiveRoute, updateRecord, saveRecord, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
 import L from 'leaflet';
-import { MapPin, Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, Plus, Save } from 'lucide-react';
+import { MapPin, Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, Plus, Save, Rocket, CheckCircle2 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
-// Fix leaflet icon
 // Fix leaflet icon
 const customIcon = new L.Icon({
     iconUrl: 'https://cdn-icons-png.flaticon.com/512/679/679821.png', // Vibrant Box/Package icon
     iconSize: [40, 40],
     iconAnchor: [20, 40],
     popupAnchor: [0, -40],
-    className: 'drop-shadow-glow-blue' // Adding a subtle glow via CSS
+    className: 'drop-shadow-glow-blue animate-levitate'
+});
+
+const grayIcon = new L.Icon({
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/679/679821.png',
+    iconSize: [35, 35],
+    iconAnchor: [17, 35],
+    popupAnchor: [0, -35],
+    className: 'grayscale opacity-60'
 });
 
 const userIcon = L.divIcon({
@@ -23,15 +31,18 @@ const userIcon = L.divIcon({
     iconAnchor: [12, 12]
 });
 
+const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
+    const map = useMap();
+    useEffect(() => {
+        map.setView(center, zoom);
+    }, [center, zoom, map]);
+    return null;
+};
+
 export const MapView = () => {
     const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
     const [osrmPath, setOsrmPath] = useState<[number, number][]>([]);
     const [isRouting, setIsRouting] = useState(false);
-
-    // Marker Editing
-    const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
-    const [editingMarkerName, setEditingMarkerName] = useState('');
-
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -41,7 +52,18 @@ export const MapView = () => {
 
     // Stop Editing from Navigation Panel
     const [isEditingCurrentStop, setIsEditingCurrentStop] = useState(false);
-    const [editingPointData, setEditingPointData] = useState<{ name: string, notes: string } | null>(null);
+    const [editingPointData, setEditingPointData] = useState<{
+        id: string,
+        name: string,
+        notes: string,
+        neighborhood: string,
+        city: string,
+        lat: string,
+        lng: string
+    } | null>(null);
+
+    // Celebration
+    const [showCelebration, setShowCelebration] = useState(false);
 
     // Undo System
     const [undoVisible, setUndoVisible] = useState(false);
@@ -162,23 +184,7 @@ export const MapView = () => {
         setOsrmPath([]); // invalidate the osrm drawn line if you drag!
     };
 
-    const handleSaveMarkerEdit = async (id: string) => {
-        if (!editingMarkerName.trim()) return;
 
-        // Update local list
-        const updatedPoints = routePoints.map(p =>
-            p.id === id ? { ...p, name: editingMarkerName.trim() } : p
-        );
-        setRoutePoints(updatedPoints);
-
-        // Update active route session
-        await updateActiveRoute(updatedPoints.filter(p => p.id !== 'current'));
-
-        // Permanently update location DB
-        await updateRecord(id, { name: editingMarkerName.trim() });
-
-        setEditingMarkerId(null);
-    };
 
     const handleRoteirizar = async () => {
         const validPoints = routePoints.filter(p => p.lat !== null && p.lng !== null);
@@ -188,46 +194,48 @@ export const MapView = () => {
         }
 
         setIsRouting(true);
-        try {
-            // Nearest Neighbor TSP Simple Sort
-            const unvisited = [...validPoints];
-            const sorted = [];
-            let current = unvisited.shift()!;
-            sorted.push(current);
+        // Force minimum 3s for cinematic feel
+        const minDuration = new Promise(resolve => setTimeout(resolve, 3000));
 
-            while (unvisited.length > 0) {
-                let nearestIdx = 0;
-                let minDist = Infinity;
-                for (let i = 0; i < unvisited.length; i++) {
-                    const el = unvisited[i];
-                    // Euclidean dist is sufficient for localized points
-                    const dist = Math.pow(el.lat! - current.lat!, 2) + Math.pow(el.lng! - current.lng!, 2);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        nearestIdx = i;
+        try {
+            // ... algorithm ...
+            const fetchRoute = (async () => {
+                const unvisited = [...validPoints.filter(p => !p.isDelivered)];
+                const delivered = validPoints.filter(p => p.isDelivered);
+
+                // TSP only on unvisited
+                const sorted = [];
+                if (unvisited.length > 0) {
+                    let current = unvisited.shift()!;
+                    sorted.push(current);
+                    while (unvisited.length > 0) {
+                        let nearestIdx = 0;
+                        let minDist = Infinity;
+                        for (let i = 0; i < unvisited.length; i++) {
+                            const el = unvisited[i];
+                            const dist = Math.pow(el.lat! - current.lat!, 2) + Math.pow(el.lng! - current.lng!, 2);
+                            if (dist < minDist) { minDist = dist; nearestIdx = i; }
+                        }
+                        current = unvisited.splice(nearestIdx, 1)[0];
+                        sorted.push(current);
                     }
                 }
-                current = unvisited.splice(nearestIdx, 1)[0];
-                sorted.push(current);
-            }
 
-            setRoutePoints(sorted); // Updates the pins instantly
-            await updateActiveRoute(sorted.filter(p => p.id !== 'current'));
+                const finalOrder = [...delivered, ...sorted];
+                setRoutePoints(finalOrder);
+                await updateActiveRoute(finalOrder.filter(p => p.id !== 'current'));
 
-            // Fetch real road geometries from OSRM
-            const coordsString = sorted.map(p => `${p.lng},${p.lat}`).join(';');
-            const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`;
+                const coordsString = finalOrder.map(p => `${p.lng},${p.lat}`).join(';');
+                const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.code === 'Ok' && data.routes[0]) {
+                    const leafletCoords: [number, number][] = data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
+                    setOsrmPath(leafletCoords);
+                }
+            })();
 
-            const res = await fetch(url);
-            const data = await res.json();
-
-            if (data.code === 'Ok' && data.routes && data.routes[0]) {
-                const geojsonCoords = data.routes[0].geometry.coordinates;
-                const leafletCoords: [number, number][] = geojsonCoords.map((c: number[]) => [c[1], c[0]]);
-                setOsrmPath(leafletCoords);
-            } else {
-                alert("Não foi possível traçar ruas entre estes pontos. Talvez estejam muito distantes ou no oceano.");
-            }
+            await Promise.all([fetchRoute, minDuration]);
         } catch (err) {
             console.error(err);
             alert("Erro ao buscar o trajeto de ruas. Verifique a internet e tente novamente.");
@@ -250,22 +258,29 @@ export const MapView = () => {
     };
 
     const handleSaveStopEdit = async () => {
-        if (!editingPointData || !lastCompletedPoint && !isNavigating) return;
-
-        const dests = routePoints.filter(p => p.id !== 'current');
-        const pointToEdit = dests[navigationIndex];
-        if (!pointToEdit) return;
+        if (!editingPointData) return;
 
         const updatedPoint = {
-            ...pointToEdit,
+            ...routePoints.find(p => p.id === editingPointData.id)!,
             name: editingPointData.name,
-            notes: editingPointData.notes
+            notes: editingPointData.notes,
+            neighborhood: editingPointData.neighborhood,
+            city: editingPointData.city,
+            lat: parseFloat(editingPointData.lat) || 0,
+            lng: parseFloat(editingPointData.lng) || 0
         };
 
-        const updatedRoute = routePoints.map(p => p.id === pointToEdit.id ? updatedPoint : p);
+        const updatedRoute = routePoints.map(p => p.id === editingPointData.id ? updatedPoint : p);
         setRoutePoints(updatedRoute);
         await updateActiveRoute(updatedRoute.filter(p => p.id !== 'current'));
-        await updateRecord(pointToEdit.id, { name: editingPointData.name, notes: editingPointData.notes });
+        await updateRecord(editingPointData.id, {
+            name: editingPointData.name,
+            notes: editingPointData.notes,
+            neighborhood: editingPointData.neighborhood,
+            city: editingPointData.city,
+            lat: updatedPoint.lat,
+            lng: updatedPoint.lng
+        });
 
         setIsEditingCurrentStop(false);
         if (navigator.vibrate) navigator.vibrate(20);
@@ -307,18 +322,27 @@ export const MapView = () => {
     };
 
     const finalizeCompletion = async (pointId: string) => {
-        const updatedPoints = routePoints.filter(p => p.id !== pointId);
+        const updatedPoints = routePoints.map(p => p.id === pointId ? { ...p, isDelivered: true } : p);
         setRoutePoints(updatedPoints);
         await updateActiveRoute(updatedPoints.filter(p => p.id !== 'current'));
 
-        const remainingDests = updatedPoints.filter(p => p.id !== 'current');
+        const remainingDests = updatedPoints.filter(p => p.id !== 'current' && !p.isDelivered);
         if (remainingDests.length === 0) {
-            alert("Roteiro Finalizado! Parabéns pelas entregas.");
+            // FIREWORKS!
+            setShowCelebration(true);
+            triggerConfetti();
+
             setIsNavigating(false);
             setNavigationIndex(0);
-            setOsrmPath([]);
         } else {
-            // Recalculate OSRM path with remaining points for precision
+            // Find next undelivered stop
+            const destsOnly = updatedPoints.filter(p => p.id !== 'current');
+            const nextUndeliveredIdx = destsOnly.findIndex(p => !p.isDelivered);
+            if (nextUndeliveredIdx !== -1) {
+                setNavigationIndex(nextUndeliveredIdx);
+            }
+
+            // Recalculate OSRM path keeping all points (showing the full path history)
             const coordsString = updatedPoints.map(p => `${p.lng},${p.lat}`).join(';');
             try {
                 const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`);
@@ -359,12 +383,40 @@ export const MapView = () => {
         setSearchQuery('');
     };
 
-    const center: [number, number] = routePoints.length > 0 && routePoints[routePoints.length - 1].lat !== null && routePoints[routePoints.length - 1].lng !== null
-        ? [routePoints[routePoints.length - 1].lat as number, routePoints[routePoints.length - 1].lng as number]
-        : [-23.55052, -46.633309]; // default center (São Paulo)
+    const triggerConfetti = () => {
+        const duration = 5 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 20000 };
+
+        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+        const interval: any = setInterval(function () {
+            const timeLeft = animationEnd - Date.now();
+
+            if (timeLeft <= 0) {
+                return clearInterval(interval);
+            }
+
+            const particleCount = 50 * (timeLeft / duration);
+            confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+            confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+        }, 250);
+    };
+
+    const getMapCenter = (): [number, number] => {
+        if (routePoints.length > 0) {
+            const lastPoint = routePoints[routePoints.length - 1];
+            if (lastPoint.lat !== null && lastPoint.lng !== null && !isNaN(lastPoint.lat) && !isNaN(lastPoint.lng)) {
+                return [lastPoint.lat, lastPoint.lng];
+            }
+        }
+        return [-23.55052, -46.633309]; // default center (São Paulo)
+    };
+
+    const center = getMapCenter();
 
     const positions = routePoints
-        .filter(p => p.lat !== null && p.lng !== null)
+        .filter(p => p.lat !== null && p.lng !== null && !isNaN(p.lat) && !isNaN(p.lng))
         .map(p => [p.lat, p.lng] as [number, number]);
 
     return (
@@ -419,11 +471,13 @@ export const MapView = () => {
 
             <div className="flex-1 w-full relative z-0">
                 <MapContainer
+                    key={routePoints.length}
                     center={center}
                     zoom={13}
-                    className="w-full h-full"
+                    className="w-full h-full z-0"
                     zoomControl={false}
                 >
+                    <ChangeView center={center} zoom={13} />
                     {/* CartoDB Dark Matter base map */}
                     <TileLayer
                         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -437,64 +491,81 @@ export const MapView = () => {
                     ) : null}
 
                     {routePoints.map((point, index) => {
-                        if (point.lat === null || point.lng === null) return null;
+                        if (point.lat === null || point.lng === null || isNaN(point.lat) || isNaN(point.lng)) return null;
                         return (
                             <Marker
-                                key={`${point.id}-${index}`}
+                                key={`${point.id}-${index}-${point.lat}`}
                                 position={[point.lat, point.lng]}
-                                icon={point.id === 'current' ? userIcon : customIcon}
-                                draggable={point.id !== 'current'}
+                                icon={point.id === 'current' ? userIcon : point.isDelivered ? grayIcon : customIcon}
+                                draggable={point.id !== 'current' && !point.isDelivered}
                                 eventHandlers={{
                                     dragend: (e) => handleMarkerDragEnd(index, e)
                                 }}
                             >
-                                <Popup className="glass-popup" eventHandlers={{ remove: () => setEditingMarkerId(null) }}>
-                                    {editingMarkerId === point.id ? (
-                                        <div className="flex flex-col gap-2 min-w-[150px] p-1">
-                                            <input
-                                                value={editingMarkerName}
-                                                onChange={e => setEditingMarkerName(e.target.value)}
-                                                className="w-full bg-zinc-100 border border-zinc-300 rounded p-1.5 text-sm text-black focus:outline-blue-500"
-                                                autoFocus
-                                                placeholder="Nome do local"
-                                            />
-                                            <button
-                                                onClick={() => handleSaveMarkerEdit(point.id)}
-                                                className="bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold w-full hover:bg-blue-700 transition"
-                                            >
-                                                Salvar
-                                            </button>
+                                <Popup className="glass-popup">
+                                    <div className="flex flex-col">
+                                        <div className="font-bold text-zinc-900 border-b border-zinc-100 pb-1.5 mb-2 flex items-center gap-2">
+                                            <MapPin size={14} className="text-blue-500" />
+                                            {point.name}
                                         </div>
-                                    ) : (
-                                        <div className="flex flex-col">
-                                            <div className="font-bold text-black border-b border-gray-200 pb-1 mb-1">{point.name}</div>
-                                            <div className="text-xs text-gray-700">⌚ Scan: {new Date(point.scannedAt).toLocaleTimeString()}</div>
-                                            <div className="text-xs text-gray-700 font-mono mt-0.5">📍 Lat: {point.lat.toFixed(5)}<br />📍 Lng: {point.lng.toFixed(5)}</div>
-
-                                            {point.id !== 'current' && (
-                                                <div className="flex flex-col mt-2 gap-2">
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingMarkerId(point.id);
-                                                            setEditingMarkerName(point.name);
-                                                        }}
-                                                        className="bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1.5 rounded text-xs font-bold hover:bg-blue-200 transition"
-                                                    >
-                                                        ✏️ Editar Nome
-                                                    </button>
-                                                    <div className="text-[10px] text-gray-500 italic pointer-events-none leading-tight border-t border-gray-200 pt-1.5 mt-0.5">
-                                                        *(Arraste e solte o pino no mapa para ajustar a localização exata no banco de dados)*
-                                                    </div>
+                                        <div className="space-y-1">
+                                            <div className="text-[10px] text-zinc-500 flex items-center gap-1.5">
+                                                <span className="font-bold w-12">HORA:</span>
+                                                {new Date(point.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                            {(point.neighborhood || point.city) && (
+                                                <div className="text-[10px] text-zinc-500 flex items-start gap-1.5">
+                                                    <span className="font-bold w-12">LOCAL:</span>
+                                                    <span className="flex-1">{[point.neighborhood, point.city].filter(Boolean).join(', ')}</span>
                                                 </div>
                                             )}
+                                            <div className="text-[10px] text-zinc-400 font-mono mt-1 pt-1 border-t border-zinc-50">
+                                                {point.lat.toFixed(6)}, {point.lng.toFixed(6)}
+                                            </div>
                                         </div>
-                                    )}
+
+                                        {point.id !== 'current' && (
+                                            <div className="flex flex-col mt-4 gap-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingPointData({
+                                                            id: point.id,
+                                                            name: point.name,
+                                                            notes: point.notes || '',
+                                                            neighborhood: point.neighborhood || '',
+                                                            city: point.city || '',
+                                                            lat: point.lat?.toString() || '',
+                                                            lng: point.lng?.toString() || ''
+                                                        });
+                                                        setIsEditingCurrentStop(true);
+                                                    }}
+                                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95"
+                                                >
+                                                    <Save size={14} /> EDITAR REGISTRO
+                                                </button>
+                                                <p className="text-[8px] text-zinc-400 text-center italic">Arraste o pin para mover rapidamente</p>
+                                            </div>
+                                        )}
+                                    </div>
                                 </Popup>
                             </Marker>
                         );
                     })}
                 </MapContainer>
             </div>
+
+            {/* ROTEIRIZANDO OVERLAY */}
+            {isRouting && (
+                <div className="fixed inset-0 z-[20000] bg-black/60 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in text-center p-10">
+                    <div className="relative mb-6">
+                        <div className="w-24 h-24 border-4 border-purple-500/20 rounded-full"></div>
+                        <div className="absolute inset-0 border-t-4 border-purple-500 rounded-full animate-spin"></div>
+                        <Route size={40} className="absolute inset-0 m-auto text-purple-400 animate-pulse" />
+                    </div>
+                    <h3 className="text-2xl font-black text-white italic tracking-tighter">CALCULANDO ROTA OTIMIZADA</h3>
+                    <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">Processando TSP & OSRM Grid...</p>
+                </div>
+            )}
 
             <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-2">
                 <button
@@ -565,7 +636,15 @@ export const MapView = () => {
                             <button
                                 onClick={() => {
                                     const p = routePoints.filter(p => p.id !== 'current')[navigationIndex];
-                                    setEditingPointData({ name: p.name, notes: p.notes || '' });
+                                    setEditingPointData({
+                                        id: p.id,
+                                        name: p.name,
+                                        notes: p.notes || '',
+                                        neighborhood: p.neighborhood || '',
+                                        city: p.city || '',
+                                        lat: p.lat?.toString() || '',
+                                        lng: p.lng?.toString() || ''
+                                    });
                                     setIsEditingCurrentStop(true);
                                 }}
                                 className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-3 rounded-2xl border border-white/5 transition-all"
@@ -605,10 +684,50 @@ export const MapView = () => {
                                     onChange={e => setEditingPointData({ ...editingPointData, name: e.target.value })}
                                 />
                             </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Bairro</label>
+                                    <input
+                                        className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
+                                        value={editingPointData.neighborhood}
+                                        onChange={e => setEditingPointData({ ...editingPointData, neighborhood: e.target.value })}
+                                        placeholder="Bairro"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Cidade</label>
+                                    <input
+                                        className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
+                                        value={editingPointData.city}
+                                        onChange={e => setEditingPointData({ ...editingPointData, city: e.target.value })}
+                                        placeholder="Cidade"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Latitude</label>
+                                    <input
+                                        className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
+                                        value={editingPointData.lat}
+                                        onChange={e => setEditingPointData({ ...editingPointData, lat: e.target.value })}
+                                        placeholder="Lat"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Longitude</label>
+                                    <input
+                                        className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
+                                        value={editingPointData.lng}
+                                        onChange={e => setEditingPointData({ ...editingPointData, lng: e.target.value })}
+                                        placeholder="Lng"
+                                    />
+                                </div>
+                            </div>
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Observações / Notas</label>
                                 <textarea
-                                    className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white h-32 resize-none focus:border-blue-500/50 focus:outline-none"
+                                    className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white h-24 resize-none focus:border-blue-500/50 focus:outline-none"
                                     placeholder="Ex: Tocar campainha no fundo, Portão azul..."
                                     value={editingPointData.notes}
                                     onChange={e => setEditingPointData({ ...editingPointData, notes: e.target.value })}
@@ -652,6 +771,40 @@ export const MapView = () => {
                     <div className="glass-panel px-6 py-4 rounded-2xl flex items-center gap-3">
                         <MapPin className="text-zinc-400" />
                         <span className="text-zinc-300 font-medium">Nenhum ponto registrado na rota atual</span>
+                    </div>
+                </div>
+            )}
+            {/* CELEBRATION MODAL */}
+            {showCelebration && (
+                <div className="fixed inset-0 z-[20000] flex items-center justify-center p-6 animate-in fade-in duration-500">
+                    <div className="absolute inset-0 bg-black/90 backdrop-blur-2xl"></div>
+
+                    <div className="relative flex flex-col items-center text-center max-w-sm">
+                        <div className="mb-8 relative animate-bounce-slow">
+                            <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full scale-150"></div>
+                            <Rocket size={100} className="text-blue-400 rotate-[-45deg] drop-shadow-[0_0_20px_rgba(96,165,250,0.8)] rocket-fly" />
+                        </div>
+
+                        <div className="space-y-4 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+                            <div className="flex justify-center mb-2">
+                                <CheckCircle2 size={40} className="text-emerald-400" />
+                            </div>
+                            <h2 className="text-4xl font-extrabold text-white leading-tight">
+                                Missão <br /> Concluída!
+                            </h2>
+                            <p className="text-zinc-400 font-medium">
+                                Você finalizou todas as entregas planejadas. Ótimo trabalho hoje!
+                            </p>
+
+                            <div className="pt-8 w-full">
+                                <button
+                                    onClick={() => setShowCelebration(false)}
+                                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-5 rounded-3xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all text-lg"
+                                >
+                                    VOLTAR AO MAPA
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

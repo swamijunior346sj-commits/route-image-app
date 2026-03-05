@@ -71,13 +71,66 @@ export const updateRecord = async (id: string, updates: Partial<LocationRecord>)
 };
 
 export interface RoutePoint {
-    id: string; // Links to the matching LocationRecord id
+    id: string;
     name: string;
     lat: number;
     lng: number;
     scannedAt: number;
     notes?: string;
+    isDelivered?: boolean;
+    neighborhood?: string;
+    city?: string;
 }
+
+export interface AppSettings {
+    personalData: {
+        name: string;
+        email: string;
+        phone: string;
+        vehicle: string;
+    };
+    notifications: {
+        push: boolean;
+        haptic: boolean;
+        sound: boolean;
+    };
+    mapPreferences: {
+        darkMode: boolean;
+        showTraffic: boolean;
+        autoCenter: boolean;
+    };
+}
+
+const defaultSettings: AppSettings = {
+    personalData: {
+        name: 'João Silva',
+        email: 'joao.silva@delivery.com',
+        phone: '(11) 99999-8888',
+        vehicle: 'Yamaha Fazer 250 - Placa ABC-1234'
+    },
+    notifications: {
+        push: true,
+        haptic: true,
+        sound: true
+    },
+    mapPreferences: {
+        darkMode: true,
+        showTraffic: false,
+        autoCenter: true
+    }
+};
+
+export const getSettings = async (): Promise<AppSettings> => {
+    const settings = await localforage.getItem<AppSettings>('app_settings');
+    return settings || defaultSettings;
+};
+
+export const updateSettings = async (updates: Partial<AppSettings>): Promise<AppSettings> => {
+    const current = await getSettings();
+    const updated = { ...current, ...updates };
+    await localforage.setItem('app_settings', updated);
+    return updated;
+};
 
 export const getActiveRoute = async (): Promise<RoutePoint[]> => {
     const route = await sessionDb.getItem<RoutePoint[]>('route') || [];

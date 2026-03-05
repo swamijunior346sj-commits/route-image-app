@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, MapPin, ScanLine, X, Loader2, ImagePlus, SwitchCamera, Maximize2, Save } from 'lucide-react';
+import { Camera, MapPin, ScanLine, X, Loader2, ImagePlus, SwitchCamera, Save } from 'lucide-react';
 import { getRecords, saveRecord, addPointToActiveRoute } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
@@ -89,7 +89,9 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                     lat: bestMatch.lat || -23.55052,
                     lng: bestMatch.lng || -46.633309,
                     scannedAt: Date.now(),
-                    notes: bestMatch.notes
+                    notes: bestMatch.notes,
+                    neighborhood: bestMatch.neighborhood,
+                    city: bestMatch.city
                 });
 
                 // Auto-navigate animation
@@ -231,7 +233,9 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                             lat: bestMatch.lat || -23.55052,
                             lng: bestMatch.lng || -46.633309,
                             scannedAt: Date.now(),
-                            notes: bestMatch.notes
+                            notes: bestMatch.notes,
+                            neighborhood: bestMatch.neighborhood,
+                            city: bestMatch.city
                         });
                         setIsSendingToRoute(true);
                         setTimeout(() => { setIsSendingToRoute(false); onNavigateToMap(); }, 2000);
@@ -322,13 +326,45 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                             <h3 className="text-lg font-bold">Dados da Etiqueta</h3>
                             <button onClick={cancelRegister} className="text-zinc-400 p-1"><X size={20} /></button>
                         </div>
-                        <div className="flex flex-col gap-3 overflow-y-auto max-h-[40vh] py-2">
-                            <input type="text" placeholder="Endereço / Pacote *" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm" value={addressInput} onChange={e => setAddressInput(e.target.value)} />
-                            <div className="flex gap-2">
-                                <input type="text" placeholder="Bairro" className="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-sm" value={neighborhoodInput} onChange={e => setNeighborhoodInput(e.target.value)} />
-                                <input type="text" placeholder="Cidade" className="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-sm" value={cityInput} onChange={e => setCityInput(e.target.value)} />
+                        <div className="flex flex-col gap-3 overflow-y-auto max-h-[50vh] pr-2 custom-scrollbar">
+                            {registerImage && (
+                                <div
+                                    className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 mb-1 shrink-0 cursor-pointer active:scale-[0.98] transition-all"
+                                    onClick={() => setIsPreviewExpanded(true)}
+                                >
+                                    <img src={registerImage} className="w-full h-full object-cover" alt="Etiqueta" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                                    <p className="absolute bottom-2 left-3 text-[10px] font-bold text-white uppercase tracking-wider">Ver Foto Expandida</p>
+                                </div>
+                            )}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Endereço / Pacote *</label>
+                                <input type="text" placeholder="Ex: Rua das Flores, 123" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500/50 focus:outline-none" value={addressInput} onChange={e => setAddressInput(e.target.value)} />
                             </div>
-                            <textarea placeholder="Notas extras..." rows={2} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm resize-none" value={notesInput} onChange={e => setNotesInput(e.target.value)} />
+                            <div className="flex gap-2">
+                                <div className="flex-1 space-y-1.5">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Bairro</label>
+                                    <input type="text" placeholder="Bairro" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500/50 focus:outline-none" value={neighborhoodInput} onChange={e => setNeighborhoodInput(e.target.value)} />
+                                </div>
+                                <div className="flex-1 space-y-1.5">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Cidade</label>
+                                    <input type="text" placeholder="Cidade" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500/50 focus:outline-none" value={cityInput} onChange={e => setCityInput(e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="flex-1 space-y-1.5">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Latitude</label>
+                                    <input type="text" placeholder="-23.55052" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500/50 focus:outline-none" value={latInput} onChange={e => setLatInput(e.target.value)} />
+                                </div>
+                                <div className="flex-1 space-y-1.5">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Longitude</label>
+                                    <input type="text" placeholder="-46.63330" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500/50 focus:outline-none" value={lngInput} onChange={e => setLngInput(e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Notas extras</label>
+                                <textarea placeholder="Ex: Portão preto, entregar no fundo..." rows={2} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm resize-none focus:border-blue-500/50 focus:outline-none" value={notesInput} onChange={e => setNotesInput(e.target.value)} />
+                            </div>
                         </div>
                         <button onClick={handleSaveRegistration} disabled={loading || !addressInput.trim()} className="w-full glow-btn py-4 rounded-xl font-bold flex items-center justify-center gap-2">
                             {loading ? <Loader2 className="animate-spin" /> : <><Save size={20} /> Confirmar</>}
@@ -351,6 +387,22 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                         <h3 className="text-2xl font-bold text-white tracking-tight animate-pulse">Enviando à Rota</h3>
                         <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] mt-2">Otimizando percurso...</p>
                     </div>
+                </div>
+            )}
+
+            {/* EXPANDED IMAGE PREVIEW */}
+            {isPreviewExpanded && registerImage && (
+                <div className="fixed inset-0 z-[10001] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
+                    <button
+                        onClick={() => setIsPreviewExpanded(false)}
+                        className="absolute top-6 right-6 p-4 bg-white/10 rounded-full text-white backdrop-blur-md"
+                    >
+                        <X size={28} />
+                    </button>
+                    <div className="w-full h-full max-w-4xl max-h-[80vh] flex items-center justify-center">
+                        <img src={registerImage} className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" alt="Etiqueta Expandida" />
+                    </div>
+                    <p className="text-zinc-500 text-xs mt-6 font-bold uppercase tracking-widest">Toque no fechar para voltar</p>
                 </div>
             )}
         </div>

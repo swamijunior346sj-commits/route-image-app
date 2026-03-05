@@ -8,7 +8,7 @@ import { ProfileView } from './components/ProfileView';
 import { loadModel } from './services/imageProcessing';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile'>('scanner');
+  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile'>('map');
   const [modelLoading, setModelLoading] = useState(true);
 
   // Use localStorage to pretend we have a real session active
