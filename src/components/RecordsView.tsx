@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
-import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, Save, FileText, FileSpreadsheet, FileJson, ChevronDown } from 'lucide-react';
+import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, FileText, FileSpreadsheet, FileJson, ChevronDown, ChevronUp } from 'lucide-react';
 import { exportAsCSV, exportAsJSON, exportAsXLS, exportAsPDF, importRecords as processImport } from '../services/importExport';
 import { extractFeatures } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
@@ -9,8 +9,6 @@ import { analyzeAddressImage } from '../services/geminiService';
 export const RecordsView = () => {
     const [records, setRecords] = useState<LocationRecord[]>([]);
 
-    // Edit/Create Modal State
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<LocationRecord | null>(null);
     const [editName, setEditName] = useState('');
     const [editLat, setEditLat] = useState('');
@@ -21,15 +19,19 @@ export const RecordsView = () => {
     const [editNotes, setEditNotes] = useState('');
     const [editNeighborhood, setEditNeighborhood] = useState('');
     const [editCity, setEditCity] = useState('');
-    const [isExtracting, setIsExtracting] = useState(false);
     const [photoActionTarget, setPhotoActionTarget] = useState<'main' | 'extra' | null>(null);
 
     // Multi-selection and Search
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
-    const [isSendingRoute, setIsSendingRoute] = useState(false);
+    const [isSendingToRoute, setIsSendingToRoute] = useState(false);
+    const [sheetExpandedDetail, setSheetExpandedDetail] = useState(false);
+    const [sheetExpandedEdit, setSheetExpandedEdit] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
+
+    // AI/Vision Loading states
+    const [isExtracting, setIsExtracting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
 
     const displayRecords = searchQuery.length >= 3
@@ -118,20 +120,19 @@ export const RecordsView = () => {
         e.target.value = '';
     };
 
-    // Detail View State
-    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedDetail, setSelectedDetail] = useState<LocationRecord | null>(null);
 
 
 
     const openDetail = (record: LocationRecord) => {
         setSelectedDetail(record);
-        setIsDetailModalOpen(true);
+        // setIsDetailModalOpen(true); // No longer needed
+        setSheetExpandedDetail(false); // Reset to collapsed state
     };
 
     const openEdit = (record: LocationRecord, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
-        setIsEditModalOpen(true);
+        // setIsEditModalOpen(true); // No longer needed
         setEditingRecord(record);
         setEditName(record.name);
         setEditLat(record.lat ? String(record.lat) : '');
@@ -142,11 +143,24 @@ export const RecordsView = () => {
         setEditNotes(record.notes || '');
         setEditNeighborhood(record.neighborhood || '');
         setEditCity(record.city || '');
+        setSheetExpandedEdit(false); // Reset to collapsed state
     };
 
     const openCreate = () => {
-        setIsEditModalOpen(true);
-        setEditingRecord(null);
+        // setIsEditModalOpen(true); // No longer needed
+        setEditingRecord({
+            id: 'new',
+            name: '',
+            lat: null,
+            lng: null,
+            imageThumbnail: '',
+            featureVector: [],
+            additionalImages: [],
+            notes: '',
+            neighborhood: '',
+            city: '',
+            createdAt: Date.now(),
+        });
         setEditName('');
         setEditLat('');
         setEditLng('');
@@ -156,13 +170,14 @@ export const RecordsView = () => {
         setEditNotes('');
         setEditNeighborhood('');
         setEditCity('');
+        setSheetExpandedEdit(false); // Reset to collapsed state
     };
 
     const handleSaveEdit = async () => {
         const lat = parseFloat(editLat);
         const lng = parseFloat(editLng);
 
-        if (editingRecord) {
+        if (editingRecord && editingRecord.id !== 'new') { // Existing record
             await updateRecord(editingRecord.id, {
                 name: editName,
                 lat: isNaN(lat) ? null : lat,
@@ -174,7 +189,7 @@ export const RecordsView = () => {
                 neighborhood: editNeighborhood.trim(),
                 city: editCity.trim()
             });
-        } else {
+        } else { // New record
             if (!editName.trim()) {
                 alert('Por favor, informe um nome para o registro.');
                 return;
@@ -196,7 +211,7 @@ export const RecordsView = () => {
             }
         }
 
-        setIsEditModalOpen(false);
+        // setIsEditModalOpen(false); // No longer needed
         setEditingRecord(null);
         setEditNotes('');
         setEditNeighborhood('');
@@ -321,11 +336,11 @@ export const RecordsView = () => {
             city: r.city
         }));
 
-        setIsSendingRoute(true);
+        setIsSendingToRoute(true);
 
         setTimeout(async () => {
             await updateActiveRoute([...currentRoute, ...newPoints]);
-            setIsSendingRoute(false);
+            setIsSendingToRoute(false);
             setSelectedIds(new Set());
             // Optional: You could navigate to Map here, but keeping it an alert for now
             // or maybe just a subtle toast.
@@ -570,78 +585,72 @@ export const RecordsView = () => {
                 <Plus size={32} />
             </button>
 
-            {/* MODALS - Redesigned with Gaming Style */}
-            {isEditModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-xl animate-fade-in">
-                    <div className="w-full max-w-md bg-zinc-950 border border-white/10 rounded-[3rem] shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-500 flex flex-col max-h-[90vh]">
-                        {/* Modal Decorative Line */}
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50" />
+            {/* EDIT PANEL (Standardized Bottom Sheet) */}
+            {editingRecord && (
+                <div className="absolute inset-0 z-[100] flex flex-col justify-end bg-black/60 backdrop-blur-md pointer-events-none">
+                    <div className={`w-full bg-[#09090b] border-t border-white/10 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 pointer-events-auto flex flex-col ${sheetExpandedEdit ? 'h-[90vh]' : 'h-[600px]'}`}>
+                        {/* Drag Handle */}
+                        <div onClick={() => setSheetExpandedEdit(!sheetExpandedEdit)} className="py-6 flex flex-col items-center gap-1 cursor-pointer">
+                            <div className="w-12 h-1.5 bg-zinc-800 rounded-full" />
+                            <ChevronUp size={20} className={`text-zinc-600 transition-transform duration-500 ${sheetExpandedEdit ? 'rotate-180' : ''}`} />
+                        </div>
 
-                        <div className="p-8 overflow-y-auto">
-                            <div className="flex justify-between items-center mb-8">
-                                <div className="space-y-1">
-                                    <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">
-                                        {editingRecord ? 'Modificar Registro' : 'Novo Registro'}
-                                    </h3>
-                                </div>
-                                <button onClick={() => setIsEditModalOpen(false)} className="w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-all">
-                                    <X size={20} />
-                                </button>
+                        <div className="px-8 pb-12 flex-1 overflow-y-auto custom-scrollbar">
+                            <div className="flex items-center justify-between mb-8">
+                                <h3 className="text-3xl font-black italic uppercase text-white tracking-tighter">Modificar Registro</h3>
+                                <button onClick={() => setEditingRecord(null)} className="p-3 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-all"><X size={20} /></button>
                             </div>
 
-                            <div className="flex flex-col gap-6">
-                                {/* Core Inputs */}
-                                <div className="flex flex-col gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Identidade do Alvo</label>
-                                        <input
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-sm text-white focus:border-blue-500/50 focus:outline-none font-bold placeholder:text-zinc-700"
-                                            placeholder="NOME DO LOCAL..."
-                                            value={editName}
-                                            onChange={(e) => setEditName(e.target.value)}
-                                        />
-                                    </div>
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-2">Identificação Visual</label>
+                                    <input
+                                        className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white font-bold focus:border-blue-500 transition-all outline-none"
+                                        placeholder="NOME DO PONTO..."
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                    />
                                 </div>
 
-                                {/* Address Fields */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Bairro</label>
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-2">Setor/Bairro</label>
                                         <input
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white font-bold focus:border-blue-500 transition-all outline-none"
+                                            placeholder="BAIRRO..."
                                             value={editNeighborhood}
                                             onChange={(e) => setEditNeighborhood(e.target.value)}
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Geo / Cidade</label>
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-2">Cidade</label>
                                         <input
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white font-bold focus:border-blue-500 transition-all outline-none"
+                                            placeholder="CIDADE..."
                                             value={editCity}
                                             onChange={(e) => setEditCity(e.target.value)}
                                         />
                                     </div>
                                 </div>
 
-                                {/* Coordinate HUD */}
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-blue-500/5 border border-blue-500/10 rounded-[1.5rem] p-4 group hover:bg-blue-500/10 transition-all cursor-pointer relative" onClick={handleUseCurrentLocationForEdit}>
-                                        <label className="text-[8px] font-black text-blue-500/60 uppercase tracking-widest block mb-2">Latitude Geográfica</label>
+                                    <div className="bg-blue-600/5 border border-blue-500/10 rounded-3xl p-5 relative cursor-pointer active:scale-95 transition-all" onClick={handleUseCurrentLocationForEdit}>
+                                        <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-2">Latitude GPS</label>
                                         <input
                                             className="w-full bg-transparent text-sm font-mono text-white focus:outline-none"
                                             value={editLat}
                                             onChange={(e) => setEditLat(e.target.value)}
                                         />
-                                        <LocateFixed size={12} className="absolute top-4 right-4 text-blue-500 opacity-40 group-hover:opacity-100 animate-pulse" />
+                                        <LocateFixed size={14} className="absolute top-5 right-5 text-blue-500 opacity-40" />
                                     </div>
-                                    <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-[1.5rem] p-4 group hover:bg-indigo-500/10 transition-all cursor-pointer relative" onClick={handleUseCurrentLocationForEdit}>
-                                        <label className="text-[8px] font-black text-indigo-500/60 uppercase tracking-widest block mb-2">Longitude Geográfica</label>
+                                    <div className="bg-indigo-600/5 border border-indigo-500/10 rounded-3xl p-5 relative cursor-pointer active:scale-95 transition-all" onClick={handleUseCurrentLocationForEdit}>
+                                        <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-2">Longitude GPS</label>
                                         <input
                                             className="w-full bg-transparent text-sm font-mono text-white focus:outline-none"
                                             value={editLng}
                                             onChange={(e) => setEditLng(e.target.value)}
                                         />
-                                        <LocateFixed size={12} className="absolute top-4 right-4 text-indigo-500 opacity-40 group-hover:opacity-100 animate-pulse" />
+                                        <LocateFixed size={14} className="absolute top-5 right-5 text-indigo-500 opacity-40" />
                                     </div>
                                 </div>
 
@@ -661,55 +670,52 @@ export const RecordsView = () => {
                                         } finally { setIsExtracting(false); }
                                     }}
                                     disabled={isExtracting}
-                                    className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-500/20 transition-all disabled:opacity-30 shadow-[0_10px_30px_rgba(16,185,129,0.1)]"
+                                    className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-5 rounded-3xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-emerald-500/20 active:scale-95 transition-all"
                                 >
-                                    <LocateFixed size={16} className={isExtracting ? 'animate-spin' : ''} />
-                                    Sincronização Geográfica Automática
+                                    <LocateFixed size={18} className={isExtracting ? 'animate-spin' : ''} />
+                                    Geocodificação Direta
                                 </button>
 
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Diretivas Adicionais</label>
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Observações Operacionais</label>
                                     <textarea
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-zinc-300 h-20 resize-none focus:border-blue-500/50 focus:outline-none font-medium italic"
+                                        className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-6 text-sm text-zinc-400 h-28 resize-none focus:border-blue-500 outline-none italic"
                                         placeholder="PONTOS DE REFERÊNCIA..."
                                         value={editNotes}
                                         onChange={(e) => setEditNotes(e.target.value)}
                                     />
                                 </div>
 
-                                {/* Additional Images Section */}
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Ângulos de Reconhecimento</label>
-                                    <div className="flex flex-wrap gap-3">
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Reconhecimento Multi-Ângulo</label>
+                                    <div className="flex flex-wrap gap-4 bg-white/5 p-6 rounded-[2.5rem] border border-white/5">
                                         <button
                                             type="button"
                                             onClick={() => setPhotoActionTarget('extra')}
-                                            className="w-14 h-14 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center text-zinc-600 hover:text-blue-500 hover:border-blue-500/50 transition-all"
+                                            className="w-16 h-16 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center text-zinc-600 hover:text-blue-500 hover:border-blue-500/50 transition-all active:scale-90"
                                         >
-                                            <Camera size={20} />
+                                            <Camera size={24} />
                                         </button>
                                         {editAdditionalImages.map((img) => (
-                                            <div key={img.id} className="relative w-14 h-14 rounded-2xl overflow-hidden border border-white/10 group">
-                                                <img src={img.image} className="w-full h-full object-cover" />
+                                            <div key={img.id} className="relative w-16 h-16 rounded-2xl overflow-hidden border border-white/10 group shadow-lg">
+                                                <img src={img.image} className="w-full h-full object-cover grayscale brightness-75 group-hover:grayscale-0 group-hover:brightness-100 transition-all" />
                                                 <button
                                                     onClick={() => handleRemoveAdditionalImage(img.id)}
-                                                    className="absolute inset-0 bg-red-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white"
+                                                    className="absolute inset-0 bg-red-600/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white scale-110"
                                                 >
-                                                    <Trash size={16} />
+                                                    <Trash size={18} />
                                                 </button>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* Saving Logic */}
                                 <button
                                     onClick={handleSaveEdit}
-                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] py-5 rounded-[2rem] shadow-[0_20px_50px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-3 text-xs mt-4 active:scale-95"
+                                    className="w-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] py-6 rounded-[2.5rem] shadow-xl shadow-blue-600/20 active:scale-95 transition-all text-[11px] mb-4"
                                     disabled={isExtracting}
                                 >
-                                    <Save size={20} />
-                                    {editingRecord ? 'FINALIZAR ALTERAÇÕES' : 'CONFIRMAR NOVO REGISTRO'}
+                                    {editingRecord && editingRecord.id !== 'new' ? 'ATUALIZAR MATRIZ DE DADOS' : 'INICIAR NOVO REGISTRO'}
                                 </button>
                             </div>
                         </div>
@@ -760,65 +766,79 @@ export const RecordsView = () => {
                 </div>
             )}
 
-            {/* Detail Modal - Cinematic Style */}
-            {isDetailModalOpen && selectedDetail && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-fade-in">
-                    <div className="w-full max-w-sm flex flex-col gap-8 animate-in zoom-in-95 duration-700">
-                        {/* Hero Image */}
-                        <div className="relative group">
-                            <div className="absolute inset-0 bg-blue-500/20 blur-[80px] rounded-full scale-75 opacity-50" />
-                            <div className="relative w-full aspect-square rounded-[3.5rem] overflow-hidden border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.8)]">
-                                {selectedDetail.imageThumbnail ? (
-                                    <img src={selectedDetail.imageThumbnail} className="w-full h-full object-cover scale-105 group-hover:scale-100 transition-transform duration-1000" />
-                                ) : (
-                                    <div className="w-full h-full bg-zinc-950 flex items-center justify-center"><Database size={64} className="text-zinc-800" /></div>
-                                )}
-                                <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black via-black/40 to-transparent" />
+            {/* DETAIL PANEL (Standardized Bottom Sheet) */}
+            {selectedDetail && (
+                <div className="absolute inset-0 z-[150] flex flex-col justify-end bg-black/95 backdrop-blur-2xl pointer-events-none">
+                    <div className={`w-full bg-[#09090b] border-t border-white/10 rounded-t-[3.5rem] shadow-2xl transition-all duration-700 pointer-events-auto flex flex-col ${sheetExpandedDetail ? 'h-[90vh]' : 'h-[650px]'}`}>
+                        {/* Drag Handle */}
+                        <div onClick={() => setSheetExpandedDetail(!sheetExpandedDetail)} className="py-6 flex flex-col items-center gap-1 cursor-pointer">
+                            <div className="w-12 h-1.5 bg-zinc-800 rounded-full" />
+                            <ChevronUp size={20} className={`text-zinc-600 transition-transform duration-500 ${sheetExpandedDetail ? 'rotate-180' : ''}`} />
+                        </div>
 
-                                <div className="absolute bottom-8 left-8 right-8">
-                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-2">Alvo Identificado</p>
-                                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white leading-none line-clamp-2">
-                                        {selectedDetail.name}
-                                    </h2>
+                        <div className="px-8 pb-12 flex-1 overflow-y-auto no-scrollbar">
+                            <div className="relative mb-10 group">
+                                <div className="absolute inset-x-0 -bottom-10 h-32 bg-gradient-to-t from-[#09090b] to-transparent z-10" />
+                                <div className="relative w-full aspect-[4/5] rounded-[3rem] overflow-hidden border border-white/5 shadow-2xl">
+                                    {selectedDetail.imageThumbnail ? (
+                                        <img src={selectedDetail.imageThumbnail} className="w-full h-full object-cover grayscale brightness-75 transition-all duration-1000 group-hover:grayscale-0 group-hover:brightness-100 scale-110 group-hover:scale-100" />
+                                    ) : (
+                                        <div className="w-full h-full bg-zinc-950 flex items-center justify-center"><Database size={64} className="text-zinc-900" /></div>
+                                    )}
+                                    <div className="absolute top-8 right-8 z-20">
+                                        <button onClick={() => setSelectedDetail(null)} className="p-3 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white"><X size={20} /></button>
+                                    </div>
+                                    <div className="absolute bottom-12 left-8 right-8 z-20">
+                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-2">Alvo Identificado</p>
+                                        <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white leading-[0.9]">{selectedDetail.name}</h2>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Stats HUD */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2rem] space-y-1">
-                                <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Setor Privado</span>
-                                <p className="text-sm font-black text-white italic uppercase">{selectedDetail.neighborhood || '---'}</p>
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2.5rem] space-y-1">
+                                    <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Setor</span>
+                                    <p className="text-sm font-black text-white italic uppercase truncate">{selectedDetail.neighborhood || '---'}</p>
+                                </div>
+                                <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2.5rem] space-y-1">
+                                    <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Cidade</span>
+                                    <p className="text-sm font-black text-white italic uppercase truncate">{selectedDetail.city || '---'}</p>
+                                </div>
                             </div>
-                            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2rem] space-y-1">
-                                <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Cidade Nucleo</span>
-                                <p className="text-sm font-black text-white italic uppercase">{selectedDetail.city || '---'}</p>
-                            </div>
-                        </div>
 
-                        {/* Multi-photo HUD teaser if exists */}
-                        {selectedDetail.additionalImages && selectedDetail.additionalImages.length > 0 && (
-                            <div className="flex gap-3 overflow-x-auto pb-2 -mx-2 px-2 no-scrollbar">
-                                {selectedDetail.additionalImages.map((img, i) => (
-                                    <div key={i} className="w-14 h-14 rounded-2xl border border-white/10 overflow-hidden shrink-0">
-                                        <img src={img.image} className="w-full h-full object-cover grayscale brightness-75 hover:grayscale-0 hover:brightness-100 transition-all" />
+                            {selectedDetail.additionalImages && selectedDetail.additionalImages.length > 0 && (
+                                <div className="space-y-4 mb-10">
+                                    <h4 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest ml-4">Vistas Secundárias</h4>
+                                    <div className="flex gap-4 overflow-x-auto pb-4 px-2 no-scrollbar">
+                                        {selectedDetail.additionalImages.map((img, i) => (
+                                            <div key={i} className="w-24 h-24 rounded-[2rem] border border-white/10 overflow-hidden shrink-0 shadow-lg">
+                                                <img src={img.image} className="w-full h-full object-cover grayscale brightness-50 hover:grayscale-0 hover:brightness-100 transition-all" />
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                </div>
+                            )}
 
-                        <button
-                            onClick={() => setIsDetailModalOpen(false)}
-                            className="w-full bg-white text-black py-6 rounded-[2rem] font-black uppercase tracking-[0.3em] text-[10px] shadow-2xl active:scale-95 transition-all hover:bg-zinc-200"
-                        >
-                            Recolher Visão
-                        </button>
+                            <div className="space-y-4 mb-10">
+                                <h4 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest ml-4">Diretivas Operacionais</h4>
+                                <div className="bg-white/[0.03] border border-white/5 p-8 rounded-[2.5rem] text-zinc-400 text-sm italic leading-relaxed">
+                                    {selectedDetail.notes || 'Sem observações tácticas registradas para este alvo.'}
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => setSelectedDetail(null)}
+                                className="w-full bg-white text-black py-6 rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-[10px] shadow-2xl active:scale-95 transition-all mb-4"
+                            >
+                                Recolher Visão
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* SENDING ROUTE ANIMATION */}
-            {isSendingRoute && (
+            {isSendingToRoute && (
                 <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-12 text-center animate-fade-in">
                     <div className="relative mb-12">
                         <div className="w-32 h-32 border border-blue-500/10 rounded-full animate-ping opacity-20" />

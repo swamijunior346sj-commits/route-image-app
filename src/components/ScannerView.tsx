@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, MapPin, ScanLine, X, Loader2, SwitchCamera, Save, LocateFixed, Database, Sparkles } from 'lucide-react';
+import { Camera, MapPin, ScanLine, X, Loader2, SwitchCamera, LocateFixed, Database, Sparkles, ChevronUp } from 'lucide-react';
 import { getRecords, saveRecord, addPointToActiveRoute } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
@@ -31,7 +31,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
     const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
     const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
     const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
-    const [aiStatus, setAiStatus] = useState('');
+    const [aiStatus, setAiStatus] = useState('Analisando matriz...');
+    const [sheetExpanded, setSheetExpanded] = useState(false);
 
     // Scanned match
     const [match, setMatch] = useState<LocationRecord | null>(null);
@@ -40,14 +41,15 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
     const captureAndExtract = useCallback(async (): Promise<{ imageSrc: string, features: number[] } | null> => {
         if (!webcamRef.current) return null;
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (!imageSrc) return null;
+        const video = (webcamRef.current as any).video;
+        if (!video || video.readyState !== 4) return null;
 
-        const img = new Image();
-        img.src = imageSrc;
-        await new Promise(r => { img.onload = r; });
+        // Extract features directly from video frame for speed
+        const features = await extractFeatures(video);
 
-        const features = await extractFeatures(img);
+        // Get screenshot only for display/storage if needed (like in register mode)
+        const imageSrc = webcamRef.current.getScreenshot() || '';
+
         return { imageSrc, features };
     }, []);
 
@@ -92,6 +94,43 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
         }
     };
 
+    // AUTO FOCUS IMPLEMENTATION
+    const applyFocus = useCallback(async () => {
+        if (!webcamRef.current) return;
+        const video = (webcamRef.current as any).video;
+        if (!video || !video.srcObject) return;
+
+        const track = video.srcObject.getVideoTracks()[0];
+        if (!track) return;
+
+        const capabilities = track.getCapabilities?.();
+        if (capabilities && (capabilities as any).focusMode) {
+            try {
+                await track.applyConstraints({
+                    advanced: [{ focusMode: 'continuous' } as any]
+                });
+            } catch (err) {
+                console.warn('Foco automático contínuo não suportado ou negado:', err);
+                try {
+                    // Try manual focus if continuous fails
+                    await track.applyConstraints({
+                        advanced: [{ focusMode: 'manual', focusDistance: 0 } as any]
+                    });
+                } catch (e) {
+                    console.warn('Foco manual também não suportado.');
+                }
+            }
+        }
+    }, []);
+
+    // Effect to apply focus when webcam is ready
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            applyFocus();
+        }, 2000); // Give time for stream to stabilize
+        return () => clearTimeout(timer);
+    }, [applyFocus, facingMode]);
+
     // AUTO SCAN LOOP
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
@@ -105,6 +144,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                 if (!capture) return;
 
                 const records = await getRecords();
+                if (records.length === 0) return;
+
                 let bestMatch: LocationRecord | null = null;
                 let highestSimilarity = 0;
 
@@ -127,11 +168,11 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
                 if (bestMatch && highestSimilarity > SIMILARITY_THRESHOLD) {
                     setLoading(true); // We found it! Show loading overlay while animating mapping
-                    if (navigator.vibrate) navigator.vibrate(50);
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // Distinct "Success" pattern
                     setMatch(bestMatch);
 
                     await addPointToActiveRoute({
-                        id: bestMatch.id,
+                        id: bestMatch.id!,
                         name: bestMatch.name,
                         lat: bestMatch.lat || -20.143196,
                         lng: bestMatch.lng || -44.2174965,
@@ -150,12 +191,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                     }, 2000);
                 }
             } catch (err: any) {
-                console.error(err);
+                console.error('Scan error:', err);
             }
         };
 
         if (mode === 'scan' && !isSendingToRoute && !match) {
-            interval = setInterval(autoScan, 1500); // Check every 1.5 seconds
+            interval = setInterval(autoScan, 1000); // Check every 1 second (Faster indexing)
         }
 
         return () => {
@@ -422,6 +463,17 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                                 )}
                             </div>
 
+                            {/* HUD State Label */}
+                            {!loading && mode === 'scan' && (
+                                <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 animate-pulse">
+                                    <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-600/10 border border-blue-500/20 rounded-full backdrop-blur-md">
+                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
+                                        <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] italic">Buscando Coincidências</span>
+                                    </div>
+                                    <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.4em]">Modo Indexação Ativa</p>
+                                </div>
+                            )}
+
                             {/* Decorative HUD Elements */}
                             <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-32 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
                             <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-32 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
@@ -432,7 +484,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
             {/* Bottom Controls */}
             <div className="absolute bottom-0 w-full px-6 pb-44 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent z-10">
-                {mode === 'scan' ? (
+                {mode === 'scan' && (
                     <div className="space-y-4 max-w-lg mx-auto">
                         <div className="flex w-full">
                             <button
@@ -453,173 +505,161 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                             </label>
                         </div>
                     </div>
-                ) : (
-                    <div className="max-w-lg mx-auto bg-zinc-950/40 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-8 flex flex-col gap-6 animate-[slideUp_0.5s_ease-out] shadow-[0_50px_100px_rgba(0,0,0,0.8)]">
-                        <div className="flex justify-between items-center px-2">
-                            <div className="space-y-0.5">
-                                <h3 className="text-xl font-black italic uppercase text-white tracking-tighter leading-none">Dados de Registro</h3>
-                                <p className="text-[9px] font-black text-blue-500/60 uppercase tracking-widest">Indexação Neural de Logística</p>
-                            </div>
-                            <button onClick={cancelRegister} className="bg-white/5 p-2.5 rounded-2xl text-zinc-500 hover:text-white transition-colors">
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="flex flex-col gap-5 overflow-y-auto max-h-[45vh] pr-2 custom-scrollbar relative">
-                            {/* ── AI ANALYZING OVERLAY ── */}
-                            {isAiAnalyzing && (
-                                <div className="absolute inset-0 z-20 rounded-3xl bg-black/80 backdrop-blur-lg flex flex-col items-center justify-center gap-5 animate-in fade-in duration-300">
-                                    {/* Glowing icon */}
-                                    <div className="relative">
-                                        <div className="absolute inset-0 rounded-full bg-violet-500/30 blur-2xl scale-150 animate-pulse" />
-                                        <div className="relative w-20 h-20 rounded-3xl bg-zinc-900 border border-violet-500/30 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.4)]">
-                                            <Sparkles size={36} className="text-violet-400 animate-spin" style={{ animationDuration: '3s' }} />
-                                        </div>
-                                    </div>
-
-                                    {/* Scanner beam (horizontal sweep) */}
-                                    {registerImage && (
-                                        <div className="relative w-full h-20 rounded-2xl overflow-hidden border border-violet-500/20 mx-2">
-                                            <img src={registerImage} className="w-full h-full object-cover opacity-40" alt="" />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                                            {/* Beam */}
-                                            <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-violet-400 to-transparent animate-[scan_1.2s_ease-in-out_infinite] shadow-[0_0_12px_rgba(167,139,250,1)]" />
-                                        </div>
-                                    )}
-
-                                    {/* Status text */}
-                                    <div className="text-center space-y-1 px-4">
-                                        <p className="text-xs font-black text-white uppercase tracking-widest">{aiStatus}</p>
-                                        <div className="flex items-center justify-center gap-1 mt-1">
-                                            {[0, 1, 2].map(i => (
-                                                <div
-                                                    key={i}
-                                                    className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
-                                                    style={{ animationDelay: `${i * 0.15}s` }}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {registerImage && (
-                                <div
-                                    className="relative w-full h-36 rounded-[2rem] overflow-hidden border border-white/10 mb-2 shrink-0 group cursor-pointer"
-                                    onClick={() => setIsPreviewExpanded(true)}
-                                >
-                                    <img src={registerImage} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Etiqueta" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
-                                        <p className="text-[10px] font-black text-white uppercase tracking-widest italic">Ampliar Detalhes da Captura</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-1.5 group">
-                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-4">Endereço / Identificador</label>
-                                <input
-                                    type="text"
-                                    placeholder="RUA, NÚMERO, NOME DO DESTINATÁRIO..."
-                                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-5 text-xs text-white placeholder:text-zinc-700 focus:border-blue-500/50 focus:outline-none transition-all font-medium italic"
-                                    value={addressInput}
-                                    onChange={e => setAddressInput(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5 focus-within:translate-y-[-2px] transition-transform">
-                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-4">Bairro</label>
-                                    <input
-                                        type="text"
-                                        placeholder="BAIRRO"
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-5 text-xs text-white placeholder:text-zinc-700 focus:border-blue-500/50 focus:outline-none transition-all italic"
-                                        value={neighborhoodInput}
-                                        onChange={e => setNeighborhoodInput(e.target.value)}
-                                    />
-                                </div>
-                                <div className="space-y-1.5 focus-within:translate-y-[-2px] transition-transform">
-                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-4">Cidade</label>
-                                    <input
-                                        type="text"
-                                        placeholder="CIDADE"
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-5 text-xs text-white placeholder:text-zinc-700 focus:border-blue-500/50 focus:outline-none transition-all italic"
-                                        value={cityInput}
-                                        onChange={e => setCityInput(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Coordinates HUD */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-blue-500/5 border border-blue-500/10 rounded-3xl p-5 flex flex-col gap-1 relative overflow-hidden group">
-                                    <label className="text-[9px] font-black text-blue-500/40 uppercase tracking-widest">Latitude</label>
-                                    <input
-                                        type="text"
-                                        value={latInput}
-                                        onChange={(e) => setLatInput(e.target.value)}
-                                        className="bg-transparent text-sm font-mono text-white tracking-widest focus:outline-none italic"
-                                        placeholder="0.000000"
-                                    />
-                                    <LocateFixed size={12} className="absolute top-5 right-5 text-blue-500/20 group-hover:text-blue-500 transition-colors" />
-                                </div>
-                                <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-3xl p-5 flex flex-col gap-1 relative overflow-hidden group">
-                                    <label className="text-[9px] font-black text-indigo-500/40 uppercase tracking-widest">Longitude</label>
-                                    <input
-                                        type="text"
-                                        value={lngInput}
-                                        onChange={(e) => setLngInput(e.target.value)}
-                                        className="bg-transparent text-sm font-mono text-white tracking-widest focus:outline-none italic"
-                                        placeholder="0.000000"
-                                    />
-                                    <LocateFixed size={12} className="absolute top-5 right-5 text-indigo-500/20 group-hover:text-indigo-500 transition-colors" />
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={async () => {
-                                    if (!latInput || !lngInput) return alert('Capture coordenadas primeiro.');
-                                    setLoading(true);
-                                    try {
-                                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latInput}&lon=${lngInput}`);
-                                        const data = await res.json();
-                                        if (data?.address) {
-                                            const a = data.address;
-                                            setAddressInput(`${a.road || a.pedestrian || ''}${a.house_number ? ', ' + a.house_number : ''}`);
-                                            setNeighborhoodInput(a.suburb || a.neighbourhood || '');
-                                            setCityInput(a.city || a.town || '');
-                                        }
-                                    } finally { setLoading(false); }
-                                }}
-                                disabled={loading || !latInput}
-                                className="w-full bg-emerald-500/5 border border-emerald-500/20 text-emerald-500/60 py-4 rounded-2xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-500/10 transition-all disabled:opacity-20"
-                            >
-                                <Database size={14} className={loading ? 'animate-spin' : ''} />
-                                Sincronização Geográfica Reversa
-                            </button>
-
-                            <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-4">Diretivas Logísticas</label>
-                                <textarea
-                                    placeholder="NOTAS DE ACESSO, PONTOS DE REFERÊNCIA..."
-                                    rows={2}
-                                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-5 text-xs text-white placeholder:text-zinc-700 focus:border-blue-500/50 focus:outline-none transition-all italic resize-none"
-                                    value={notesInput}
-                                    onChange={e => setNotesInput(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={handleSaveRegistration}
-                            disabled={loading || !addressInput.trim()}
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-[2rem] font-black italic uppercase text-xs tracking-[0.2em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-30 mt-2"
-                        >
-                            {loading ? <Loader2 className="animate-spin" /> : <Save size={18} />}
-                            Salvar
-                        </button>
-                    </div>
                 )}
             </div>
+            {/* REGISTRATION BOTTOM SHEET */}
+            {mode === 'register' && (
+                <div className="absolute inset-x-0 bottom-0 z-50 pointer-events-none">
+                    <div className={`w-full bg-[#09090b] border-t border-white/10 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.6)] transition-all duration-500 pointer-events-auto flex flex-col ${sheetExpanded ? 'h-[90vh]' : 'h-[600px]'}`}>
+                        {/* Drag Handle */}
+                        <div onClick={() => setSheetExpanded(!sheetExpanded)} className="py-6 flex flex-col items-center gap-1 cursor-pointer">
+                            <div className="w-12 h-1.5 bg-zinc-800 rounded-full" />
+                            <ChevronUp size={20} className={`text-zinc-600 transition-transform duration-500 ${sheetExpanded ? 'rotate-180' : ''}`} />
+                        </div>
+
+                        <div className="px-8 pb-12 flex-1 overflow-y-auto no-scrollbar pb-32">
+                            <div className="flex justify-between items-center mb-10">
+                                <div className="space-y-1">
+                                    <h3 className="text-3xl font-black italic uppercase text-white tracking-tighter leading-none">Dados de Registro</h3>
+                                    <p className="text-[9px] font-black text-blue-500/60 uppercase tracking-[0.3em]">Ambiente de Indexação Operacional</p>
+                                </div>
+                                <button onClick={cancelRegister} className="p-3 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-all">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-8 relative">
+                                {/* AI Status Overlay if analyzing */}
+                                {isAiAnalyzing && (
+                                    <div className="absolute inset-0 z-[60] bg-[#09090b]/90 backdrop-blur-xl flex flex-col items-center justify-center gap-6 animate-in fade-in duration-500 rounded-[2.5rem] border border-violet-500/10">
+                                        <div className="relative">
+                                            <div className="absolute inset-0 rounded-full bg-violet-500/20 blur-3xl scale-150 animate-pulse" />
+                                            <div className="relative w-24 h-24 rounded-[2rem] bg-zinc-900 border border-violet-500/20 flex items-center justify-center shadow-[0_0_50px_rgba(139,92,246,0.3)]">
+                                                <Sparkles size={40} className="text-violet-400 animate-spin" style={{ animationDuration: '4s' }} />
+                                            </div>
+                                        </div>
+                                        <div className="text-center space-y-2">
+                                            <p className="text-sm font-black text-white uppercase tracking-widest px-4">{aiStatus}</p>
+                                            <div className="flex gap-1.5 justify-center">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-[bounce_1s_infinite_0s]" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-[bounce_1s_infinite_0.2s]" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-[bounce_1s_infinite_0.4s]" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {registerImage && (
+                                    <div className="relative w-full aspect-video rounded-[2.5rem] overflow-hidden border border-white/5 group shadow-2xl shrink-0" onClick={() => setIsPreviewExpanded(true)}>
+                                        <img src={registerImage} className="w-full h-full object-cover grayscale brightness-50 group-hover:grayscale-0 group-hover:brightness-100 transition-all duration-700" alt="Capture" />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                                        <div className="absolute bottom-6 left-8 flex items-center gap-3">
+                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                                            <span className="text-[9px] font-black text-white uppercase tracking-widest">Visual do Alvo</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="space-y-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-4">Endereço Principal</label>
+                                        <input
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-6 text-sm text-white focus:border-blue-500 transition-all outline-none font-bold italic h-20"
+                                            placeholder="LOGRADOURO, NÚMERO..."
+                                            value={addressInput}
+                                            onChange={e => setAddressInput(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-4">Setor/Bairro</label>
+                                            <input
+                                                className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white focus:border-blue-500 transition-all outline-none"
+                                                placeholder="BAIRRO"
+                                                value={neighborhoodInput}
+                                                onChange={e => setNeighborhoodInput(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-4">Cidade</label>
+                                            <input
+                                                className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white focus:border-blue-500 transition-all outline-none"
+                                                placeholder="CIDADE"
+                                                value={cityInput}
+                                                onChange={e => setCityInput(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-blue-600/5 border border-blue-600/10 rounded-3xl p-5 flex flex-col gap-1 relative shadow-inner">
+                                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Latitude</label>
+                                            <input
+                                                value={latInput}
+                                                onChange={(e) => setLatInput(e.target.value)}
+                                                className="bg-transparent text-sm font-mono text-white tracking-widest outline-none"
+                                                placeholder="0.000000"
+                                            />
+                                            <LocateFixed size={14} className="absolute top-5 right-5 text-blue-500/20" />
+                                        </div>
+                                        <div className="bg-indigo-600/5 border border-indigo-600/10 rounded-3xl p-5 flex flex-col gap-1 relative shadow-inner">
+                                            <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Longitude</label>
+                                            <input
+                                                value={lngInput}
+                                                onChange={(e) => setLngInput(e.target.value)}
+                                                className="bg-transparent text-sm font-mono text-white tracking-widest outline-none"
+                                                placeholder="0.000000"
+                                            />
+                                            <LocateFixed size={14} className="absolute top-5 right-5 text-indigo-500/20" />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!latInput || !lngInput) return alert('Capture coordenadas primeiro.');
+                                            setLoading(true);
+                                            try {
+                                                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latInput}&lon=${lngInput}`);
+                                                const data = await res.json();
+                                                if (data?.address) {
+                                                    const a = data.address;
+                                                    setAddressInput(`${a.road || a.pedestrian || ''}${a.house_number ? ', ' + a.house_number : ''}`);
+                                                    setNeighborhoodInput(a.suburb || a.neighbourhood || '');
+                                                    setCityInput(a.city || a.town || '');
+                                                }
+                                            } finally { setLoading(false); }
+                                        }}
+                                        disabled={loading || !latInput}
+                                        className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-5 rounded-3xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-emerald-500/20 transition-all shadow-lg active:scale-95"
+                                    >
+                                        <Database size={18} className={loading ? 'animate-spin' : ''} />
+                                        SINCRONIZAÇÃO GEOGRÁFICA
+                                    </button>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-4">Diretivas Adicionais</label>
+                                        <textarea
+                                            placeholder="PONTOS DE REFERÊNCIA OPERACIONAIS..."
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-6 text-sm text-zinc-400 h-24 outline-none italic focus:border-blue-500 transition-all"
+                                            value={notesInput}
+                                            onChange={e => setNotesInput(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <button
+                                        onClick={handleSaveRegistration}
+                                        disabled={loading}
+                                        className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-white shadow-[0_20px_60px_rgba(37,99,235,0.3)] active:scale-95 transition-all text-[11px] mb-4"
+                                    >
+                                        {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : 'CONFIRMAR INDEXAÇÃO'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Cinematic Transition Overlay */}
             {isSendingToRoute && (

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer, Circle } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash } from 'lucide-react';
+import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const mapContainerStyle = {
@@ -16,6 +16,23 @@ const defaultCenter = {
 };
 
 const LIBRARIES: ("places" | "drawing" | "geometry" | "visualization")[] = ["places"];
+
+const darkMapStyle = [
+    { elementType: 'geometry', stylers: [{ color: '#1a1a1a' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ visibility: 'off' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#181818' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2c2c2c' }] },
+    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#373737' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3c3c3c' }] },
+    { featureType: 'road.highway.controlled_access', elementType: 'geometry', stylers: [{ color: '#4e4e4e' }] },
+    { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+    { featureType: 'transit', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
+    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3d3d3d' }] }
+];
 
 export const MapView = () => {
     const { isLoaded } = useJsApiLoader({
@@ -36,8 +53,13 @@ export const MapView = () => {
     const [navigationIndex, setNavigationIndex] = useState(0);
     const [showCelebration, setShowCelebration] = useState(false);
     const [accuracy, setAccuracy] = useState<number | null>(null);
-    const [showRouteConfirmation, setShowRouteConfirmation] = useState(false);
     const [showCheckAnimation, setShowCheckAnimation] = useState(false);
+    const [showRouteConfirmation, setShowRouteConfirmation] = useState(false);
+    const [manifestExpanded, setManifestExpanded] = useState(false);
+    const [editExpanded, setEditExpanded] = useState(false);
+    const [sheetExpanded, setSheetExpanded] = useState(false);
+    const [undoTimeout, setUndoTimeout] = useState<any>(null);
+    const [lastActionPointId, setLastActionPointId] = useState<string | null>(null);
 
     // Marker edit panel
     const [editingPoint, setEditingPoint] = useState<RoutePoint | null>(null);
@@ -272,17 +294,29 @@ export const MapView = () => {
         }
     };
 
-    const handleCompleteStop = async () => {
+    const handleCompleteStop = async (delivered: boolean) => {
         const dests = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
         const point = dests[navigationIndex];
         if (!point) return;
 
+        // Limpar timeouts anteriores se houver
+        if (undoTimeout) clearTimeout(undoTimeout);
+
+        // Salvar estado para desfazer
+        setLastActionPointId(point.id);
+
+        // Efeito visual imediato
         setShowCheckAnimation(true);
-        setTimeout(async () => {
-            setShowCheckAnimation(false);
-            const updated = routePoints.map(p => p.id === point.id ? { ...p, isDelivered: true } : p);
+        setTimeout(() => setShowCheckAnimation(false), 800);
+
+        // Marcar localmente primeiro para resposta instantânea
+        const updated = routePoints.map(p => p.id === point.id ? { ...p, isDelivered: delivered } : p);
+        setRoutePoints(updated);
+
+        // Timer de 3 segundos para confirmar a ação (UNDO)
+        const timeout = setTimeout(async () => {
             await updateActiveRoute(updated);
-            setRoutePoints(updated);
+            setLastActionPointId(null);
 
             if (navigationIndex < dests.length - 1) {
                 setNavigationIndex(prev => prev + 1);
@@ -296,7 +330,22 @@ export const MapView = () => {
                 });
                 setTimeout(() => setShowCelebration(false), 5000);
             }
-        }, 1200);
+        }, 3000);
+
+        setUndoTimeout(timeout);
+    };
+
+    const handleUndoAction = () => {
+        if (undoTimeout) {
+            clearTimeout(undoTimeout);
+            setUndoTimeout(null);
+
+            // Reverter localmente
+            if (lastActionPointId) {
+                setRoutePoints(prev => prev.map(p => p.id === lastActionPointId ? { ...p, isDelivered: false } : p));
+            }
+            setLastActionPointId(null);
+        }
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -369,10 +418,10 @@ export const MapView = () => {
         });
     };
 
-    if (!isLoaded) return <div className="w-full h-full bg-white flex items-center justify-center font-black">CARREGANDO MAPA...</div>;
+    if (!isLoaded) return <div className="w-full h-full bg-black flex items-center justify-center font-black text-white">CARREGANDO MAPA...</div>;
 
     return (
-        <div className="relative w-full h-full bg-white overflow-hidden">
+        <div className="relative w-full h-full bg-black overflow-hidden">
             {/* SEARCH HUD */}
             <div className={`absolute top-10 left-1/2 -translate-x-1/2 z-40 w-full max-w-lg px-6 transition-all duration-700 ${isNavigating ? '-translate-y-32' : ''}`}>
                 <div className="relative group">
@@ -428,7 +477,7 @@ export const MapView = () => {
                 onUnmount={onUnmount}
                 options={{
                     disableDefaultUI: true,
-                    styles: [] // Light theme default
+                    styles: darkMapStyle
                 }}
             >
                 {routePoints.map((p, i) => (
@@ -499,107 +548,189 @@ export const MapView = () => {
                 </button>
             </div>
 
-            {/* EDIT PANEL */}
+            {/* EDIT PANEL (Standardized Bottom Sheet) */}
             {editingPoint && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
-                    <div className="w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-2xl font-black italic uppercase text-zinc-900 mb-6">Modificar Ponto</h3>
-                        <div className="space-y-4 mb-8">
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Identificação</label>
-                                <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 font-bold" placeholder="Nome..." />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Bairro</label>
-                                <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900" placeholder="Bairro..." />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
+                <div className="absolute inset-0 z-[100] flex flex-col justify-end bg-black/40 backdrop-blur-sm pointer-events-none">
+                    <div className={`w-full bg-white border-t-2 border-zinc-100 rounded-t-[3.5rem] shadow-2xl transition-all duration-500 pointer-events-auto ${editExpanded ? 'h-[85vh]' : 'h-[500px]'}`}>
+                        <div onClick={() => setEditExpanded(!editExpanded)} className="py-4 flex flex-col items-center gap-1 cursor-pointer">
+                            <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
+                            <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${editExpanded ? 'rotate-180' : ''}`} />
+                        </div>
+
+                        <div className="px-8 pb-12 h-full overflow-y-auto custom-scrollbar">
+                            <h3 className="text-2xl font-black italic uppercase text-zinc-900 mb-6">Modificar Ponto</h3>
+                            <div className="space-y-5 mb-8">
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Latitude GPS</label>
-                                    <input value={editLat} onChange={e => setEditLat(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 text-xs font-mono" placeholder="-20.000..." />
+                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Identificação</label>
+                                    <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 font-bold focus:border-blue-500 outline-none" placeholder="Nome..." />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Longitude GPS</label>
-                                    <input value={editLng} onChange={e => setEditLng(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 text-xs font-mono" placeholder="-44.000..." />
+                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Bairro</label>
+                                    <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 focus:border-blue-500 outline-none" placeholder="Bairro..." />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Latitude GPS</label>
+                                        <input value={editLat} onChange={e => setEditLat(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 text-xs font-mono" placeholder="-20.000..." />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Longitude GPS</label>
+                                        <input value={editLng} onChange={e => setEditLng(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 text-xs font-mono" placeholder="-44.000..." />
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        if ('geolocation' in navigator) {
+                                            navigator.geolocation.getCurrentPosition(pos => {
+                                                setEditLat(String(pos.coords.latitude));
+                                                setEditLng(String(pos.coords.longitude));
+                                            });
+                                        }
+                                    }}
+                                    className="w-full bg-blue-50 text-blue-600 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-blue-100 active:scale-95 transition-all shadow-sm shadow-blue-500/10"
+                                >
+                                    <LocateFixed size={14} /> Sincronizar GPS Atual
+                                </button>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Observações Adicionais</label>
+                                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 h-28 text-sm outline-none focus:border-blue-500" placeholder="Informações extras..." />
                                 </div>
                             </div>
-                            <button
-                                onClick={() => {
-                                    if ('geolocation' in navigator) {
-                                        navigator.geolocation.getCurrentPosition(pos => {
-                                            setEditLat(String(pos.coords.latitude));
-                                            setEditLng(String(pos.coords.longitude));
-                                        });
-                                    }
-                                }}
-                                className="w-full bg-blue-50 text-blue-600 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-100 transition-all"
-                            >
-                                <LocateFixed size={14} /> Usar Minha Localização Atual
-                            </button>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Observações</label>
-                                <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 h-24 text-sm" placeholder="Notas..." />
+                            <div className="flex flex-col gap-3">
+                                <button onClick={handleSavePointEdit} className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-xl shadow-blue-500/20 active:scale-95 transition-all">Salvar Alterações</button>
+                                <button onClick={() => { setEditingPoint(null); setEditExpanded(false); }} className="w-full py-4 text-zinc-400 font-extrabold uppercase text-[10px] tracking-[0.3em]">Cancelar Operação</button>
                             </div>
                         </div>
-                        <button onClick={handleSavePointEdit} className="w-full bg-blue-600 py-4 rounded-3xl font-black uppercase text-white shadow-lg">Salvar Alterações</button>
-                        <button onClick={() => setEditingPoint(null)} className="w-full mt-4 text-zinc-400 font-black uppercase text-xs">Cancelar</button>
                     </div>
                 </div>
             )}
 
-            {/* ROUTE CONFIRMATION */}
+            {/* ROUTE CONFIRMATION (Standardized Bottom Sheet) */}
             {showRouteConfirmation && (
-                <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/20 backdrop-blur-sm pointer-events-none">
-                    <div className="bg-white border-t-2 border-zinc-100 p-8 pb-12 rounded-t-[3.5rem] pointer-events-auto shadow-2xl animate-slide-up">
-                        <div className="w-12 h-1.5 bg-zinc-200 rounded-full mx-auto mb-10" />
-                        <h2 className="text-2xl font-black italic text-zinc-900 uppercase mb-8">Manifesto de Rota</h2>
-                        <div className="max-h-[50vh] overflow-y-auto space-y-3 mb-10">
-                            {routePoints.filter(p => !p.isDelivered && p.id !== 'current').map((p, idx) => (
-                                <div key={p.id} className="bg-zinc-50 border border-zinc-100 p-5 rounded-3xl flex items-center gap-4 group/item relative">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black italic shrink-0">#{idx + 1}</div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-zinc-900 font-black uppercase text-xs truncate">{p.name}</p>
-                                        <p className="text-zinc-500 text-[10px] uppercase truncate">{p.neighborhood}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {(!p.lat || !p.lng) && <div className="text-[7px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-black uppercase whitespace-nowrap">Sem GPS</div>}
-                                        <button onClick={() => openEditPanel(p)} className="p-2.5 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-blue-500 transition-all shadow-sm">
-                                            <Pencil size={14} />
-                                        </button>
-                                        <button onClick={() => handleDeletePoint(p.id)} className="p-2.5 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-red-500 transition-all shadow-sm">
-                                            <Trash size={14} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                <div className="absolute inset-0 z-[100] flex flex-col justify-end bg-black/20 backdrop-blur-sm pointer-events-none">
+                    <div className={`bg-white border-t-2 border-zinc-100 rounded-t-[3.5rem] pointer-events-auto shadow-2xl transition-all duration-500 ${manifestExpanded ? 'h-[85vh]' : 'h-[550px]'}`}>
+                        <div onClick={() => setManifestExpanded(!manifestExpanded)} className="py-4 flex flex-col items-center gap-1 cursor-pointer">
+                            <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
+                            <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${manifestExpanded ? 'rotate-180' : ''}`} />
                         </div>
-                        <button onClick={() => { setShowRouteConfirmation(false); setIsNavigating(true); setNavigationIndex(0); }} className="w-full bg-blue-600 py-6 rounded-3xl font-black uppercase text-white shadow-xl">Iniciar Rota</button>
+
+                        <div className="px-8 pb-12 flex flex-col h-full overflow-hidden">
+                            <h2 className="text-2xl font-black italic text-zinc-900 uppercase mb-8">Manifesto de Rota</h2>
+                            <div className="flex-1 overflow-y-auto space-y-3 mb-8 custom-scrollbar bg-zinc-50/50 p-2 rounded-[2.5rem]">
+                                {routePoints.filter(p => !p.isDelivered && p.id !== 'current').map((p, idx) => (
+                                    <div key={p.id} className="bg-white border border-zinc-100 p-5 rounded-3xl flex items-center gap-4 group/item relative shadow-sm">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black italic shrink-0">#{idx + 1}</div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-zinc-900 font-black uppercase text-[11px] truncate">{p.name}</p>
+                                            <p className="text-zinc-500 text-[9px] uppercase tracking-widest truncate">{p.neighborhood}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {(!p.lat || !p.lng) && <div className="text-[7px] bg-red-50 text-red-600 px-2 py-1 rounded-full font-black uppercase whitespace-nowrap">Sem GPS</div>}
+                                            <button onClick={() => openEditPanel(p)} className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 text-zinc-400 hover:text-blue-500 transition-all shadow-sm active:scale-90">
+                                                <Pencil size={14} />
+                                            </button>
+                                            <button onClick={() => handleDeletePoint(p.id)} className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 text-zinc-400 hover:text-red-500 transition-all shadow-sm active:scale-90">
+                                                <Trash size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                <button onClick={() => { setShowRouteConfirmation(false); setIsNavigating(true); setNavigationIndex(0); setManifestExpanded(false); }} className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-500/30 active:scale-95 transition-all">Iniciar Jornada</button>
+                                <button onClick={() => { setShowRouteConfirmation(false); setManifestExpanded(false); }} className="w-full py-4 text-zinc-400 font-extrabold uppercase text-[10px] tracking-[0.3em]">Recolher Manifesto</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* NAV SHEET */}
+            {/* NAV DRAWER (Maps Style) */}
             {isNavigating && (() => {
                 const pending = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
                 const currentStop = pending[navigationIndex];
                 if (!currentStop) return null;
                 return (
-                    <div className="absolute bottom-10 left-0 right-0 z-[30] px-6">
-                        <div className="bg-white border-2 border-zinc-100 rounded-[2.5rem] p-6 shadow-2xl">
-                            <div className="flex items-center gap-4 mb-6">
-                                <div className="w-14 h-14 rounded-2xl bg-blue-600 flex flex-col items-center justify-center shrink-0">
-                                    <span className="text-[10px] font-black text-blue-200">PARADA</span>
-                                    <span className="text-xl font-black text-white">{navigationIndex + 1}</span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{currentStop.neighborhood || 'PENDENTE'}</p>
-                                    <h3 className="text-lg font-black italic uppercase text-zinc-900 truncate">{currentStop.name}</h3>
-                                </div>
-                                <button onClick={() => setIsNavigating(false)} className="text-zinc-300"><X /></button>
+                    <div className="absolute inset-x-0 bottom-0 z-50 pointer-events-none">
+                        {/* Undo Notification Popup */}
+                        {lastActionPointId && (
+                            <div className="absolute -top-20 left-1/2 -translate-x-1/2 bg-zinc-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-4 shadow-2xl animate-in slide-in-from-bottom-5 duration-300 pointer-events-auto">
+                                <span className="text-white font-black uppercase text-[10px] tracking-widest">Ação registrada!</span>
+                                <button onClick={handleUndoAction} className="flex items-center gap-2 text-blue-400 font-black uppercase text-[10px] hover:text-white transition-colors border-l border-white/10 pl-4">
+                                    <RotateCcw size={14} /> Desfazer
+                                </button>
                             </div>
-                            <button onClick={handleCompleteStop} className="w-full bg-emerald-500 py-5 rounded-3xl font-black uppercase text-white shadow-emerald-500/20 shadow-xl flex items-center justify-center gap-3">
-                                <CheckCircle2 size={20} /> Concluir Entrega
-                            </button>
+                        )}
+
+                        <div className={`w-full bg-white border-t-2 border-zinc-100 rounded-t-[3rem] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] transition-all duration-500 pointer-events-auto ${sheetExpanded ? 'h-[70vh]' : 'h-[300px]'}`}>
+                            <div className="w-full flex flex-col h-full">
+                                {/* Drag Handle */}
+                                <div onClick={() => setSheetExpanded(!sheetExpanded)} className="py-4 flex flex-col items-center gap-1 cursor-pointer">
+                                    <div className="w-12 h-1.5 bg-zinc-100 rounded-full" />
+                                    <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${sheetExpanded ? 'rotate-180' : ''}`} />
+                                </div>
+
+                                <div className="px-8 pb-10 flex-1 overflow-y-auto">
+                                    {/* Stop ID & Address HUD */}
+                                    <div className="flex items-start justify-between mb-8">
+                                        <div className="flex items-center gap-5">
+                                            <div className="w-16 h-16 rounded-[1.5rem] bg-blue-600 flex flex-col items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
+                                                <span className="text-[10px] font-black text-blue-200">#</span>
+                                                <span className="text-2xl font-black text-white">{navigationIndex + 1}</span>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-black text-blue-600 uppercase tracking-[0.2em] mb-1">{currentStop.neighborhood || 'SETOR PENDENTE'}</p>
+                                                <h3 className="text-2xl font-black italic uppercase text-zinc-900 leading-tight truncate pr-4">{currentStop.name}</h3>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setIsNavigating(false)} className="p-3 bg-zinc-50 rounded-full text-zinc-300 hover:text-red-500 transition-all">
+                                            <X size={20} />
+                                        </button>
+                                    </div>
+
+                                    {/* Action Grid */}
+                                    <div className="grid grid-cols-2 gap-4 mb-8">
+                                        <button
+                                            onClick={() => handleCompleteStop(true)}
+                                            className="h-20 bg-emerald-500 rounded-3xl flex flex-col items-center justify-center gap-1 text-white shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                                        >
+                                            <PackageCheck size={28} />
+                                            <span className="text-[10px] font-black uppercase">Entregue</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleCompleteStop(false)}
+                                            className="h-20 bg-zinc-900 rounded-3xl flex flex-col items-center justify-center gap-1 text-white shadow-lg shadow-zinc-900/20 active:scale-95 transition-all"
+                                        >
+                                            <PackageX size={28} />
+                                            <span className="text-[10px] font-black uppercase">Não Entregue</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Map Link / Navigation Button */}
+                                    <button
+                                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentStop.lat},${currentStop.lng}`, '_blank')}
+                                        className="w-full bg-blue-50 border border-blue-100 py-6 rounded-3xl flex items-center justify-center gap-4 text-blue-600 hover:bg-blue-100 transition-all font-black uppercase tracking-widest text-xs"
+                                    >
+                                        <Navigation size={20} fill="currentColor" /> Abrir no Google Maps
+                                    </button>
+
+                                    {sheetExpanded && (
+                                        <div className="mt-10 animate-in fade-in slide-in-from-top-4 duration-500">
+                                            <h4 className="text-[10px] font-black uppercase text-zinc-400 mb-4 tracking-widest">Informações Adicionais</h4>
+                                            <div className="bg-zinc-50 rounded-3xl p-6 space-y-4">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-zinc-400 uppercase">Cidade</p>
+                                                    <p className="text-zinc-900 font-bold">{currentStop.city || '-'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-zinc-400 uppercase">Notas do Operador</p>
+                                                    <p className="text-zinc-600 text-sm leading-relaxed">{currentStop.notes || 'Sem observações para este local.'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );

@@ -26,9 +26,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 }
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>,
 )
