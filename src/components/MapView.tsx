@@ -410,7 +410,7 @@ export const MapView = () => {
                 return [lastPoint.lat, lastPoint.lng];
             }
         }
-        return [-23.55052, -46.633309]; // default center (São Paulo)
+        return [-20.143196, -44.2174965]; // default center (Brumadinho, MG) as requested by incorporating the map link
     };
 
     const center = getMapCenter();
@@ -650,7 +650,7 @@ export const MapView = () => {
                                 className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-3 rounded-2xl border border-white/5 transition-all"
                                 title="Editar Endereço"
                             >
-                                <Plus size={16} className="rotate-45" /> {/* Using Plus rotated as a subtle edit/settings icon or just for variety */}
+                                <Plus size={16} className="rotate-45" />
                             </button>
                             <button
                                 onClick={handleCompleteStop}
@@ -668,7 +668,7 @@ export const MapView = () => {
             {isEditingCurrentStop && editingPointData && (
                 <div className="absolute inset-0 z-[10002] flex items-center justify-center p-6 animate-in fade-in duration-300">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsEditingCurrentStop(false)}></div>
-                    <div className="relative w-full max-w-md bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                    <div className="relative w-full max-md bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="p-6 border-b border-white/5 flex justify-between items-center">
                             <h3 className="text-lg font-bold text-white">Editar Parada</h3>
                             <button onClick={() => setIsEditingCurrentStop(false)} className="p-2 text-zinc-400 hover:text-white">
@@ -774,6 +774,7 @@ export const MapView = () => {
                     </div>
                 </div>
             )}
+
             {/* CELEBRATION MODAL */}
             {showCelebration && (
                 <div className="fixed inset-0 z-[20000] flex items-center justify-center p-6 animate-in fade-in duration-500">
