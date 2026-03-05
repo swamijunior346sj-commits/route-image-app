@@ -76,6 +76,7 @@ export interface RoutePoint {
     lat: number;
     lng: number;
     scannedAt: number;
+    notes?: string;
 }
 
 export const getActiveRoute = async (): Promise<RoutePoint[]> => {

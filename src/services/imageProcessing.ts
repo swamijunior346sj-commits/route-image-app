@@ -32,8 +32,40 @@ export const extractFeatures = async (
         throw new Error('Model failed to load');
     }
 
-    // model.infer expects true for embeddings layer
-    const embedding = model.infer(input, true);
+    // --- LABEL-FOCUSED AUTO-CROP ---
+    // Optimized for PACKAGE LABELS: capturing barcode and address text.
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = 224;
+    canvas.height = 224;
+
+    let sourceWidth, sourceHeight;
+    if (input instanceof ImageData) {
+        sourceWidth = input.width;
+        sourceHeight = input.height;
+    } else {
+        sourceWidth = (input as any).videoWidth || (input as any).naturalWidth || (input as any).width;
+        sourceHeight = (input as any).videoHeight || (input as any).naturalHeight || (input as any).height;
+    }
+
+    // Capture 85% of center - labels are usually white rectangles.
+    const cropSize = Math.min(sourceWidth, sourceHeight) * 0.85;
+    const sx = (sourceWidth - cropSize) / 2;
+    const sy = (sourceHeight - cropSize) / 2;
+
+    if (ctx) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, 224, 224);
+        if (input instanceof ImageData) {
+            ctx.putImageData(input, -sx, -sy);
+        } else {
+            ctx.drawImage(input, sx, sy, cropSize, cropSize, 0, 0, 224, 224);
+        }
+    }
+
+    // Process label area
+    const embedding = model.infer(canvas, true);
     const data = await embedding.data();
     embedding.dispose();
 

@@ -7,15 +7,18 @@ import L from 'leaflet';
 import { MapPin, Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, Plus, Save } from 'lucide-react';
 
 // Fix leaflet icon
+// Fix leaflet icon
 const customIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/8157/8157973.png', // Delivery icon
-    iconSize: [35, 35],
-    iconAnchor: [17, 35],
-    popupAnchor: [0, -35]
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/679/679821.png', // Vibrant Box/Package icon
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40],
+    className: 'drop-shadow-glow-blue' // Adding a subtle glow via CSS
 });
 
 const userIcon = L.divIcon({
-    className: 'pulse-icon',
+    className: 'pulse-icon-container',
+    html: `<div class="w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-[0_0_10px_rgba(59,130,246,0.8)] pulse-icon"></div>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12]
 });
@@ -35,6 +38,17 @@ export const MapView = () => {
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [navigationIndex, setNavigationIndex] = useState(0);
+
+    // Stop Editing from Navigation Panel
+    const [isEditingCurrentStop, setIsEditingCurrentStop] = useState(false);
+    const [editingPointData, setEditingPointData] = useState<{ name: string, notes: string } | null>(null);
+
+    // Undo System
+    const [undoVisible, setUndoVisible] = useState(false);
+    const [lastCompletedPoint, setLastCompletedPoint] = useState<RoutePoint | null>(null);
+    const [undoCountdown, setUndoCountdown] = useState(2);
+    const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
+
     const autocompleteTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Silently try to get location on mount for better search suggestions
@@ -235,16 +249,85 @@ export const MapView = () => {
         }
     };
 
+    const handleSaveStopEdit = async () => {
+        if (!editingPointData || !lastCompletedPoint && !isNavigating) return;
+
+        const dests = routePoints.filter(p => p.id !== 'current');
+        const pointToEdit = dests[navigationIndex];
+        if (!pointToEdit) return;
+
+        const updatedPoint = {
+            ...pointToEdit,
+            name: editingPointData.name,
+            notes: editingPointData.notes
+        };
+
+        const updatedRoute = routePoints.map(p => p.id === pointToEdit.id ? updatedPoint : p);
+        setRoutePoints(updatedRoute);
+        await updateActiveRoute(updatedRoute.filter(p => p.id !== 'current'));
+        await updateRecord(pointToEdit.id, { name: editingPointData.name, notes: editingPointData.notes });
+
+        setIsEditingCurrentStop(false);
+        if (navigator.vibrate) navigator.vibrate(20);
+    };
+
     const handleCompleteStop = async () => {
         const dests = routePoints.filter(p => p.id !== 'current');
-        if (navigationIndex < dests.length - 1) {
-            setNavigationIndex(prev => prev + 1);
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-        } else {
+        const point = dests[navigationIndex];
+
+        if (!point) return;
+
+        // Save for undo
+        setLastCompletedPoint(point);
+        setUndoVisible(true);
+        setUndoCountdown(2);
+
+        if (navigator.vibrate) navigator.vibrate([50]);
+
+        // Feedback: Show undo card for 2 seconds
+        if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+
+        let timeLeft = 2;
+        undoTimerRef.current = setInterval(() => {
+            timeLeft -= 1;
+            setUndoCountdown(timeLeft);
+            if (timeLeft <= 0) {
+                if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+                setUndoVisible(false);
+                finalizeCompletion(point.id);
+            }
+        }, 1000);
+    };
+
+    const handleUndo = () => {
+        if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+        setUndoVisible(false);
+        setLastCompletedPoint(null);
+        if (navigator.vibrate) navigator.vibrate(30);
+    };
+
+    const finalizeCompletion = async (pointId: string) => {
+        const updatedPoints = routePoints.filter(p => p.id !== pointId);
+        setRoutePoints(updatedPoints);
+        await updateActiveRoute(updatedPoints.filter(p => p.id !== 'current'));
+
+        const remainingDests = updatedPoints.filter(p => p.id !== 'current');
+        if (remainingDests.length === 0) {
             alert("Roteiro Finalizado! Parabéns pelas entregas.");
             setIsNavigating(false);
             setNavigationIndex(0);
-            handleClear(); // clear the temporary finished route
+            setOsrmPath([]);
+        } else {
+            // Recalculate OSRM path with remaining points for precision
+            const coordsString = updatedPoints.map(p => `${p.lng},${p.lat}`).join(';');
+            try {
+                const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`);
+                const data = await res.json();
+                if (data.code === 'Ok') {
+                    const leafletCoords: [number, number][] = data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
+                    setOsrmPath(leafletCoords);
+                }
+            } catch (e) { console.log(e); }
         }
     };
 
@@ -471,15 +554,94 @@ export const MapView = () => {
                             <h4 className="text-base font-bold text-white truncate leading-tight">
                                 {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.name || "Destino Desconhecido"}
                             </h4>
-                            <p className="text-[10px] text-zinc-400 mt-0.5">Siga no mapa para chegar ao destino</p>
+                            {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.notes && (
+                                <p className="text-[10px] text-zinc-400 mt-0.5 line-clamp-1 italic">
+                                    " {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.notes} "
+                                </p>
+                            )}
                         </div>
 
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => {
+                                    const p = routePoints.filter(p => p.id !== 'current')[navigationIndex];
+                                    setEditingPointData({ name: p.name, notes: p.notes || '' });
+                                    setIsEditingCurrentStop(true);
+                                }}
+                                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-3 rounded-2xl border border-white/5 transition-all"
+                                title="Editar Endereço"
+                            >
+                                <Plus size={16} className="rotate-45" /> {/* Using Plus rotated as a subtle edit/settings icon or just for variety */}
+                            </button>
+                            <button
+                                onClick={handleCompleteStop}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-3 rounded-2xl shadow-lg transition-all active:scale-90 flex items-center gap-2 text-xs"
+                            >
+                                <Save size={16} />
+                                Entregue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* EDIT STOP MODAL */}
+            {isEditingCurrentStop && editingPointData && (
+                <div className="absolute inset-0 z-[10002] flex items-center justify-center p-6 animate-in fade-in duration-300">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsEditingCurrentStop(false)}></div>
+                    <div className="relative w-full max-w-md bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-white">Editar Parada</h3>
+                            <button onClick={() => setIsEditingCurrentStop(false)} className="p-2 text-zinc-400 hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 flex flex-col gap-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Nome do Local / Endereço</label>
+                                <input
+                                    className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
+                                    value={editingPointData.name}
+                                    onChange={e => setEditingPointData({ ...editingPointData, name: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Observações / Notas</label>
+                                <textarea
+                                    className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white h-32 resize-none focus:border-blue-500/50 focus:outline-none"
+                                    placeholder="Ex: Tocar campainha no fundo, Portão azul..."
+                                    value={editingPointData.notes}
+                                    onChange={e => setEditingPointData({ ...editingPointData, notes: e.target.value })}
+                                />
+                            </div>
+                            <button
+                                onClick={handleSaveStopEdit}
+                                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2"
+                            >
+                                <Save size={18} />
+                                SALVAR ALTERAÇÕES
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* UNDO NOTIFICATION CARD */}
+            {undoVisible && lastCompletedPoint && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[10001] animate-in zoom-in-90 fade-in duration-300">
+                    <div className="bg-zinc-900 border border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.5)] p-6 rounded-[2.5rem] flex flex-col items-center min-w-[240px] gap-3 backdrop-blur-xl">
+                        <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mb-1">
+                            <span className="text-white font-bold text-lg">{undoCountdown}</span>
+                        </div>
+                        <h4 className="text-white font-bold text-center">Ponto Marcado!</h4>
+                        <p className="text-zinc-400 text-xs text-center px-4">{lastCompletedPoint.name} entregue.</p>
+
                         <button
-                            onClick={handleCompleteStop}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-3 rounded-2xl shadow-lg transition-all active:scale-90 flex items-center gap-2 text-xs"
+                            onClick={handleUndo}
+                            className="w-full mt-2 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors border border-white/5"
                         >
-                            <Save size={16} />
-                            Concluir
+                            <Trash2 size={16} className="text-blue-400" />
+                            DESFAZER
                         </button>
                     </div>
                 </div>
