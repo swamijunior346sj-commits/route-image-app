@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer, Circle } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2 } from 'lucide-react';
+import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const mapContainerStyle = {
@@ -17,17 +17,7 @@ const defaultCenter = {
 
 const LIBRARIES: ("places" | "drawing" | "geometry" | "visualization")[] = ["places"];
 
-// Dark mode style for Google Maps
-const darkMapStyle = [
-    { elementType: "geometry", stylers: [{ color: "#212121" }] },
-    { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
-    { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#757575" }] },
-    { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c2c" }] },
-    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a8a8a" }] },
-    { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] }
-];
+// Map configuration constants
 
 export const MapView = () => {
     const { isLoaded } = useJsApiLoader({
@@ -48,6 +38,8 @@ export const MapView = () => {
     const [navigationIndex, setNavigationIndex] = useState(0);
     const [selectedPoint, setSelectedPoint] = useState<RoutePoint | null>(null);
     const [showCelebration, setShowCelebration] = useState(false);
+    const [accuracy, setAccuracy] = useState<number | null>(null);
+    const [showRouteConfirmation, setShowRouteConfirmation] = useState(false);
 
     const autocompleteTimerRef = useRef<any>(null);
     const placesServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -64,14 +56,30 @@ export const MapView = () => {
     }, []);
 
     useEffect(() => {
+        let watchId: number | null = null;
+
         if ('geolocation' in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                (err) => console.log('Location bias failed:', err),
-                { enableHighAccuracy: false, timeout: 5000 }
+            watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    setUserLocation(coords);
+                    setAccuracy(pos.coords.accuracy);
+
+                    // Keep "You are here" point in sync silently
+                    setRoutePoints(prev => {
+                        const others = prev.filter(p => p.id !== 'current');
+                        return [...others, { id: 'current', name: 'Você está aqui', ...coords, scannedAt: Date.now() }];
+                    });
+                },
+                (err) => console.log('Continuous GPS error:', err),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }
         loadRoute();
+
+        return () => {
+            if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+        };
     }, []);
 
     const loadRoute = async () => {
@@ -86,7 +94,9 @@ export const MapView = () => {
                 (pos) => {
                     const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                     setUserLocation(coords);
+                    setAccuracy(pos.coords.accuracy);
                     if (map) map.panTo(coords);
+                    if (map) map.setZoom(17); // Professional precision zoom level
 
                     setRoutePoints(prev => {
                         const filtered = prev.filter(p => p.id !== 'current');
@@ -94,9 +104,9 @@ export const MapView = () => {
                     });
                 },
                 () => {
-                    if (!silent) alert('GPS indisponível.');
+                    if (!silent) alert('GPS indisponível para alta precisão.');
                 },
-                { enableHighAccuracy: true, timeout: 5000 }
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }
     };
@@ -144,6 +154,7 @@ export const MapView = () => {
                     ...sortedIntermediate,
                     validPoints[validPoints.length - 1]
                 ]);
+                setShowRouteConfirmation(true);
             }
         } catch (err) {
             console.error("Routing error:", err);
@@ -240,14 +251,13 @@ export const MapView = () => {
         <div className="relative w-full h-full flex flex-col pt-safe bg-black overflow-hidden">
             {/* Header HUD */}
             <div className="absolute top-0 z-20 w-full p-6 flex flex-col gap-4 pointer-events-none">
-                <div className="flex justify-between items-start">
-                    <div className="space-y-1">
-                        <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase">Operação <span className="text-blue-500">Mapa</span></h1>
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,1)]" />
-                            <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">Sistemas Google Ativos</p>
+                <div className="flex flex-wrap items-center gap-2">
+                    {accuracy !== null && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
+                            <div className={`w-1.5 h-1.5 rounded-full ${accuracy < 20 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : accuracy < 50 ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                            <p className="text-[9px] text-white font-black tracking-tighter uppercase italic">SINAL GPS: {Math.round(accuracy)}m</p>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="relative pointer-events-auto max-w-lg">
@@ -264,12 +274,29 @@ export const MapView = () => {
                 </div>
 
                 {searchResults.length > 0 && (
-                    <div className="mt-2 bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-h-60 overflow-y-auto pointer-events-auto flex flex-col p-2 gap-1 animate-slide-up max-w-lg shadow-2xl">
+                    <div className="mt-2 bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-h-72 overflow-y-auto pointer-events-auto flex flex-col p-3 gap-2 animate-slide-up max-w-lg shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] custom-scrollbar">
                         {searchResults.map((res, i) => (
-                            <button key={i} onClick={() => selectPrediction(res)} className="text-left p-4 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/5 group">
-                                <p className="text-[10px] font-bold text-white uppercase tracking-tight">{res.structured_formatting.main_text}</p>
-                                <p className="text-[8px] text-zinc-500 uppercase">{res.structured_formatting.secondary_text}</p>
-                            </button>
+                            <div key={i} className="flex items-center gap-3 p-1">
+                                <button
+                                    onClick={() => selectPrediction(res)}
+                                    className="flex-1 text-left p-4 bg-white/[0.02] hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/10 group flex items-start gap-4"
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center border border-white/5 group-hover:border-blue-500/30 transition-colors">
+                                        <MapPin size={18} className="text-zinc-600 group-hover:text-blue-500 transition-colors" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[11px] font-black text-white uppercase tracking-tight truncate">{res.structured_formatting.main_text}</p>
+                                        <p className="text-[9px] text-zinc-500 uppercase truncate mt-0.5">{res.structured_formatting.secondary_text}</p>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => selectPrediction(res)}
+                                    className="w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all border border-blue-400/20"
+                                    title="Adicionar à Rota"
+                                >
+                                    <Plus size={24} />
+                                </button>
+                            </div>
                         ))}
                     </div>
                 )}
@@ -282,10 +309,9 @@ export const MapView = () => {
                 onLoad={onLoad}
                 onUnmount={onUnmount}
                 options={{
-                    styles: darkMapStyle,
-                    disableDefaultUI: true,
-                    clickableIcons: false,
-                    zoomControl: false,
+                    disableDefaultUI: false,
+                    clickableIcons: true,
+                    zoomControl: true,
                     gestureHandling: 'greedy'
                 }}
             >
@@ -309,6 +335,21 @@ export const MapView = () => {
                         }}
                     />
                 ))}
+
+                {userLocation && accuracy && (
+                    <Circle
+                        center={userLocation}
+                        radius={accuracy}
+                        options={{
+                            fillColor: '#3b82f6',
+                            fillOpacity: 0.1,
+                            strokeColor: '#3b82f6',
+                            strokeOpacity: 0.3,
+                            strokeWeight: 1,
+                            clickable: false
+                        }}
+                    />
+                )}
 
                 {directionsResponse && (
                     <DirectionsRenderer
@@ -352,6 +393,61 @@ export const MapView = () => {
                     <Trash2 size={24} />
                 </button>
             </div>
+
+            {/* Route Confirmation Bottom Sheet */}
+            {showRouteConfirmation && directionsResponse && (
+                <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-sm pointer-events-none">
+                    <div className="bg-zinc-950/95 border-t border-white/10 p-8 pb-12 rounded-t-[3.5rem] animate-slide-up pointer-events-auto max-h-[85vh] flex flex-col shadow-[0_-25px_60px_rgba(0,0,0,0.9)]">
+                        <div className="w-16 h-1.5 bg-zinc-800 rounded-full mx-auto mb-10" />
+
+                        <div className="flex justify-between items-center mb-8 px-2">
+                            <div className="space-y-1">
+                                <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">Manifesto de Rota</h2>
+                                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">{routePoints.filter(p => p.id !== 'current' && !p.isDelivered).length} Pontos de Entrega</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Total Estimado</p>
+                                <p className="text-xl font-black text-white italic">
+                                    {(directionsResponse.routes[0].legs.reduce((acc, leg) => acc + (leg.distance?.value || 0), 0) / 1000).toFixed(1)}KM
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto custom-scrollbar px-2 space-y-4 mb-10">
+                            {routePoints.filter(p => p.id !== 'current' && !p.isDelivered).map((point, idx) => (
+                                <div key={point.id} className="bg-white/[0.03] border border-white/5 p-5 rounded-3xl flex items-center gap-5 group hover:bg-white/[0.06] transition-all">
+                                    <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-[12px] font-black text-blue-500 italic">
+                                        #{idx + 1}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[13px] font-black text-white uppercase truncate tracking-tight">{point.name}</p>
+                                        <p className="text-[10px] text-zinc-500 uppercase truncate mt-0.5">{point.neighborhood || 'Zona_Operacional'}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                onClick={() => setShowRouteConfirmation(false)}
+                                className="bg-white/[0.03] border border-white/10 py-6 rounded-3xl text-[12px] font-black uppercase text-zinc-400 tracking-widest active:scale-95 transition-all"
+                            >
+                                Voltar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowRouteConfirmation(false);
+                                    setIsNavigating(true);
+                                    setNavigationIndex(0);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-500 border border-blue-400/30 py-6 rounded-3xl flex items-center justify-center gap-3 shadow-[0_20px_40px_rgba(37,99,235,0.4)] text-[12px] font-black uppercase text-white tracking-widest active:scale-95 transition-all"
+                            >
+                                Iniciar Operação
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Navigation Bar Bottom */}
             {isNavigating && (

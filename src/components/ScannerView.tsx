@@ -25,6 +25,7 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
     const [neighborhoodInput, setNeighborhoodInput] = useState('');
     const [latInput, setLatInput] = useState('');
     const [lngInput, setLngInput] = useState('');
+    const [accuracy, setAccuracy] = useState<number | null>(null);
 
     const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
     const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
@@ -123,9 +124,10 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                     (pos) => {
                         setLatInput(pos.coords.latitude.toString());
                         setLngInput(pos.coords.longitude.toString());
+                        setAccuracy(pos.coords.accuracy);
                     },
                     undefined,
-                    { timeout: 5000 }
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
             }
 
@@ -152,11 +154,12 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
             if (isNaN(lat) || isNaN(lng)) {
                 try {
                     const query = [addressInput, neighborhoodInput, cityInput].filter(Boolean).join(', ');
-                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}&countrycodes=br`);
+                    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+                    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`);
                     const data = await res.json();
-                    if (data?.length > 0) {
-                        lat = parseFloat(data[0].lat);
-                        lng = parseFloat(data[0].lon);
+                    if (data.status === 'OK' && data.results?.[0]) {
+                        lat = data.results[0].geometry.location.lat;
+                        lng = data.results[0].geometry.location.lng;
                     }
                 } catch (e) { console.log(e); }
             }
@@ -229,9 +232,10 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                             (pos) => {
                                 setLatInput(pos.coords.latitude.toFixed(6));
                                 setLngInput(pos.coords.longitude.toFixed(6));
+                                setAccuracy(pos.coords.accuracy);
                             },
                             undefined,
-                            { timeout: 5000 }
+                            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                         );
                     }
 
@@ -301,7 +305,15 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
                             Scanner <span className="text-blue-500">Visão</span>
                         </h1>
-                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">{statusMsg}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">{statusMsg}</p>
+                            {accuracy !== null && (
+                                <div className="flex items-center gap-2 ml-4 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
+                                    <div className={`w-1 h-1 rounded-full ${accuracy < 20 ? 'bg-emerald-500' : accuracy < 50 ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                                    <p className="text-[8px] text-zinc-400 font-bold tracking-tighter uppercase">SIGNAL: {Math.round(accuracy)}m</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     {mode === 'scan' && (
                         <button

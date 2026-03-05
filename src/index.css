@@ -240,17 +240,6 @@ select {
 }
 
 /* -------------------------
-   GOOGLE MAPS OVERRIDES
-   ------------------------- */
-.gm-style .gm-style-cc,
-.gm-style .gmnoprint:not(.gm-bundled-control),
-.gm-style a[href*="maps.google.com"],
-.gm-style a[title="Open this area in Google Maps"],
-.gm-style button[title="Toggle fullscreen view"] {
-  display: none !important;
-}
-
-/* -------------------------
    MARKER / MAP ANIMATIONS
    ------------------------- */
 @keyframes levitate {
