@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer, Circle } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer, Circle } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, ChevronDown, ChevronUp, Package, Save, Pencil } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const mapContainerStyle = {
@@ -36,11 +36,52 @@ export const MapView = () => {
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [navigationIndex, setNavigationIndex] = useState(0);
-    const [selectedPoint, setSelectedPoint] = useState<RoutePoint | null>(null);
     const [showCelebration, setShowCelebration] = useState(false);
     const [accuracy, setAccuracy] = useState<number | null>(null);
     const [showRouteConfirmation, setShowRouteConfirmation] = useState(false);
     const [sheetExpanded, setSheetExpanded] = useState(false);
+    const [showCheckAnimation, setShowCheckAnimation] = useState(false);
+
+    // Marker edit panel
+    const [editingPoint, setEditingPoint] = useState<RoutePoint | null>(null);
+    const [editName, setEditName] = useState('');
+    const [editNeighborhood, setEditNeighborhood] = useState('');
+    const [editNotes, setEditNotes] = useState('');
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+    const openEditPanel = (p: RoutePoint) => {
+        if (p.id === 'current') return; // don't edit GPS dot
+        setEditingPoint(p);
+        setEditName(p.name);
+        setEditNeighborhood(p.neighborhood || '');
+        setEditNotes(p.notes || '');
+    };
+
+    const handleSavePointEdit = async () => {
+        if (!editingPoint) return;
+        setIsSavingEdit(true);
+        const updated = routePoints.map(p =>
+            p.id === editingPoint.id
+                ? { ...p, name: editName.trim(), neighborhood: editNeighborhood.trim(), notes: editNotes.trim() }
+                : p
+        );
+        setRoutePoints(updated);
+        await updateActiveRoute(updated.filter(p => p.id !== 'current'));
+        setIsSavingEdit(false);
+        setEditingPoint(null);
+    };
+
+    const handleMarkDeliveredFromPanel = async () => {
+        if (!editingPoint) return;
+        await finalizeCompletion(editingPoint.id);
+        setEditingPoint(null);
+    };
+
+    const handleDeleteFromManifest = async (id: string) => {
+        const updated = routePoints.filter(p => p.id !== id);
+        setRoutePoints(updated);
+        await updateActiveRoute(updated.filter(p => p.id !== 'current'));
+    };
 
     // Touch drag for bottom sheet
     const touchStartY = useRef<number>(0);
@@ -138,8 +179,20 @@ export const MapView = () => {
         setIsRouting(true);
         const origin = userLocation || { lat: routePoints[0].lat, lng: routePoints[0].lng };
 
-        // Define waypoints (intermediate points)
-        const waypoints = validPoints.map(p => ({
+        // To get the absolute shortest path using Google API, we pick the furthest point as the destination
+        // and pass all other points as intermediate waypoints to be completely reordered.
+        const distance = (p1: any, p2: any) => Math.pow(p1.lat - p2.lat, 2) + Math.pow(p1.lng - p2.lng, 2);
+        let furthestIdx = 0;
+        let maxDist = 0;
+        for (let i = 0; i < validPoints.length; i++) {
+            const d = distance(origin, validPoints[i]);
+            if (d > maxDist) { maxDist = d; furthestIdx = i; }
+        }
+
+        const destPoint = validPoints[furthestIdx];
+        const waypointsList = validPoints.filter((_, i) => i !== furthestIdx);
+
+        const waypoints = waypointsList.map(p => ({
             location: new google.maps.LatLng(p.lat, p.lng),
             stopover: true
         }));
@@ -149,8 +202,8 @@ export const MapView = () => {
         try {
             const result = await directionsService.route({
                 origin: origin,
-                destination: waypoints[waypoints.length - 1].location,
-                waypoints: waypoints.slice(0, -1),
+                destination: new google.maps.LatLng(destPoint.lat, destPoint.lng),
+                waypoints: waypoints,
                 optimizeWaypoints: true,
                 travelMode: google.maps.TravelMode.DRIVING,
             });
@@ -159,12 +212,12 @@ export const MapView = () => {
                 setDirectionsResponse(result);
                 // Update route order based on optimization
                 const order = result.routes[0].waypoint_order;
-                const sortedIntermediate = order.map(idx => validPoints[idx]);
-                // This is a simplified sort - in production we'd map all fields carefully
+                const sortedIntermediate = order.map(idx => waypointsList[idx]);
+
                 setRoutePoints(prev => [
                     ...prev.filter(p => p.isDelivered || p.id === 'current'),
                     ...sortedIntermediate,
-                    validPoints[validPoints.length - 1]
+                    destPoint
                 ]);
                 setShowRouteConfirmation(true);
             }
@@ -190,7 +243,13 @@ export const MapView = () => {
         if (!point) return;
 
         if (navigator.vibrate) navigator.vibrate(50);
-        await finalizeCompletion(point.id);
+
+        // Show check animation briefly before advancing
+        setShowCheckAnimation(true);
+        setTimeout(async () => {
+            setShowCheckAnimation(false);
+            await finalizeCompletion(point.id);
+        }, 800);
     };
 
     const finalizeCompletion = async (id: string) => {
@@ -325,7 +384,18 @@ export const MapView = () => {
                     <Marker
                         key={p.id + i}
                         position={{ lat: p.lat, lng: p.lng }}
-                        onClick={() => setSelectedPoint(p)}
+                        onClick={() => {
+                            if (isNavigating) {
+                                const pendingPoints = routePoints.filter(px => px.id !== 'current' && !px.isDelivered);
+                                const idx = pendingPoints.findIndex(px => px.id === p.id);
+                                if (idx !== -1) {
+                                    setNavigationIndex(idx);
+                                    setSheetExpanded(true);
+                                }
+                            } else {
+                                openEditPanel(p);
+                            }
+                        }}
                         icon={p.id === 'current' ? {
                             path: google.maps.SymbolPath.CIRCLE,
                             fillColor: '#3b82f6',
@@ -371,18 +441,110 @@ export const MapView = () => {
                     />
                 )}
 
-                {selectedPoint && (
-                    <InfoWindow
-                        position={{ lat: selectedPoint.lat, lng: selectedPoint.lng }}
-                        onCloseClick={() => setSelectedPoint(null)}
-                    >
-                        <div className="p-2 min-w-[150px] bg-zinc-950 text-white rounded-xl">
-                            <h4 className="text-sm font-black italic uppercase italic leading-none mb-1">{selectedPoint.name}</h4>
-                            <p className="text-[9px] text-zinc-500 uppercase tracking-widest">{selectedPoint.neighborhood || 'Zona de Entrega'}</p>
-                        </div>
-                    </InfoWindow>
-                )}
             </GoogleMap>
+
+            {/* ── MARKER EDIT BOTTOM PANEL ── */}
+            {editingPoint && (() => {
+                const pendingPoints = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
+                const stopIndex = pendingPoints.findIndex(p => p.id === editingPoint.id);
+                return (
+                    <div className="absolute inset-0 z-40 flex flex-col justify-end" onClick={() => setEditingPoint(null)}>
+                        {/* Backdrop */}
+                        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+                        <div
+                            className="relative bg-zinc-950 border-t border-white/10 rounded-t-[2.5rem] shadow-[0_-30px_80px_rgba(0,0,0,0.9)] p-6 pb-10 space-y-5 animate-in slide-in-from-bottom duration-300"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            {/* Handle */}
+                            <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto" />
+
+                            {/* Header */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-2xl bg-blue-600 flex flex-col items-center justify-center shadow-[0_6px_20px_rgba(37,99,235,0.4)]">
+                                        <span className="text-[7px] font-black text-blue-200 uppercase leading-none">STOP</span>
+                                        <span className="text-base font-black text-white leading-none">
+                                            {stopIndex >= 0 ? stopIndex + 1 : '—'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Editar Parada</p>
+                                        <p className="text-[10px] text-zinc-500 truncate max-w-[200px]">{editingPoint.city || 'Destino da Rota'}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setEditingPoint(null)}
+                                    className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-500"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            {/* Fields */}
+                            <div className="space-y-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Endereço / Nome</label>
+                                    <input
+                                        type="text"
+                                        value={editName}
+                                        onChange={e => setEditName(e.target.value)}
+                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:border-blue-500/50 focus:outline-none transition-all italic"
+                                        placeholder="Nome ou endereço completo..."
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Bairro</label>
+                                        <input
+                                            type="text"
+                                            value={editNeighborhood}
+                                            onChange={e => setEditNeighborhood(e.target.value)}
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:border-blue-500/50 focus:outline-none transition-all italic"
+                                            placeholder="Bairro..."
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Notas</label>
+                                        <input
+                                            type="text"
+                                            value={editNotes}
+                                            onChange={e => setEditNotes(e.target.value)}
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:border-blue-500/50 focus:outline-none transition-all italic"
+                                            placeholder="Obs..."
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Coords display (read-only) */}
+                            <div className="flex items-center gap-2 px-1">
+                                <MapPin size={12} className="text-zinc-600 shrink-0" />
+                                <span className="text-[9px] text-zinc-600 font-mono">
+                                    {editingPoint.lat.toFixed(6)}, {editingPoint.lng.toFixed(6)}
+                                </span>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={handleMarkDeliveredFromPanel}
+                                    className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-all active:scale-95"
+                                >
+                                    <CheckCircle2 size={16} /> Entregue
+                                </button>
+                                <button
+                                    onClick={handleSavePointEdit}
+                                    disabled={isSavingEdit || !editName.trim()}
+                                    className="bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(37,99,235,0.4)] transition-all active:scale-95 disabled:opacity-40"
+                                >
+                                    {isSavingEdit ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Salvar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Float Actions */}
             <div className="absolute top-40 right-6 z-10 flex flex-col gap-3">
@@ -419,15 +581,42 @@ export const MapView = () => {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar px-2 space-y-4 mb-10">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar px-2 space-y-3 mb-10">
                             {routePoints.filter(p => p.id !== 'current' && !p.isDelivered).map((point, idx) => (
-                                <div key={point.id} className="bg-white/[0.03] border border-white/5 p-5 rounded-3xl flex items-center gap-5 group hover:bg-white/[0.06] transition-all">
-                                    <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-[12px] font-black text-blue-500 italic">
-                                        #{idx + 1}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-[13px] font-black text-white uppercase truncate tracking-tight">{point.name}</p>
-                                        <p className="text-[10px] text-zinc-500 uppercase truncate mt-0.5">{point.neighborhood || 'Zona_Operacional'}</p>
+                                <div key={point.id} className="bg-white/[0.03] border border-white/5 p-5 rounded-3xl group hover:bg-white/[0.05] transition-all">
+                                    <div className="flex items-center gap-4">
+                                        {/* Number badge */}
+                                        <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-[12px] font-black text-blue-500 italic shrink-0">
+                                            #{idx + 1}
+                                        </div>
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[13px] font-black text-white uppercase truncate tracking-tight">{point.name}</p>
+                                            <p className="text-[10px] text-zinc-500 uppercase truncate mt-0.5">{point.neighborhood || 'Zona Operacional'}</p>
+                                            {point.notes && (
+                                                <p className="text-[9px] text-zinc-600 italic mt-1 truncate">{point.notes}</p>
+                                            )}
+                                        </div>
+                                        {/* Actions */}
+                                        <div className="flex gap-2 shrink-0">
+                                            <button
+                                                onClick={() => {
+                                                    setShowRouteConfirmation(false);
+                                                    openEditPanel(point);
+                                                }}
+                                                className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-all"
+                                                title="Editar"
+                                            >
+                                                <Pencil size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteFromManifest(point.id)}
+                                                className="w-9 h-9 rounded-xl bg-red-500/5 border border-red-500/10 flex items-center justify-center text-red-500/50 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                                title="Excluir"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -584,9 +773,13 @@ export const MapView = () => {
                                                     {isPast ? '✓' : idx + 1}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className={`text-[12px] font-black uppercase truncate tracking-tight ${isCurrent ? 'text-white' : 'text-zinc-400'
-                                                        }`}>{point.name}</p>
+                                                    <p className={`text-[12px] font-black uppercase truncate tracking-tight ${isCurrent ? 'text-white' : 'text-zinc-400'}`}>{point.name}</p>
                                                     <p className="text-[9px] text-zinc-600 uppercase truncate mt-0.5">{point.neighborhood || '---'}</p>
+                                                    {point.notes && (
+                                                        <p className={`text-[9px] italic mt-0.5 truncate ${isCurrent ? 'text-zinc-400' : 'text-zinc-700'}`}>
+                                                            {point.notes}
+                                                        </p>
+                                                    )}
                                                 </div>
                                                 {isCurrent && (
                                                     <Package size={16} className="text-blue-400 animate-pulse shrink-0" />
@@ -623,6 +816,15 @@ export const MapView = () => {
                         <h2 className="text-4xl font-black text-white italic tracking-tighter uppercase">Operação Concluída</h2>
                         <p className="text-zinc-500 font-black uppercase tracking-widest text-[9px]">Todos os destinos foram alcançados.</p>
                         <button onClick={() => setShowCelebration(false)} className="bg-white text-black font-black uppercase tracking-widest py-4 px-10 rounded-2xl text-[10px] mt-4">Retornar</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Quick Check Animation */}
+            {showCheckAnimation && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none">
+                    <div className="bg-emerald-500 text-white rounded-[2rem] p-8 animate-in zoom-in spin-in rotate-12 duration-300 shadow-[0_0_80px_rgba(16,185,129,1)]">
+                        <CheckCircle2 size={72} strokeWidth={3} className="animate-pulse" />
                     </div>
                 </div>
             )}

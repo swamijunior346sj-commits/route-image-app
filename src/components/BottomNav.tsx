@@ -9,7 +9,7 @@ export const BottomNav = ({ currentTab, setTab }: BottomNavProps) => {
     const tabs = [
         { id: 'scanner', icon: Camera, label: 'VISÃO' },
         { id: 'map', icon: Map, label: 'MAPA' },
-        { id: 'records', icon: List, label: 'LISTA' },
+        { id: 'records', icon: List, label: 'MEUS ENDEREÇOS' },
         { id: 'profile', icon: User, label: 'CONTA' },
     ] as const;
 

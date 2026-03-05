@@ -24,6 +24,15 @@ const toRow = (r: LocationRecord) => ({
     Criado_em: r.createdAt ? new Date(r.createdAt).toLocaleString('pt-BR') : '',
 });
 
+/** Formats a text representation of GPS coordinates correcting comma to period */
+const parseCoord = (val: any): number | null => {
+    if (val === null || val === undefined) return null;
+    const str = String(val).trim().replace(',', '.');
+    if (!str) return null;
+    const num = parseFloat(str);
+    return isNaN(num) ? null : num;
+};
+
 // ────────────────────────────────────────
 // EXPORT
 // ────────────────────────────────────────
@@ -191,10 +200,14 @@ export const importFromCSV = async (file: File): Promise<number> => {
                     for (const row of rows) {
                         const name = row['Nome'] || row['name'] || row['Endereço'] || row['endereco'] || '';
                         if (!name.trim()) continue;
+
+                        const lat = parseCoord(row['Latitude'] || row['lat']);
+                        const lng = parseCoord(row['Longitude'] || row['lng']);
+
                         await saveRecord(
                             name.trim(),
-                            parseFloat(row['Latitude'] || row['lat'] || '') || null,
-                            parseFloat(row['Longitude'] || row['lng'] || '') || null,
+                            lat,
+                            lng,
                             '',
                             [],
                             {
@@ -227,10 +240,14 @@ export const importFromXLS = async (file: File): Promise<number> => {
                 for (const row of rows) {
                     const name = row['Nome'] || row['name'] || row['Endereço'] || '';
                     if (!name.toString().trim()) continue;
+
+                    const lat = parseCoord(row['Latitude']);
+                    const lng = parseCoord(row['Longitude']);
+
                     await saveRecord(
                         name.toString().trim(),
-                        parseFloat(row['Latitude']?.toString() || '') || null,
-                        parseFloat(row['Longitude']?.toString() || '') || null,
+                        lat,
+                        lng,
                         '',
                         [],
                         {
