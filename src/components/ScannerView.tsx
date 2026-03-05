@@ -464,16 +464,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                                 )}
                             </div>
 
-                            {/* HUD State Label */}
-                            {!loading && mode === 'scan' && (
-                                <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-max flex flex-col items-center gap-2 animate-pulse">
-                                    <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-600/10 border border-blue-500/20 rounded-full backdrop-blur-md">
-                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
-                                        <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] italic">Buscando Coincidências</span>
-                                    </div>
-                                    <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.4em]">Modo Indexação Ativa</p>
-                                </div>
-                            )}
+
+
 
                             {/* Decorative HUD Elements */}
                             <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-32 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>

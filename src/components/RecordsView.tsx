@@ -113,13 +113,46 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
         if (!file) return;
         try {
             setIsImporting(true);
+
+            // Capture existing record IDs before import
+            const existingRecords = await getRecords();
+            const existingIds = new Set(existingRecords.map(r => r.id));
+
+            // Import records to DB
             await processImport(file);
-            alert('Registros importados com sucesso!');
-            await loadRecords();
-        } catch (err: any) {
-            alert(`Erro ao importar: ${err?.message || err}`);
-        } finally {
+
+            // Reload and find newly imported records
+            const allRecords = await getRecords();
+            setRecords(allRecords);
+            const newRecords = allRecords.filter(r => !existingIds.has(r.id));
+
+            if (newRecords.length > 0) {
+                // Add all new records to the active route
+                const currentRoute = await getActiveRoute();
+                const newPoints = newRecords.map(r => ({
+                    id: r.id,
+                    name: r.name,
+                    lat: r.lat,
+                    lng: r.lng,
+                    scannedAt: Date.now(),
+                    notes: r.notes,
+                    neighborhood: r.neighborhood,
+                    city: r.city
+                }));
+
+                const finalRoute = [...currentRoute.filter(p => p.id !== 'current'), ...newPoints];
+                await updateActiveRoute(finalRoute);
+            }
+
             setIsImporting(false);
+
+            // Navigate to map with cinema transition
+            if (onNavigateToMap) {
+                onNavigateToMap();
+            }
+        } catch (err: any) {
+            setIsImporting(false);
+            alert(`Erro ao importar: ${err?.message || err}`);
         }
         e.target.value = '';
     };
@@ -369,16 +402,20 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
-                                <button onClick={handleSendToMap} className="w-12 h-12 flex items-center justify-center bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl hover:bg-emerald-500/20 transition-all shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                                    <MapPinned size={22} />
+                                <button onClick={handleSendToMap} className="flex flex-col items-center justify-center gap-1 px-3 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl hover:bg-emerald-500/20 transition-all shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                                    <MapPinned size={20} />
+                                    <span className="text-[8px] font-black uppercase tracking-wider">Roteirizar</span>
                                 </button>
-                                <button onClick={toggleSelectAll} className="w-12 h-12 flex items-center justify-center bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-2xl hover:bg-blue-500/20 transition-all">
-                                    {selectedIds.size === displayRecords.length ? <CheckSquare size={22} /> : <Square size={22} />}
+                                <button onClick={toggleSelectAll} className="flex flex-col items-center justify-center gap-1 px-3 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-2xl hover:bg-blue-500/20 transition-all">
+                                    {selectedIds.size === displayRecords.length ? <CheckSquare size={20} /> : <Square size={20} />}
+                                    <span className="text-[8px] font-black uppercase tracking-wider">Todos</span>
                                 </button>
-                                <button onClick={handleBulkDelete} className="w-12 h-12 flex items-center justify-center bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl hover:bg-red-500/20 transition-all">
-                                    <Trash2 size={22} />
+                                <button onClick={handleBulkDelete} className="flex flex-col items-center justify-center gap-1 px-3 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl hover:bg-red-500/20 transition-all">
+                                    <Trash2 size={20} />
+                                    <span className="text-[8px] font-black uppercase tracking-wider">Excluir</span>
                                 </button>
                             </div>
+
                         </div>
                     ) : (
                         <div className="space-y-5 animate-fade-in">
