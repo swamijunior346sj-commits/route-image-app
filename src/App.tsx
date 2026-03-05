@@ -28,7 +28,23 @@ export default function App() {
       }
     };
     initApp();
-  }, []);
+
+    // Setup history for hardware back button navigation
+    window.history.replaceState({ tab: currentTab }, '');
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state && e.state.tab) {
+        setCurrentTab(e.state.tab);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []); // Intentionally leaving currentTab out of deps so it registers the initial handler
+
+  const changeTab = (tab: 'scanner' | 'map' | 'records' | 'profile') => {
+    if (tab === currentTab) return;
+    window.history.pushState({ tab }, '');
+    setCurrentTab(tab);
+  };
 
   if (modelLoading) {
     return (
@@ -87,15 +103,15 @@ export default function App() {
       <div className="flex-1 w-full h-full relative">
         {currentTab === 'scanner' && (
           <ScannerView
-            onNavigateToMap={() => setCurrentTab('map')}
-            onNavigateToRecords={() => setCurrentTab('records')}
+            onNavigateToMap={() => changeTab('map')}
+            onNavigateToRecords={() => changeTab('records')}
           />
         )}
         {currentTab === 'map' && <MapView />}
         {currentTab === 'records' && <RecordsView />}
         {currentTab === 'profile' && <ProfileView onLogout={() => setIsAuthenticated(false)} />}
       </div>
-      <BottomNav currentTab={currentTab} setTab={setCurrentTab} />
+      <BottomNav currentTab={currentTab} setTab={changeTab} />
     </div>
   );
 }

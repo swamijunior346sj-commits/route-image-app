@@ -333,10 +333,10 @@ export const RecordsView = () => {
     const handleSendToMap = async () => {
         if (selectedIds.size === 0) return;
 
-        const selectedRecords = records.filter(r => selectedIds.has(r.id) && r.lat !== null && r.lng !== null);
+        const selectedRecords = records.filter(r => selectedIds.has(r.id));
 
         if (selectedRecords.length === 0) {
-            alert("Nenhum dos locais selecionados possui coordenadas de GPS válidas.");
+            alert("Nenhum local selecionado válido.");
             return;
         }
 
@@ -344,9 +344,12 @@ export const RecordsView = () => {
         const newPoints = selectedRecords.map(r => ({
             id: r.id,
             name: r.name,
-            lat: r.lat as number,
-            lng: r.lng as number,
-            scannedAt: Date.now()
+            lat: r.lat,
+            lng: r.lng,
+            scannedAt: Date.now(),
+            notes: r.notes,
+            neighborhood: r.neighborhood,
+            city: r.city
         }));
 
         setIsSendingRoute(true);
@@ -608,9 +611,8 @@ export const RecordsView = () => {
                         <div className="p-8 overflow-y-auto">
                             <div className="flex justify-between items-center mb-8">
                                 <div className="space-y-1">
-                                    <p className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Escritura de Campo</p>
                                     <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">
-                                        {editingRecord ? 'Modificar Registro' : 'Iniciação Manual'}
+                                        {editingRecord ? 'Modificar Registro' : 'Novo Registro'}
                                     </h3>
                                 </div>
                                 <button onClick={() => setIsEditModalOpen(false)} className="w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-all">
@@ -619,20 +621,9 @@ export const RecordsView = () => {
                             </div>
 
                             <div className="flex flex-col gap-6">
-                                {/* Thumbnail Header */}
-                                <div className="flex items-start gap-4 mb-2">
-                                    <div className="relative w-28 h-28 rounded-[2rem] overflow-hidden border-2 border-white/5 group bg-zinc-900 flex items-center justify-center shrink-0">
-                                        {editMainImage ? (
-                                            <img src={editMainImage} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <ImageIcon className="text-zinc-800" size={32} />
-                                        )}
-                                        <button type="button" onClick={() => setPhotoActionTarget('main')} className="absolute inset-0 bg-blue-600/60 backdrop-blur-sm flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                                            <Camera size={24} className="text-white mb-1" />
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-white">Alterar</span>
-                                        </button>
-                                    </div>
-                                    <div className="flex-1 space-y-3">
+                                {/* Core Inputs */}
+                                <div className="flex flex-col gap-4">
+                                    <div className="space-y-2">
                                         <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Identidade do Alvo</label>
                                         <input
                                             className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-sm text-white focus:border-blue-500/50 focus:outline-none font-bold placeholder:text-zinc-700"
@@ -640,31 +631,13 @@ export const RecordsView = () => {
                                             value={editName}
                                             onChange={(e) => setEditName(e.target.value)}
                                         />
-                                        {/* AI Analyze Button */}
-                                        {editMainImage && (
-                                            <button
-                                                type="button"
-                                                onClick={handleAnalyzeWithAI}
-                                                disabled={isAnalyzingAI}
-                                                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600/20 to-blue-600/20 border border-violet-500/30 hover:border-violet-400/60 text-violet-300 hover:text-violet-200 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50 active:scale-95 shadow-[0_0_20px_rgba(139,92,246,0.1)] hover:shadow-[0_0_30px_rgba(139,92,246,0.2)]"
-                                            >
-                                                <Sparkles size={13} className={isAnalyzingAI ? 'animate-spin' : 'animate-pulse'} />
-                                                {isAnalyzingAI ? 'IA Analisando...' : 'Analisar com IA'}
-                                            </button>
-                                        )}
-                                        {/* AI Result */}
-                                        {aiAnalysisResult && (
-                                            <div className={`text-[8px] font-black uppercase tracking-widest px-3 py-2 rounded-xl ${aiAnalysisResult.includes('sucesso') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                                                {aiAnalysisResult}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
 
                                 {/* Address Fields */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Setor / Bairro</label>
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Bairro</label>
                                         <input
                                             className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
                                             value={editNeighborhood}

@@ -18,8 +18,8 @@ export interface LocationRecord {
 export interface RoutePoint {
     id: string;
     name: string;
-    lat: number;
-    lng: number;
+    lat: number | null;
+    lng: number | null;
     scannedAt: number;
     notes?: string;
     isDelivered?: boolean;

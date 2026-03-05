@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { Camera, MapPin, ScanLine, X, Loader2, SwitchCamera, Save, LocateFixed, Database, Sparkles } from 'lucide-react';
 import { getRecords, saveRecord, addPointToActiveRoute } from '../services/db';
@@ -38,7 +38,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
     const SIMILARITY_THRESHOLD = 0.80;
 
-    const captureAndExtract = async (): Promise<{ imageSrc: string, features: number[] } | null> => {
+    const captureAndExtract = useCallback(async (): Promise<{ imageSrc: string, features: number[] } | null> => {
         if (!webcamRef.current) return null;
         const imageSrc = webcamRef.current.getScreenshot();
         if (!imageSrc) return null;
@@ -49,7 +49,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
         const features = await extractFeatures(img);
         return { imageSrc, features };
-    };
+    }, []);
 
     /**
      * Runs Gemini AI analysis with a guaranteed 2-second animated overlay.
@@ -92,88 +92,76 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
         }
     };
 
-    const handleScan = useCallback(async () => {
-        try {
-            setLoading(true);
-            setMatch(null);
+    // AUTO SCAN LOOP
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval>;
 
-            if (navigator.vibrate) navigator.vibrate(50);
+        const autoScan = async () => {
+            if (loading || mode !== 'scan' || isSendingToRoute || match) return;
 
-            const capture = await captureAndExtract();
-            if (!capture) throw new Error("Erro ao acessar a câmera.");
+            try {
+                // Background capture process - runs without triggering UI loading spinner
+                const capture = await captureAndExtract();
+                if (!capture) return;
 
-            const records = await getRecords();
-            let bestMatch: LocationRecord | null = null;
-            let highestSimilarity = 0;
+                const records = await getRecords();
+                let bestMatch: LocationRecord | null = null;
+                let highestSimilarity = 0;
 
-            for (const rec of records) {
-                const sim = cosineSimilarity(capture.features, rec.featureVector);
-                if (sim > highestSimilarity) {
-                    highestSimilarity = sim;
-                    bestMatch = rec;
-                }
-                if (rec.additionalImages) {
-                    for (const addView of rec.additionalImages) {
-                        const simAdd = cosineSimilarity(capture.features, addView.features);
-                        if (simAdd > highestSimilarity) {
-                            highestSimilarity = simAdd;
-                            bestMatch = rec;
+                for (const rec of records) {
+                    const sim = cosineSimilarity(capture.features, rec.featureVector);
+                    if (sim > highestSimilarity) {
+                        highestSimilarity = sim;
+                        bestMatch = rec;
+                    }
+                    if (rec.additionalImages) {
+                        for (const addView of rec.additionalImages) {
+                            const simAdd = cosineSimilarity(capture.features, addView.features);
+                            if (simAdd > highestSimilarity) {
+                                highestSimilarity = simAdd;
+                                bestMatch = rec;
+                            }
                         }
                     }
                 }
-            }
 
-            if (bestMatch && highestSimilarity > SIMILARITY_THRESHOLD) {
-                setMatch(bestMatch);
+                if (bestMatch && highestSimilarity > SIMILARITY_THRESHOLD) {
+                    setLoading(true); // We found it! Show loading overlay while animating mapping
+                    if (navigator.vibrate) navigator.vibrate(50);
+                    setMatch(bestMatch);
 
-                await addPointToActiveRoute({
-                    id: bestMatch.id,
-                    name: bestMatch.name,
-                    lat: bestMatch.lat || -20.143196,
-                    lng: bestMatch.lng || -44.2174965,
-                    scannedAt: Date.now(),
-                    notes: bestMatch.notes,
-                    neighborhood: bestMatch.neighborhood,
-                    city: bestMatch.city
-                });
+                    await addPointToActiveRoute({
+                        id: bestMatch.id,
+                        name: bestMatch.name,
+                        lat: bestMatch.lat || -20.143196,
+                        lng: bestMatch.lng || -44.2174965,
+                        scannedAt: Date.now(),
+                        notes: bestMatch.notes,
+                        neighborhood: bestMatch.neighborhood,
+                        city: bestMatch.city
+                    });
 
-                // Auto-navigate animation
-                setIsSendingToRoute(true);
-                setTimeout(() => {
-                    setIsSendingToRoute(false);
-                    onNavigateToMap();
-                }, 2000);
-            } else {
-                // VISUAL MATCH FAILED -> USE GEMINI AI TO READ AND REGISTER NEW
-                // Clear fields for pre-filling
-                setAddressInput('');
-                setNeighborhoodInput('');
-                setCityInput('');
-                setNotesInput('');
-                setLatInput('');
-                setLngInput('');
-
-                const aiReading = await analyzeAddressImage(capture.imageSrc);
-                if (aiReading) {
-                    if (aiReading.address) setAddressInput(aiReading.address);
-                    if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
-                    if (aiReading.city) setCityInput(aiReading.city);
-                    if (aiReading.notes) setNotesInput(aiReading.notes);
-
-                    setRegisterImage(capture.imageSrc);
-                    setRegisterFeatures(capture.features);
-                    setMode('register');
-                } else {
-                    // No AI match either
-                    setMatch(null);
+                    // Auto-navigate animation
+                    setIsSendingToRoute(true);
+                    setTimeout(() => {
+                        setIsSendingToRoute(false);
+                        setLoading(false);
+                        onNavigateToMap();
+                    }, 2000);
                 }
+            } catch (err: any) {
+                console.error(err);
             }
-        } catch (err: any) {
-            console.error(err);
-        } finally {
-            setLoading(false);
+        };
+
+        if (mode === 'scan' && !isSendingToRoute && !match) {
+            interval = setInterval(autoScan, 1500); // Check every 1.5 seconds
         }
-    }, [webcamRef, onNavigateToMap]);
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [mode, isSendingToRoute, match, loading, onNavigateToMap, captureAndExtract]);
 
     const handleRegisterStart = async () => {
         try {
@@ -446,24 +434,15 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
             <div className="absolute bottom-0 w-full px-6 pb-44 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent z-10">
                 {mode === 'scan' ? (
                     <div className="space-y-4 max-w-lg mx-auto">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="flex w-full">
                             <button
                                 onClick={handleRegisterStart}
                                 disabled={loading}
-                                className="group relative overflow-hidden bg-white/[0.03] border border-white/10 py-5 rounded-[2rem] flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-30"
+                                className="w-full group relative overflow-hidden bg-white/[0.03] border border-white/10 py-5 rounded-[2rem] flex items-center justify-center gap-3 transition-all hover:bg-white/[0.05] active:scale-95 disabled:opacity-30"
                             >
                                 <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                                 <Camera size={18} className="text-zinc-400 group-hover:text-white transition-colors" />
-                                <span className="font-black italic uppercase text-[11px] tracking-widest text-zinc-400 group-hover:text-white transition-colors">Vincular</span>
-                            </button>
-
-                            <button
-                                onClick={handleScan}
-                                disabled={loading}
-                                className="relative bg-blue-600 hover:bg-blue-500 border border-blue-400/30 py-5 rounded-[2rem] flex items-center justify-center gap-3 shadow-[0_15px_35px_rgba(37,99,235,0.3)] transition-all active:scale-95 disabled:opacity-30"
-                            >
-                                <ScanLine size={18} className="text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]" />
-                                <span className="font-black italic uppercase text-[11px] tracking-widest text-white">Escanear</span>
+                                <span className="font-black italic uppercase text-[11px] tracking-widest text-zinc-400 group-hover:text-white transition-colors">Vincular Novo Endereço</span>
                             </button>
                         </div>
 

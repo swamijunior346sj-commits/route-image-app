@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer, Circle } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, ChevronDown, ChevronUp, Package, Save, Pencil } from 'lucide-react';
+import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const mapContainerStyle = {
@@ -16,8 +16,6 @@ const defaultCenter = {
 };
 
 const LIBRARIES: ("places" | "drawing" | "geometry" | "visualization")[] = ["places"];
-
-// Map configuration constants
 
 export const MapView = () => {
     const { isLoaded } = useJsApiLoader({
@@ -39,7 +37,6 @@ export const MapView = () => {
     const [showCelebration, setShowCelebration] = useState(false);
     const [accuracy, setAccuracy] = useState<number | null>(null);
     const [showRouteConfirmation, setShowRouteConfirmation] = useState(false);
-    const [sheetExpanded, setSheetExpanded] = useState(false);
     const [showCheckAnimation, setShowCheckAnimation] = useState(false);
 
     // Marker edit panel
@@ -47,10 +44,12 @@ export const MapView = () => {
     const [editName, setEditName] = useState('');
     const [editNeighborhood, setEditNeighborhood] = useState('');
     const [editNotes, setEditNotes] = useState('');
-    const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+    const placesServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
+    const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
     const openEditPanel = (p: RoutePoint) => {
-        if (p.id === 'current') return; // don't edit GPS dot
+        if (p.id === 'current') return;
         setEditingPoint(p);
         setEditName(p.name);
         setEditNeighborhood(p.neighborhood || '');
@@ -59,44 +58,19 @@ export const MapView = () => {
 
     const handleSavePointEdit = async () => {
         if (!editingPoint) return;
-        setIsSavingEdit(true);
-        const updated = routePoints.map(p =>
-            p.id === editingPoint.id
-                ? { ...p, name: editName.trim(), neighborhood: editNeighborhood.trim(), notes: editNotes.trim() }
-                : p
-        );
-        setRoutePoints(updated);
-        await updateActiveRoute(updated.filter(p => p.id !== 'current'));
-        setIsSavingEdit(false);
-        setEditingPoint(null);
+        try {
+            const updated = routePoints.map(p =>
+                p.id === editingPoint.id
+                    ? { ...p, name: editName, neighborhood: editNeighborhood, notes: editNotes }
+                    : p
+            );
+            await updateActiveRoute(updated);
+            setRoutePoints(updated);
+            setEditingPoint(null);
+        } catch (err) {
+            console.error(err);
+        }
     };
-
-    const handleMarkDeliveredFromPanel = async () => {
-        if (!editingPoint) return;
-        await finalizeCompletion(editingPoint.id);
-        setEditingPoint(null);
-    };
-
-    const handleDeleteFromManifest = async (id: string) => {
-        const updated = routePoints.filter(p => p.id !== id);
-        setRoutePoints(updated);
-        await updateActiveRoute(updated.filter(p => p.id !== 'current'));
-    };
-
-    // Touch drag for bottom sheet
-    const touchStartY = useRef<number>(0);
-    const handleSheetTouchStart = (e: React.TouchEvent) => {
-        touchStartY.current = e.touches[0].clientY;
-    };
-    const handleSheetTouchEnd = (e: React.TouchEvent) => {
-        const delta = touchStartY.current - e.changedTouches[0].clientY;
-        if (delta > 40) setSheetExpanded(true);   // swipe up
-        if (delta < -40) setSheetExpanded(false);  // swipe down
-    };
-
-    const autocompleteTimerRef = useRef<any>(null);
-    const placesServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
-    const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
     const onLoad = useCallback((map: google.maps.Map) => {
         setMap(map);
@@ -118,7 +92,6 @@ export const MapView = () => {
                     setUserLocation(coords);
                     setAccuracy(pos.coords.accuracy);
 
-                    // Keep "You are here" point in sync silently
                     setRoutePoints(prev => {
                         const others = prev.filter(p => p.id !== 'current');
                         return [...others, { id: 'current', name: 'Você está aqui', ...coords, scannedAt: Date.now() }];
@@ -149,7 +122,7 @@ export const MapView = () => {
                     setUserLocation(coords);
                     setAccuracy(pos.coords.accuracy);
                     if (map) map.panTo(coords);
-                    if (map) map.setZoom(17); // Professional precision zoom level
+                    if (map) map.setZoom(17);
 
                     setRoutePoints(prev => {
                         const filtered = prev.filter(p => p.id !== 'current');
@@ -157,7 +130,7 @@ export const MapView = () => {
                     });
                 },
                 () => {
-                    if (!silent) alert('GPS indisponível para alta precisão.');
+                    if (!silent) alert('GPS indisponível.');
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
@@ -173,27 +146,22 @@ export const MapView = () => {
     };
 
     const handleRoteirizar = async () => {
-        const validPoints = routePoints.filter(p => !p.isDelivered && p.lat !== null && p.lng !== null);
+        const validPoints = routePoints.filter(p => !p.isDelivered && p.id !== 'current');
         if (validPoints.length < 1) return alert("Adicione destinos primeiro.");
 
         setIsRouting(true);
-        const origin = userLocation || { lat: routePoints[0].lat, lng: routePoints[0].lng };
+        const origin = userLocation || (validPoints[0].lat && validPoints[0].lng ? { lat: validPoints[0].lat, lng: validPoints[0].lng } : validPoints[0].name);
 
-        // To get the absolute shortest path using Google API, we pick the furthest point as the destination
-        // and pass all other points as intermediate waypoints to be completely reordered.
-        const distance = (p1: any, p2: any) => Math.pow(p1.lat - p2.lat, 2) + Math.pow(p1.lng - p2.lng, 2);
-        let furthestIdx = 0;
-        let maxDist = 0;
-        for (let i = 0; i < validPoints.length; i++) {
-            const d = distance(origin, validPoints[i]);
-            if (d > maxDist) { maxDist = d; furthestIdx = i; }
-        }
+        const buildLocation = (p: any) => {
+            if (p.lat !== null && p.lng !== null && p.lat !== 0) return new google.maps.LatLng(p.lat, p.lng);
+            return [p.name, p.neighborhood, p.city].filter(Boolean).join(', ');
+        };
 
-        const destPoint = validPoints[furthestIdx];
-        const waypointsList = validPoints.filter((_, i) => i !== furthestIdx);
+        const destPoint = validPoints[validPoints.length - 1];
+        const waypointsList = validPoints.slice(0, -1);
 
         const waypoints = waypointsList.map(p => ({
-            location: new google.maps.LatLng(p.lat, p.lng),
+            location: buildLocation(p),
             stopover: true
         }));
 
@@ -201,16 +169,16 @@ export const MapView = () => {
 
         try {
             const result = await directionsService.route({
-                origin: origin,
-                destination: new google.maps.LatLng(destPoint.lat, destPoint.lng),
-                waypoints: waypoints,
+                origin: origin as any,
+                destination: buildLocation(destPoint) as any,
+                waypoints: waypoints as any,
                 optimizeWaypoints: true,
                 travelMode: google.maps.TravelMode.DRIVING,
             });
 
             if (result && result.routes && result.routes.length > 0) {
                 setDirectionsResponse(result);
-                // Update route order based on optimization
+                // Respect optimized order
                 const order = result.routes[0].waypoint_order;
                 const sortedIntermediate = order.map(idx => waypointsList[idx]);
 
@@ -223,18 +191,10 @@ export const MapView = () => {
             }
         } catch (err) {
             console.error("Routing error:", err);
-            alert("Erro na otimização de rota.");
+            alert("Erro na roteirização Google.");
         } finally {
             setIsRouting(false);
         }
-    };
-
-    const handleStartNavigation = () => {
-        const dests = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
-        if (dests.length === 0) return alert("Sem destinos pendentes.");
-        setIsNavigating(true);
-        setNavigationIndex(0);
-        if (!directionsResponse) handleRoteirizar();
     };
 
     const handleCompleteStop = async () => {
@@ -242,122 +202,111 @@ export const MapView = () => {
         const point = dests[navigationIndex];
         if (!point) return;
 
-        if (navigator.vibrate) navigator.vibrate(50);
-
-        // Show check animation briefly before advancing
         setShowCheckAnimation(true);
         setTimeout(async () => {
             setShowCheckAnimation(false);
-            await finalizeCompletion(point.id);
-        }, 800);
+            const updated = routePoints.map(p => p.id === point.id ? { ...p, isDelivered: true } : p);
+            await updateActiveRoute(updated);
+            setRoutePoints(updated);
+
+            if (navigationIndex < dests.length - 1) {
+                setNavigationIndex(prev => prev + 1);
+            } else {
+                setIsNavigating(false);
+                setShowCelebration(true);
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+                setTimeout(() => setShowCelebration(false), 5000);
+            }
+        }, 1200);
     };
 
-    const finalizeCompletion = async (id: string) => {
-        const updated = routePoints.map(p => p.id === id ? { ...p, isDelivered: true } : p);
-        setRoutePoints(updated);
-        await updateActiveRoute(updated.filter(p => p.id !== 'current'));
-
-        const remaining = updated.filter(p => p.id !== 'current' && !p.isDelivered);
-        if (remaining.length === 0) {
-            setShowCelebration(true);
-            triggerConfetti();
-            setIsNavigating(false);
-            setDirectionsResponse(null);
-        } else {
-            // Recalculate route if needed or just move to next
-            const nextIdx = updated.filter(p => p.id !== 'current' && !p.isDelivered).findIndex(p => !p.isDelivered);
-            if (nextIdx !== -1) setNavigationIndex(0); // Index 0 of pendings
-        }
-    };
-
-    const triggerConfetti = () => {
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#3b82f6', '#ffffff', '#6366f1'] });
-    };
-
-    // Google Places Search
-    useEffect(() => {
-        if (!searchQuery.trim() || searchQuery.length < 3 || !placesServiceRef.current) return setSearchResults([]);
-
-        if (autocompleteTimerRef.current) clearTimeout(autocompleteTimerRef.current);
-        autocompleteTimerRef.current = setTimeout(() => {
-            setIsSearching(true);
-            placesServiceRef.current?.getPlacePredictions({
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!isLoaded || !placesServiceRef.current || !searchQuery.trim()) return;
+        setIsSearching(true);
+        placesServiceRef.current.getPlacePredictions(
+            {
                 input: searchQuery,
-                componentRestrictions: { country: 'br' },
                 locationBias: userLocation ? new google.maps.LatLng(userLocation.lat, userLocation.lng) : undefined
-            }, (predictions, status) => {
+            },
+            (predictions: google.maps.places.AutocompletePrediction[] | null, status: google.maps.places.PlacesServiceStatus) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
                     setSearchResults(predictions);
                 }
                 setIsSearching(false);
-            });
-        }, 500);
-    }, [searchQuery, userLocation]);
+            }
+        );
+    };
 
     const selectPrediction = (prediction: google.maps.places.AutocompletePrediction) => {
-        geocoderRef.current?.geocode({ placeId: prediction.place_id }, (results, status) => {
+        if (!geocoderRef.current) return;
+        geocoderRef.current.geocode({ placeId: prediction.place_id }, async (results, status) => {
             if (status === 'OK' && results?.[0]) {
                 const loc = results[0].geometry.location;
-                const p: RoutePoint = {
-                    id: crypto.randomUUID(),
+                const newPoint: RoutePoint = {
+                    id: Date.now().toString(),
                     name: prediction.structured_formatting.main_text,
                     lat: loc.lat(),
                     lng: loc.lng(),
                     scannedAt: Date.now(),
-                    neighborhood: results[0].address_components.find(c => c.types.includes('sublocality'))?.long_name || ''
+                    neighborhood: results[0].address_components.find(c => c.types.includes('sublocality'))?.long_name || '',
+                    city: results[0].address_components.find(c => c.types.includes('administrative_area_level_2'))?.long_name || '',
                 };
-                const updated = [...routePoints, p];
-                setRoutePoints(updated);
-                updateActiveRoute(updated.filter(x => x.id !== 'current'));
-                map?.panTo(loc);
-                setSearchResults([]);
+                const updated = [...routePoints.filter(p => p.id !== 'current'), newPoint];
+                await updateActiveRoute(updated);
+                setRoutePoints([...updated, ...(userLocation ? [{ id: 'current', name: 'Você está aqui', ...userLocation, scannedAt: Date.now() }] : [])]);
                 setSearchQuery('');
+                setSearchResults([]);
             }
         });
     };
 
-    if (!isLoaded) return <div className="h-full w-full bg-black flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>;
+    if (!isLoaded) return <div className="w-full h-full bg-white flex items-center justify-center font-black">CARREGANDO MAPA...</div>;
 
     return (
-        <div className="relative w-full h-full flex flex-col pt-safe bg-black overflow-hidden">
-            {/* Header HUD */}
-            <div className="absolute top-0 z-20 w-full p-6 flex flex-col gap-4 pointer-events-none">
-                <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full h-full bg-white overflow-hidden">
+            {/* SEARCH HUD */}
+            <div className={`absolute top-10 left-1/2 -translate-x-1/2 z-40 w-full max-w-lg px-6 transition-all duration-700 ${isNavigating ? '-translate-y-32' : ''}`}>
+                <div className="relative group">
+                    <form onSubmit={handleSearch} className="relative bg-white border-2 border-zinc-200 rounded-[2rem] p-4 flex items-center gap-4 shadow-[0_20px_40px_rgba(0,0,0,0.1)] focus-within:border-blue-500">
+                        <Search size={20} className="text-zinc-400 ml-2" />
+                        <input
+                            placeholder="Pesquisar endereço Google..."
+                            className="bg-transparent flex-1 outline-none text-zinc-900 text-sm font-bold placeholder:text-zinc-400"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                        />
+                        {isSearching && <Loader2 size={18} className="animate-spin text-blue-500" />}
+                        {searchQuery && (
+                            <button type="button" onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="p-2 hover:bg-zinc-100 rounded-full text-zinc-400">
+                                <X size={16} />
+                            </button>
+                        )}
+                    </form>
                 </div>
-
-                <div className="relative pointer-events-auto max-w-lg">
-                    <input
-                        type="text"
-                        placeholder="BUSCAR ENDEREÇO OU LOCAL..."
-                        className="w-full bg-zinc-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl py-4 px-6 text-xs text-white focus:outline-none focus:border-blue-500/50 italic font-bold tracking-widest uppercase shadow-2xl"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                    />
-                    <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center">
-                        {isSearching ? <Loader2 size={18} className="animate-spin text-blue-500" /> : <Search className="text-zinc-600" size={18} />}
-                    </div>
-                </div>
-
                 {searchResults.length > 0 && (
-                    <div className="mt-2 bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-h-72 overflow-y-auto pointer-events-auto flex flex-col p-3 gap-2 animate-slide-up max-w-lg shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] custom-scrollbar">
-                        {searchResults.map((res, i) => (
-                            <div key={i} className="flex items-center gap-3 p-1">
+                    <div className="mt-4 bg-white border border-zinc-100 rounded-[2.5rem] overflow-hidden shadow-2xl p-3 flex flex-col gap-1 max-h-[60vh] overflow-y-auto">
+                        {searchResults.map((res) => (
+                            <div key={res.place_id} className="flex gap-2">
                                 <button
                                     onClick={() => selectPrediction(res)}
-                                    className="flex-1 text-left p-4 bg-white/[0.02] hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/10 group flex items-start gap-4"
+                                    className="flex-1 flex items-center gap-4 p-5 hover:bg-zinc-50 rounded-[1.8rem] transition-all text-left"
                                 >
-                                    <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center border border-white/5 group-hover:border-blue-500/30 transition-colors">
-                                        <MapPin size={18} className="text-zinc-600 group-hover:text-blue-500 transition-colors" />
+                                    <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
+                                        <MapPin size={18} className="text-zinc-400" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[11px] font-black text-white uppercase tracking-tight truncate">{res.structured_formatting.main_text}</p>
-                                        <p className="text-[9px] text-zinc-500 uppercase truncate mt-0.5">{res.structured_formatting.secondary_text}</p>
+                                        <p className="text-[12px] font-black text-zinc-900 truncate">{res.structured_formatting.main_text}</p>
+                                        <p className="text-[9px] text-zinc-500 truncate">{res.structured_formatting.secondary_text}</p>
                                     </div>
                                 </button>
                                 <button
                                     onClick={() => selectPrediction(res)}
-                                    className="w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all border border-blue-400/20"
-                                    title="Adicionar à Rota"
+                                    className="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90"
                                 >
                                     <Plus size={24} />
                                 </button>
@@ -374,42 +323,30 @@ export const MapView = () => {
                 onLoad={onLoad}
                 onUnmount={onUnmount}
                 options={{
-                    disableDefaultUI: false,
-                    clickableIcons: true,
-                    zoomControl: true,
-                    gestureHandling: 'greedy'
+                    disableDefaultUI: true,
+                    styles: [] // Light theme default
                 }}
             >
                 {routePoints.map((p, i) => (
-                    <Marker
-                        key={p.id + i}
-                        position={{ lat: p.lat, lng: p.lng }}
-                        onClick={() => {
-                            if (isNavigating) {
-                                const pendingPoints = routePoints.filter(px => px.id !== 'current' && !px.isDelivered);
-                                const idx = pendingPoints.findIndex(px => px.id === p.id);
-                                if (idx !== -1) {
-                                    setNavigationIndex(idx);
-                                    setSheetExpanded(true);
-                                }
-                            } else {
-                                openEditPanel(p);
-                            }
-                        }}
-                        icon={p.id === 'current' ? {
-                            path: google.maps.SymbolPath.CIRCLE,
-                            fillColor: '#3b82f6',
-                            fillOpacity: 1,
-                            strokeColor: '#ffffff',
-                            strokeWeight: 2,
-                            scale: 8
-                        } : {
-                            url: 'https://cdn-icons-png.flaticon.com/512/679/679821.png',
-                            scaledSize: new google.maps.Size(32, 32),
-                            origin: new google.maps.Point(0, 0),
-                            anchor: new google.maps.Point(16, 32)
-                        }}
-                    />
+                    p.lat !== null && p.lng !== null && (
+                        <Marker
+                            key={`${p.id}-${i}`}
+                            position={{ lat: p.lat, lng: p.lng }}
+                            onClick={() => openEditPanel(p)}
+                            icon={p.id === 'current' ? {
+                                path: google.maps.SymbolPath.CIRCLE,
+                                fillColor: '#3b82f6',
+                                fillOpacity: 1,
+                                strokeColor: '#ffffff',
+                                strokeWeight: 2,
+                                scale: 8
+                            } : {
+                                url: 'https://cdn-icons-png.flaticon.com/512/679/679821.png',
+                                scaledSize: new google.maps.Size(32, 32),
+                                anchor: new google.maps.Point(16, 32)
+                            }}
+                        />
+                    )
                 ))}
 
                 {userLocation && accuracy && (
@@ -440,395 +377,111 @@ export const MapView = () => {
                         }}
                     />
                 )}
-
             </GoogleMap>
-
-            {/* ── MARKER EDIT BOTTOM PANEL ── */}
-            {editingPoint && (() => {
-                const pendingPoints = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
-                const stopIndex = pendingPoints.findIndex(p => p.id === editingPoint.id);
-                return (
-                    <div className="absolute inset-0 z-40 flex flex-col justify-end" onClick={() => setEditingPoint(null)}>
-                        {/* Backdrop */}
-                        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-
-                        <div
-                            className="relative bg-zinc-950 border-t border-white/10 rounded-t-[2.5rem] shadow-[0_-30px_80px_rgba(0,0,0,0.9)] p-6 pb-10 space-y-5 animate-in slide-in-from-bottom duration-300"
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {/* Handle */}
-                            <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto" />
-
-                            {/* Header */}
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-11 h-11 rounded-2xl bg-blue-600 flex flex-col items-center justify-center shadow-[0_6px_20px_rgba(37,99,235,0.4)]">
-                                        <span className="text-[7px] font-black text-blue-200 uppercase leading-none">STOP</span>
-                                        <span className="text-base font-black text-white leading-none">
-                                            {stopIndex >= 0 ? stopIndex + 1 : '—'}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Editar Parada</p>
-                                        <p className="text-[10px] text-zinc-500 truncate max-w-[200px]">{editingPoint.city || 'Destino da Rota'}</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setEditingPoint(null)}
-                                    className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-500"
-                                >
-                                    <X size={18} />
-                                </button>
-                            </div>
-
-                            {/* Fields */}
-                            <div className="space-y-3">
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Endereço / Nome</label>
-                                    <input
-                                        type="text"
-                                        value={editName}
-                                        onChange={e => setEditName(e.target.value)}
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:border-blue-500/50 focus:outline-none transition-all italic"
-                                        placeholder="Nome ou endereço completo..."
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Bairro</label>
-                                        <input
-                                            type="text"
-                                            value={editNeighborhood}
-                                            onChange={e => setEditNeighborhood(e.target.value)}
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:border-blue-500/50 focus:outline-none transition-all italic"
-                                            placeholder="Bairro..."
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Notas</label>
-                                        <input
-                                            type="text"
-                                            value={editNotes}
-                                            onChange={e => setEditNotes(e.target.value)}
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:border-blue-500/50 focus:outline-none transition-all italic"
-                                            placeholder="Obs..."
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Coords display (read-only) */}
-                            <div className="flex items-center gap-2 px-1">
-                                <MapPin size={12} className="text-zinc-600 shrink-0" />
-                                <span className="text-[9px] text-zinc-600 font-mono">
-                                    {editingPoint.lat.toFixed(6)}, {editingPoint.lng.toFixed(6)}
-                                </span>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={handleMarkDeliveredFromPanel}
-                                    className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-all active:scale-95"
-                                >
-                                    <CheckCircle2 size={16} /> Entregue
-                                </button>
-                                <button
-                                    onClick={handleSavePointEdit}
-                                    disabled={isSavingEdit || !editName.trim()}
-                                    className="bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(37,99,235,0.4)] transition-all active:scale-95 disabled:opacity-40"
-                                >
-                                    {isSavingEdit ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Salvar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                );
-            })()}
 
             {/* Float Actions */}
             <div className="absolute top-40 right-6 z-10 flex flex-col gap-3">
-                <button onClick={isNavigating ? () => setIsNavigating(false) : handleStartNavigation} className={`w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-3xl shadow-2xl transition-all border ${isNavigating ? 'bg-red-500/20 border-red-500/40 text-red-500' : 'bg-zinc-900/60 border-white/10 text-blue-500'}`}>
-                    {isNavigating ? <X size={24} /> : <Navigation size={24} />}
+                <button onClick={() => setIsNavigating(prev => !prev)} className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-white border border-zinc-200 shadow-xl transition-all ${isNavigating ? 'text-blue-600' : 'text-zinc-500'}`}>
+                    <Navigation size={24} />
                 </button>
-                <button onClick={handleRoteirizar} className="w-14 h-14 bg-zinc-900/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-indigo-400 flex items-center justify-center shadow-2xl">
+                <button onClick={handleRoteirizar} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-indigo-600 flex items-center justify-center shadow-xl">
                     {isRouting ? <Loader2 size={24} className="animate-spin" /> : <Route size={24} />}
                 </button>
-                <button onClick={() => handleLocateMe()} className="w-14 h-14 bg-zinc-900/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-emerald-400 flex items-center justify-center shadow-2xl">
+                <button onClick={() => handleLocateMe()} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-emerald-600 flex items-center justify-center shadow-xl">
                     <LocateFixed size={24} />
                 </button>
-                <button onClick={handleClear} className="w-14 h-14 bg-zinc-900/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-zinc-600 flex items-center justify-center shadow-2xl">
+                <button onClick={handleClear} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-red-400 flex items-center justify-center shadow-xl">
                     <Trash2 size={24} />
                 </button>
             </div>
 
-            {/* Route Confirmation Bottom Sheet */}
-            {showRouteConfirmation && directionsResponse && (
-                <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-sm pointer-events-none">
-                    <div className="bg-zinc-950/95 border-t border-white/10 p-8 pb-12 rounded-t-[3.5rem] animate-slide-up pointer-events-auto max-h-[85vh] flex flex-col shadow-[0_-25px_60px_rgba(0,0,0,0.9)]">
-                        <div className="w-16 h-1.5 bg-zinc-800 rounded-full mx-auto mb-10" />
-
-                        <div className="flex justify-between items-center mb-8 px-2">
-                            <div className="space-y-1">
-                                <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">Manifesto de Rota</h2>
-                                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">{routePoints.filter(p => p.id !== 'current' && !p.isDelivered).length} Pontos de Entrega</p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Total Estimado</p>
-                                <p className="text-xl font-black text-white italic">
-                                    {(directionsResponse.routes[0].legs.reduce((acc, leg) => acc + (leg.distance?.value || 0), 0) / 1000).toFixed(1)}KM
-                                </p>
-                            </div>
+            {/* EDIT PANEL */}
+            {editingPoint && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+                    <div className="w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
+                        <h3 className="text-2xl font-black italic uppercase text-zinc-900 mb-6">Modificar Ponto</h3>
+                        <div className="space-y-4 mb-8">
+                            <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 font-bold" placeholder="Nome..." />
+                            <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900" placeholder="Bairro..." />
+                            <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 h-24" placeholder="Notas..." />
                         </div>
-
-                        <div className="flex-1 overflow-y-auto custom-scrollbar px-2 space-y-3 mb-10">
-                            {routePoints.filter(p => p.id !== 'current' && !p.isDelivered).map((point, idx) => (
-                                <div key={point.id} className="bg-white/[0.03] border border-white/5 p-5 rounded-3xl group hover:bg-white/[0.05] transition-all">
-                                    <div className="flex items-center gap-4">
-                                        {/* Number badge */}
-                                        <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-[12px] font-black text-blue-500 italic shrink-0">
-                                            #{idx + 1}
-                                        </div>
-                                        {/* Info */}
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[13px] font-black text-white uppercase truncate tracking-tight">{point.name}</p>
-                                            <p className="text-[10px] text-zinc-500 uppercase truncate mt-0.5">{point.neighborhood || 'Zona Operacional'}</p>
-                                            {point.notes && (
-                                                <p className="text-[9px] text-zinc-600 italic mt-1 truncate">{point.notes}</p>
-                                            )}
-                                        </div>
-                                        {/* Actions */}
-                                        <div className="flex gap-2 shrink-0">
-                                            <button
-                                                onClick={() => {
-                                                    setShowRouteConfirmation(false);
-                                                    openEditPanel(point);
-                                                }}
-                                                className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-all"
-                                                title="Editar"
-                                            >
-                                                <Pencil size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteFromManifest(point.id)}
-                                                className="w-9 h-9 rounded-xl bg-red-500/5 border border-red-500/10 flex items-center justify-center text-red-500/50 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                                                title="Excluir"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <button
-                                onClick={() => setShowRouteConfirmation(false)}
-                                className="bg-white/[0.03] border border-white/10 py-6 rounded-3xl text-[12px] font-black uppercase text-zinc-400 tracking-widest active:scale-95 transition-all"
-                            >
-                                Voltar
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowRouteConfirmation(false);
-                                    setIsNavigating(true);
-                                    setNavigationIndex(0);
-                                }}
-                                className="bg-blue-600 hover:bg-blue-500 border border-blue-400/30 py-6 rounded-3xl flex items-center justify-center gap-3 shadow-[0_20px_40px_rgba(37,99,235,0.4)] text-[12px] font-black uppercase text-white tracking-widest active:scale-95 transition-all"
-                            >
-                                Iniciar Operação
-                            </button>
-                        </div>
+                        <button onClick={handleSavePointEdit} className="w-full bg-blue-600 py-4 rounded-3xl font-black uppercase text-white shadow-lg">Salvar</button>
+                        <button onClick={() => setEditingPoint(null)} className="w-full mt-4 text-zinc-400 font-black uppercase text-xs">Cancelar</button>
                     </div>
                 </div>
             )}
 
-            {/* === SPOKE-STYLE NAVIGATION BOTTOM SHEET === */}
-            {isNavigating && (() => {
-                const pendingPoints = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
-                const currentStop = pendingPoints[navigationIndex];
-                const totalStops = pendingPoints.length;
-                const progress = totalStops > 0 ? ((navigationIndex) / totalStops) * 100 : 0;
-
-                return (
-                    <div
-                        className={`absolute left-0 right-0 z-30 transition-all duration-500 ease-out ${sheetExpanded
-                            ? 'bottom-0 top-auto'
-                            : 'bottom-[80px]'
-                            }`}
-                        onTouchStart={handleSheetTouchStart}
-                        onTouchEnd={handleSheetTouchEnd}
-                    >
-                        {/* Backdrop blur when expanded */}
-                        {sheetExpanded && (
-                            <div
-                                className="fixed inset-0 bg-black/50 backdrop-blur-sm -z-10"
-                                onClick={() => setSheetExpanded(false)}
-                            />
-                        )}
-
-                        <div className={`bg-zinc-950 border-t border-white/10 shadow-[0_-30px_80px_rgba(0,0,0,0.8)] transition-all duration-500 ease-out ${sheetExpanded
-                            ? 'rounded-t-[2.5rem] max-h-[85vh] flex flex-col'
-                            : 'rounded-t-[2.5rem]'
-                            }`}>
-
-                            {/* Drag Handle + Progress Bar */}
-                            <div
-                                className="flex flex-col items-center pt-4 pb-2 cursor-grab active:cursor-grabbing"
-                                onClick={() => setSheetExpanded(prev => !prev)}
-                            >
-                                <div className="w-12 h-1 bg-zinc-700 rounded-full mb-3" />
-                                {/* Progress track */}
-                                <div className="w-full px-6 mb-1">
-                                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-blue-500 rounded-full transition-all duration-700 shadow-[0_0_8px_rgba(59,130,246,0.8)]"
-                                            style={{ width: `${progress}%` }}
-                                        />
-                                    </div>
-                                    <div className="flex justify-between mt-1.5 px-0.5">
-                                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">
-                                            Parada {navigationIndex + 1} de {totalStops}
-                                        </span>
-                                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">
-                                            {totalStops - navigationIndex - 1} restantes
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Current Stop - always visible */}
-                            <div className="px-6 pb-4">
-                                <div className="flex items-center gap-4">
-                                    {/* Stop number badge */}
-                                    <div className="w-14 h-14 rounded-2xl bg-blue-600 flex flex-col items-center justify-center shrink-0 shadow-[0_8px_24px_rgba(37,99,235,0.4)]">
-                                        <span className="text-[8px] font-black text-blue-200 uppercase">STOP</span>
-                                        <span className="text-xl font-black text-white leading-none">{navigationIndex + 1}</span>
-                                    </div>
-
-                                    {/* Address Info */}
+            {/* ROUTE CONFIRMATION */}
+            {showRouteConfirmation && (
+                <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/20 backdrop-blur-sm pointer-events-none">
+                    <div className="bg-white border-t-2 border-zinc-100 p-8 pb-12 rounded-t-[3.5rem] pointer-events-auto shadow-2xl animate-slide-up">
+                        <div className="w-12 h-1.5 bg-zinc-200 rounded-full mx-auto mb-10" />
+                        <h2 className="text-2xl font-black italic text-zinc-900 uppercase mb-8">Manifesto de Rota</h2>
+                        <div className="max-h-[50vh] overflow-y-auto space-y-3 mb-10">
+                            {routePoints.filter(p => !p.isDelivered && p.id !== 'current').map((p, idx) => (
+                                <div key={p.id} className="bg-zinc-50 border border-zinc-100 p-5 rounded-3xl flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black italic">#{idx + 1}</div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest truncate">
-                                            {currentStop?.neighborhood || 'ZONA OPERACIONAL'}
-                                        </p>
-                                        <h3 className="text-lg font-black italic uppercase text-white tracking-tighter leading-tight truncate">
-                                            {currentStop?.name || '---'}
-                                        </h3>
-                                        {currentStop?.notes && (
-                                            <p className="text-[9px] text-zinc-500 mt-0.5 truncate">{currentStop.notes}</p>
-                                        )}
+                                        <p className="text-zinc-900 font-black uppercase text-xs truncate">{p.name}</p>
+                                        <p className="text-zinc-500 text-[10px] uppercase truncate">{p.neighborhood}</p>
                                     </div>
-
-                                    {/* Expand toggle */}
-                                    <button
-                                        onClick={() => setSheetExpanded(prev => !prev)}
-                                        className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 shrink-0"
-                                    >
-                                        {sheetExpanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                                    </button>
+                                    {(!p.lat || !p.lng) && <div className="text-[8px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-black uppercase">Sem GPS</div>}
                                 </div>
+                            ))}
+                        </div>
+                        <button onClick={() => { setShowRouteConfirmation(false); setIsNavigating(true); setNavigationIndex(0); }} className="w-full bg-blue-600 py-6 rounded-3xl font-black uppercase text-white shadow-xl">Iniciar Rota</button>
+                    </div>
+                </div>
+            )}
 
-                                {/* Action Buttons */}
-                                <div className="grid grid-cols-2 gap-3 mt-4">
-                                    <button
-                                        onClick={() => {
-                                            // Skip this stop — mark as not-visited but move on
-                                            if (navigationIndex < pendingPoints.length - 1) {
-                                                setNavigationIndex(prev => prev + 1);
-                                            }
-                                        }}
-                                        className="bg-white/[0.03] border border-white/10 py-4 rounded-2xl text-[11px] font-black uppercase text-zinc-400 tracking-widest active:scale-95 transition-all"
-                                    >
-                                        Pular
-                                    </button>
-                                    <button
-                                        onClick={handleCompleteStop}
-                                        className="bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl text-[11px] font-black uppercase text-white tracking-widest shadow-[0_10px_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        <CheckCircle2 size={16} /> Concluído
-                                    </button>
+            {/* NAV SHEET */}
+            {isNavigating && (() => {
+                const pending = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
+                const currentStop = pending[navigationIndex];
+                if (!currentStop) return null;
+                return (
+                    <div className="absolute bottom-10 left-0 right-0 z-[30] px-6">
+                        <div className="bg-white border-2 border-zinc-100 rounded-[2.5rem] p-6 shadow-2xl">
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="w-14 h-14 rounded-2xl bg-blue-600 flex flex-col items-center justify-center shrink-0">
+                                    <span className="text-[10px] font-black text-blue-200">PARADA</span>
+                                    <span className="text-xl font-black text-white">{navigationIndex + 1}</span>
                                 </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{currentStop.neighborhood || 'PENDENTE'}</p>
+                                    <h3 className="text-lg font-black italic uppercase text-zinc-900 truncate">{currentStop.name}</h3>
+                                </div>
+                                <button onClick={() => setIsNavigating(false)} className="text-zinc-300"><X /></button>
                             </div>
-
-                            {/* Expanded: Full stop list */}
-                            {sheetExpanded && (
-                                <div className="flex-1 overflow-y-auto px-6 pb-32 space-y-3 border-t border-white/5 pt-4 mt-2">
-                                    <p className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-4">Todas as Paradas</p>
-                                    {pendingPoints.map((point, idx) => {
-                                        const isCurrent = idx === navigationIndex;
-                                        const isPast = idx < navigationIndex;
-                                        return (
-                                            <div
-                                                key={point.id}
-                                                className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${isCurrent
-                                                    ? 'bg-blue-600/10 border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
-                                                    : isPast
-                                                        ? 'bg-white/[0.01] border-white/5 opacity-40'
-                                                        : 'bg-white/[0.02] border-white/5'
-                                                    }`}
-                                            >
-                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-black shrink-0 ${isCurrent ? 'bg-blue-500 text-white shadow-[0_0_12px_rgba(59,130,246,0.6)]' : 'bg-zinc-900 text-zinc-500 border border-white/10'
-                                                    }`}>
-                                                    {isPast ? '✓' : idx + 1}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className={`text-[12px] font-black uppercase truncate tracking-tight ${isCurrent ? 'text-white' : 'text-zinc-400'}`}>{point.name}</p>
-                                                    <p className="text-[9px] text-zinc-600 uppercase truncate mt-0.5">{point.neighborhood || '---'}</p>
-                                                    {point.notes && (
-                                                        <p className={`text-[9px] italic mt-0.5 truncate ${isCurrent ? 'text-zinc-400' : 'text-zinc-700'}`}>
-                                                            {point.notes}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                {isCurrent && (
-                                                    <Package size={16} className="text-blue-400 animate-pulse shrink-0" />
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
+                            <button onClick={handleCompleteStop} className="w-full bg-emerald-500 py-5 rounded-3xl font-black uppercase text-white shadow-emerald-500/20 shadow-xl flex items-center justify-center gap-3">
+                                <CheckCircle2 size={20} /> Concluir Entrega
+                            </button>
                         </div>
                     </div>
                 );
             })()}
 
-            {/* Roteirizando Overlay */}
-            {isRouting && (
-                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-12">
-                    <div className="relative mb-8">
-                        <div className="w-24 h-24 border-2 border-blue-500/10 rounded-full animate-spin border-t-blue-500"></div>
-                        <Route size={32} className="absolute inset-0 m-auto text-blue-500 animate-pulse" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase">Inteligência de Rota Ativada</h3>
-                    <p className="text-blue-500/40 text-[9px] font-black uppercase tracking-[0.4em] mt-2">Otimizando Waypoints via Google Cloud</p>
-                </div>
-            )}
-
-            {/* CELEBRATION */}
-            {showCelebration && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-fade-in bg-black/95 backdrop-blur-2xl text-center">
-                    <div className="flex flex-col items-center gap-6">
-                        <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
-                            <CheckCircle2 size={40} className="text-emerald-500" />
-                        </div>
-                        <h2 className="text-4xl font-black text-white italic tracking-tighter uppercase">Operação Concluída</h2>
-                        <p className="text-zinc-500 font-black uppercase tracking-widest text-[9px]">Todos os destinos foram alcançados.</p>
-                        <button onClick={() => setShowCelebration(false)} className="bg-white text-black font-black uppercase tracking-widest py-4 px-10 rounded-2xl text-[10px] mt-4">Retornar</button>
-                    </div>
-                </div>
-            )}
-
-            {/* Quick Check Animation */}
+            {/* CHECK ANIMATION */}
             {showCheckAnimation && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none">
-                    <div className="bg-emerald-500 text-white rounded-[2rem] p-8 animate-in zoom-in spin-in rotate-12 duration-300 shadow-[0_0_80px_rgba(16,185,129,1)]">
-                        <CheckCircle2 size={72} strokeWidth={3} className="animate-pulse" />
+                <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
+                    <div className="bg-emerald-500 w-32 h-32 rounded-full flex items-center justify-center animate-ping text-white">
+                        <CheckCircle2 size={64} />
+                    </div>
+                </div>
+            )}
+
+            {/* CELEBRATION OVERLAY */}
+            {showCelebration && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none bg-blue-600/20 backdrop-blur-sm animate-in fade-in duration-500">
+                    <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl text-center scale-up-center">
+                        <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <CheckCircle2 size={48} className="text-emerald-500" />
+                        </div>
+                        <h2 className="text-3xl font-black italic uppercase text-zinc-900 mb-2">Rota Concluída!</h2>
+                        <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Excelente trabalho hoje.</p>
                     </div>
                 </div>
             )}
         </div>
     );
 };
-
