@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
-import { getActiveRoute, updateActiveRoute, updateRecord, saveRecord, clearActiveRoute } from '../services/db';
+import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { MapPin, Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, Plus, Save, Rocket, CheckCircle2 } from 'lucide-react';
+import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const mapContainerStyle = {
@@ -58,14 +58,8 @@ export const MapView = () => {
     const [navigationIndex, setNavigationIndex] = useState(0);
     const [selectedPoint, setSelectedPoint] = useState<RoutePoint | null>(null);
 
-    const [isEditingCurrentStop, setIsEditingCurrentStop] = useState(false);
-    const [editingPointData, setEditingPointData] = useState<any>(null);
     const [showCelebration, setShowCelebration] = useState(false);
-    const [undoVisible, setUndoVisible] = useState(false);
-    const [lastCompletedPoint, setLastCompletedPoint] = useState<RoutePoint | null>(null);
-    const [undoCountdown, setUndoCountdown] = useState(2);
 
-    const undoTimerRef = useRef<any>(null);
     const autocompleteTimerRef = useRef<any>(null);
 
     const onLoad = useCallback((map: google.maps.Map) => {
@@ -106,7 +100,7 @@ export const MapView = () => {
                         return [...filtered, { id: 'current', name: 'Você está aqui', ...coords, scannedAt: Date.now() }];
                     });
                 },
-                (err) => {
+                () => {
                     if (!silent) alert('GPS indisponível.');
                 },
                 { enableHighAccuracy: true, timeout: 5000 }
@@ -182,21 +176,8 @@ export const MapView = () => {
         const point = dests[navigationIndex];
         if (!point) return;
 
-        setLastCompletedPoint(point);
-        setUndoVisible(true);
-        setUndoCountdown(2);
-
-        if (undoTimerRef.current) clearInterval(undoTimerRef.current);
-        let timeLeft = 2;
-        undoTimerRef.current = setInterval(() => {
-            timeLeft -= 1;
-            setUndoCountdown(timeLeft);
-            if (timeLeft <= 0) {
-                clearInterval(undoTimerRef.current);
-                setUndoVisible(false);
-                finalizeCompletion(point.id);
-            }
-        }, 1000);
+        if (navigator.vibrate) navigator.vibrate(50);
+        await finalizeCompletion(point.id);
     };
 
     const finalizeCompletion = async (id: string) => {
@@ -256,7 +237,9 @@ export const MapView = () => {
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                     />
-                    <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center">
+                        {isSearching ? <Loader2 size={18} className="animate-spin text-blue-500" /> : <Search className="text-zinc-600" size={18} />}
+                    </div>
                 </div>
 
                 {searchResults.length > 0 && (
