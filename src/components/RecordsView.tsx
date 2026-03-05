@@ -17,6 +17,9 @@ export const RecordsView = () => {
     const [editMainImage, setEditMainImage] = useState<string | null>(null);
     const [editMainFeatures, setEditMainFeatures] = useState<number[] | null>(null);
     const [editAdditionalImages, setEditAdditionalImages] = useState<{ id: string, image: string, features: number[] }[]>([]);
+    const [editNotes, setEditNotes] = useState('');
+    const [editNeighborhood, setEditNeighborhood] = useState('');
+    const [editCity, setEditCity] = useState('');
     const [isExtracting, setIsExtracting] = useState(false);
     const [photoActionTarget, setPhotoActionTarget] = useState<'main' | 'extra' | null>(null);
 
@@ -120,6 +123,9 @@ export const RecordsView = () => {
         setEditMainImage(record.imageThumbnail);
         setEditMainFeatures(record.featureVector);
         setEditAdditionalImages(record.additionalImages || []);
+        setEditNotes(record.notes || '');
+        setEditNeighborhood(record.neighborhood || '');
+        setEditCity(record.city || '');
     };
 
     const openCreate = () => {
@@ -131,6 +137,9 @@ export const RecordsView = () => {
         setEditMainImage(null);
         setEditMainFeatures(null);
         setEditAdditionalImages([]);
+        setEditNotes('');
+        setEditNeighborhood('');
+        setEditCity('');
     };
 
     const handleSaveEdit = async () => {
@@ -144,7 +153,10 @@ export const RecordsView = () => {
                 lng: isNaN(lng) ? null : lng,
                 additionalImages: editAdditionalImages,
                 imageThumbnail: editMainImage || editingRecord.imageThumbnail,
-                featureVector: editMainFeatures || editingRecord.featureVector
+                featureVector: editMainFeatures || editingRecord.featureVector,
+                notes: editNotes.trim(),
+                neighborhood: editNeighborhood.trim(),
+                city: editCity.trim()
             });
         } else {
             if (!editName.trim()) {
@@ -156,7 +168,12 @@ export const RecordsView = () => {
                 isNaN(lat) ? null : lat,
                 isNaN(lng) ? null : lng,
                 editMainImage || '',
-                editMainFeatures || []
+                editMainFeatures || [],
+                {
+                    notes: editNotes.trim(),
+                    neighborhood: editNeighborhood.trim(),
+                    city: editCity.trim()
+                }
             );
             if (editAdditionalImages.length > 0) {
                 await updateRecord(newRec.id, { additionalImages: editAdditionalImages });
@@ -165,6 +182,9 @@ export const RecordsView = () => {
 
         setIsEditModalOpen(false);
         setEditingRecord(null);
+        setEditNotes('');
+        setEditNeighborhood('');
+        setEditCity('');
         loadRecords();
     };
 
@@ -457,6 +477,39 @@ export const RecordsView = () => {
                                 value={editName}
                                 onChange={(e) => setEditName(e.target.value)}
                                 className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none"
+                            />
+                        </div>
+
+                        <div className="flex gap-4">
+                            <div className="flex flex-col gap-2 flex-1">
+                                <label className="text-xs text-zinc-400">Bairro (Opcional)</label>
+                                <input
+                                    type="text"
+                                    value={editNeighborhood}
+                                    onChange={(e) => setEditNeighborhood(e.target.value)}
+                                    placeholder="Ex: Centro"
+                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none text-xs"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-2 flex-1">
+                                <label className="text-xs text-zinc-400">Cidade (Opcional)</label>
+                                <input
+                                    type="text"
+                                    value={editCity}
+                                    onChange={(e) => setEditCity(e.target.value)}
+                                    placeholder="Ex: São Paulo"
+                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <label className="text-xs text-zinc-400">Notas/Referência (Opcional)</label>
+                            <textarea
+                                value={editNotes}
+                                onChange={(e) => setEditNotes(e.target.value)}
+                                placeholder="Ponto de referência, cor do portão..."
+                                className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none text-xs h-16 resize-none"
                             />
                         </div>
 

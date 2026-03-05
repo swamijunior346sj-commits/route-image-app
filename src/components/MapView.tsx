@@ -8,11 +8,16 @@ import { MapPin, Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, Plu
 
 // Fix leaflet icon
 const customIcon = new L.Icon({
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/8157/8157973.png', // Delivery icon
+    iconSize: [35, 35],
+    iconAnchor: [17, 35],
+    popupAnchor: [0, -35]
+});
+
+const userIcon = L.divIcon({
+    className: 'pulse-icon',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12]
 });
 
 export const MapView = () => {
@@ -28,6 +33,8 @@ export const MapView = () => {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
+    const [isNavigating, setIsNavigating] = useState(false);
+    const [navigationIndex, setNavigationIndex] = useState(0);
     const autocompleteTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Silently try to get location on mount for better search suggestions
@@ -100,6 +107,7 @@ export const MapView = () => {
                 (pos) => {
                     const lat = pos.coords.latitude;
                     const lng = pos.coords.longitude;
+                    setUserLocation({ lat, lng });
 
                     setRoutePoints(prev => {
                         // Remove previous "current" marker if it exists
@@ -214,6 +222,32 @@ export const MapView = () => {
         }
     };
 
+    const handleStartNavigation = () => {
+        const dests = routePoints.filter(p => p.id !== 'current');
+        if (dests.length === 0) {
+            alert("Adicione pelo menos um destino para navegar.");
+            return;
+        }
+        setIsNavigating(true);
+        setNavigationIndex(0);
+        if (osrmPath.length === 0) {
+            handleRoteirizar();
+        }
+    };
+
+    const handleCompleteStop = async () => {
+        const dests = routePoints.filter(p => p.id !== 'current');
+        if (navigationIndex < dests.length - 1) {
+            setNavigationIndex(prev => prev + 1);
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        } else {
+            alert("Roteiro Finalizado! Parabéns pelas entregas.");
+            setIsNavigating(false);
+            setNavigationIndex(0);
+            handleClear(); // clear the temporary finished route
+        }
+    };
+
     const handleAddSearchToMap = async (result: any) => {
         const newPoint: RoutePoint = {
             id: crypto.randomUUID(),
@@ -325,7 +359,7 @@ export const MapView = () => {
                             <Marker
                                 key={`${point.id}-${index}`}
                                 position={[point.lat, point.lng]}
-                                icon={customIcon}
+                                icon={point.id === 'current' ? userIcon : customIcon}
                                 draggable={point.id !== 'current'}
                                 eventHandlers={{
                                     dragend: (e) => handleMarkerDragEnd(index, e)
@@ -381,21 +415,23 @@ export const MapView = () => {
 
             <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-2">
                 <button
-                    onClick={handleRoteirizar}
-                    disabled={isRouting}
-                    className="bg-purple-600/90 backdrop-blur-md p-3 rounded-xl border border-white/20 text-white hover:bg-purple-500 transition shadow-[0_0_15px_rgba(168,85,247,0.5)] disabled:opacity-50"
-                    title="Roteirizar Trajeto Real"
+                    onClick={isNavigating ? () => setIsNavigating(false) : handleStartNavigation}
+                    className={`p-3 rounded-xl border shadow-xl active:scale-95 transition-all backdrop-blur-md flex items-center justify-center ${isNavigating ? 'bg-red-500/20 border-red-500/30 text-red-500' : 'bg-blue-600/30 border-blue-500/30 text-blue-400'}`}
+                    title={isNavigating ? "Parar Navegação" : "Iniciar Roteiro de Entregas"}
                 >
-                    {isRouting ? <Loader2 size={20} className="animate-spin" /> : <Route size={20} />}
+                    {isNavigating ? <X size={20} /> : <Navigation size={20} />}
                 </button>
                 <div className="h-px bg-white/10 w-full my-1"></div>
-                <button
-                    onClick={loadRoute}
-                    className="bg-zinc-800/80 backdrop-blur-md p-3 rounded-xl border border-white/10 text-white hover:bg-zinc-700 transition"
-                    title="Centralizar Câmera"
-                >
-                    <Navigation size={20} />
-                </button>
+                {!isNavigating && (
+                    <button
+                        onClick={handleRoteirizar}
+                        disabled={isRouting}
+                        className="bg-purple-600/90 backdrop-blur-md p-3 rounded-xl border border-white/20 text-white hover:bg-purple-500 transition shadow-[0_0_15px_rgba(168,85,247,0.5)] disabled:opacity-50"
+                        title="Roteirizar Trajeto Real"
+                    >
+                        {isRouting ? <Loader2 size={20} className="animate-spin" /> : <Route size={20} />}
+                    </button>
+                )}
                 <button
                     onClick={() => handleLocateMe(false)}
                     className="bg-blue-600/80 backdrop-blur-md p-3 rounded-xl border border-white/10 text-white hover:bg-blue-500 transition"
@@ -403,14 +439,51 @@ export const MapView = () => {
                 >
                     <LocateFixed size={20} />
                 </button>
-                <button
-                    onClick={handleClear}
-                    className="bg-red-500/80 backdrop-blur-md p-3 rounded-xl border border-white/10 text-white hover:bg-red-400 transition"
-                    title="Limpar Rota"
-                >
-                    <Trash2 size={20} />
-                </button>
+                {!isNavigating && (
+                    <button
+                        onClick={handleClear}
+                        className="bg-red-500/80 backdrop-blur-md p-3 rounded-xl border border-white/10 text-white hover:bg-red-400 transition"
+                        title="Limpar Rota"
+                    >
+                        <Trash2 size={20} />
+                    </button>
+                )}
             </div>
+
+            {/* Navigation Panel (Bottom Floating) */}
+            {isNavigating && (
+                <div className="absolute bottom-24 left-4 right-4 z-[9999] animate-slide-up">
+                    <div className="glass-panel p-5 rounded-3xl border border-blue-500/30 shadow-[0_4px_30px_rgba(59,130,246,0.3)] flex items-center gap-4 relative overflow-hidden">
+                        {/* Proximity / Progress Bar */}
+                        <div className="absolute bottom-0 left-0 h-1.5 bg-blue-500/30 w-full">
+                            <div
+                                className="h-full bg-blue-500 transition-all duration-700 ease-out"
+                                style={{ width: `${((navigationIndex + 1) / routePoints.filter(p => p.id !== 'current').length) * 100}%` }}
+                            ></div>
+                        </div>
+
+                        <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shrink-0">
+                            <Navigation size={28} className="text-blue-400 animate-pulse" />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-0.5">Próxima Parada ({navigationIndex + 1} de {routePoints.filter(p => p.id !== 'current').length})</p>
+                            <h4 className="text-base font-bold text-white truncate leading-tight">
+                                {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.name || "Destino Desconhecido"}
+                            </h4>
+                            <p className="text-[10px] text-zinc-400 mt-0.5">Siga no mapa para chegar ao destino</p>
+                        </div>
+
+                        <button
+                            onClick={handleCompleteStop}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-3 rounded-2xl shadow-lg transition-all active:scale-90 flex items-center gap-2 text-xs"
+                        >
+                            <Save size={16} />
+                            Concluir
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {routePoints.length === 0 && (
                 <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">

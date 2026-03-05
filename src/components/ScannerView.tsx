@@ -335,14 +335,23 @@ export const ScannerView = () => {
                 {/* Scanner HUD Overlay */}
                 {mode === 'scan' && !match && (
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-64 h-64 border-2 border-primary/50 relative">
-                            <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-primary"></div>
-                            <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-primary"></div>
-                            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-primary"></div>
-                            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-primary"></div>
+                        {/* Máscara de Enquadramento (Blur/Darkened outside) */}
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
+
+                        {/* Viewfinder Hole */}
+                        <div className="relative w-64 h-64 border-2 border-white/30 rounded-[2rem] overflow-hidden shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]">
+                            {/* Corners */}
+                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-3xl"></div>
+                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-3xl"></div>
+                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-3xl"></div>
+                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-3xl"></div>
+
+                            {/* Scanning Line Animation */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-scan-line shadow-[0_0_15px_rgba(59,130,246,0.8)]"></div>
+
                             {loading && (
-                                <div className="absolute inset-0 bg-primary/20 animate-pulse flex items-center justify-center">
-                                    <Loader2 className="animate-spin text-primary" size={48} />
+                                <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-sm animate-pulse flex items-center justify-center">
+                                    <Loader2 className="animate-spin text-white drop-shadow-glow" size={48} />
                                 </div>
                             )}
                         </div>

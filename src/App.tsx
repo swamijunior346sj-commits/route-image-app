@@ -3,17 +3,23 @@ import { ScannerView } from './components/ScannerView';
 import { MapView } from './components/MapView';
 import { RecordsView } from './components/RecordsView';
 import { BottomNav } from './components/BottomNav';
+import { AuthView } from './components/AuthView';
+import { ProfileView } from './components/ProfileView';
 import { loadModel } from './services/imageProcessing';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records'>('scanner');
+  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile'>('scanner');
   const [modelLoading, setModelLoading] = useState(true);
+
+  // Use localStorage to pretend we have a real session active
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
+    () => localStorage.getItem('isAuthenticated') === 'true'
+  );
 
   useEffect(() => {
     const initApp = async () => {
       try {
         await loadModel();
-        // pre-loaded tfjs module and requested camera permissions
       } catch (err) {
         console.error("Failed to load model", err);
       } finally {
@@ -33,12 +39,17 @@ export default function App() {
     );
   }
 
+  if (!isAuthenticated) {
+    return <AuthView onLogin={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="w-full h-screen bg-black text-white overflow-hidden flex flex-col font-sans">
       <div className="flex-1 w-full h-full relative">
         {currentTab === 'scanner' && <ScannerView />}
         {currentTab === 'map' && <MapView />}
         {currentTab === 'records' && <RecordsView />}
+        {currentTab === 'profile' && <ProfileView onLogout={() => setIsAuthenticated(false)} />}
       </div>
       <BottomNav currentTab={currentTab} setTab={setCurrentTab} />
     </div>

@@ -1,8 +1,8 @@
-import { Camera, Map, List, Download, Upload } from 'lucide-react';
+import { Camera, Map, List, User } from 'lucide-react';
 
 interface BottomNavProps {
-    currentTab: 'scanner' | 'map' | 'records';
-    setTab: (tab: 'scanner' | 'map' | 'records') => void;
+    currentTab: 'scanner' | 'map' | 'records' | 'profile';
+    setTab: (tab: 'scanner' | 'map' | 'records' | 'profile') => void;
 }
 
 export const BottomNav = ({ currentTab, setTab }: BottomNavProps) => {
@@ -10,6 +10,7 @@ export const BottomNav = ({ currentTab, setTab }: BottomNavProps) => {
         { id: 'scanner', icon: Camera, label: 'Escanear' },
         { id: 'map', icon: Map, label: 'Mapa' },
         { id: 'records', icon: List, label: 'Registros' },
+        { id: 'profile', icon: User, label: 'Perfil' },
     ] as const;
 
     return (
