@@ -12,6 +12,7 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile'>('map');
   const [modelLoading, setModelLoading] = useState(true);
+  const [mapVersion, setMapVersion] = useState(0);
 
 
   // Use localStorage to pretend we have a real session active
@@ -45,6 +46,7 @@ export default function App() {
   const changeTab = (tab: 'scanner' | 'map' | 'records' | 'profile') => {
     if (tab === currentTab) return;
     window.history.pushState({ tab }, '');
+    if (tab === 'map') setMapVersion(v => v + 1);
     setCurrentTab(tab);
   };
 
@@ -73,7 +75,7 @@ export default function App() {
             onNavigateToRecords={() => changeTab('records')}
           />
         )}
-        {currentTab === 'map' && <MapView />}
+        {currentTab === 'map' && <MapView key={mapVersion} />}
         {currentTab === 'records' && (
           <RecordsView
             onNavigateToMap={() => changeTab('map')}

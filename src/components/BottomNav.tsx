@@ -14,7 +14,7 @@ export const BottomNav = ({ currentTab, setTab }: BottomNavProps) => {
     ] as const;
 
     return (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm h-16 bg-zinc-950/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] flex justify-around items-center z-50 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm h-16 bg-zinc-950/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] flex justify-around items-center z-[9999] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden">
             {/* High-tech accent line */}
             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
 

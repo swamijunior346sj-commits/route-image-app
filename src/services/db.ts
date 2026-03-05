@@ -156,22 +156,44 @@ export const updateRecord = async (id: string, updates: Partial<LocationRecord>)
 // --- ROUTE SESSION ---
 
 export const getActiveRoute = async (): Promise<RoutePoint[]> => {
-    const { data, error } = await supabase.from('active_route').select('*').order('scanned_at', { ascending: true });
-    if (error || !data) {
-        return await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).getItem<RoutePoint[]>('route') || [];
+    // Prioritize localforage as it is the primary write target in updateActiveRoute
+    try {
+        const localData = await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).getItem<RoutePoint[]>('route');
+        if (localData && localData.length > 0) {
+            return localData;
+        }
+    } catch (err) {
+        console.warn('Failed to read route from localforage:', err);
     }
-    return data.map(r => ({
-        id: r.id,
-        name: r.name,
-        lat: r.lat,
-        lng: r.lng,
-        scannedAt: new Date(r.scanned_at).getTime(),
-        notes: r.notes,
-        isDelivered: r.is_delivered,
-        neighborhood: r.neighborhood,
-        city: r.city
-    }));
+
+    // Fallback to Supabase if localforage is empty
+    try {
+        const { data, error } = await supabase.from('active_route').select('*').order('scanned_at', { ascending: true });
+        if (!error && data && data.length > 0) {
+            const mapped = data.map(r => ({
+                id: r.id,
+                name: r.name,
+                lat: r.lat,
+                lng: r.lng,
+                scannedAt: new Date(r.scanned_at).getTime(),
+                notes: r.notes,
+                isDelivered: r.is_delivered,
+                neighborhood: r.neighborhood,
+                city: r.city
+            }));
+            // Also save to localforage for next time
+            try {
+                await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).setItem('route', mapped);
+            } catch { /* ignore */ }
+            return mapped;
+        }
+    } catch (err) {
+        console.warn('Failed to read route from Supabase:', err);
+    }
+
+    return [];
 };
+
 
 export const addPointToActiveRoute = async (point: RoutePoint): Promise<RoutePoint[]> => {
     await supabase.from('active_route').insert({
