@@ -1,19 +1,20 @@
 import { useRef, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, MapPin, ScanLine, X, Loader2, ImagePlus, SwitchCamera, Save, LocateFixed, Database } from 'lucide-react';
+import { Camera, MapPin, ScanLine, X, Loader2, SwitchCamera, Save, LocateFixed, Database } from 'lucide-react';
 import { getRecords, saveRecord, addPointToActiveRoute } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
+import { analyzeAddressImage } from '../services/geminiService';
 
 interface ScannerProps {
     onNavigateToMap: () => void;
+    onNavigateToRecords: () => void;
 }
 
-export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
+export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerProps) => {
     const webcamRef = useRef<Webcam>(null);
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
-    const [statusMsg, setStatusMsg] = useState('Aponte a câmera para a etiqueta do pacote');
     const [mode, setMode] = useState<'scan' | 'register'>('scan');
 
     // Registering state
@@ -51,7 +52,6 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
     const handleScan = useCallback(async () => {
         try {
             setLoading(true);
-            setStatusMsg('Processando etiqueta...');
             setMatch(null);
 
             if (navigator.vibrate) navigator.vibrate(50);
@@ -82,13 +82,12 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
 
             if (bestMatch && highestSimilarity > SIMILARITY_THRESHOLD) {
                 setMatch(bestMatch);
-                setStatusMsg(`Reconhecido: ${(highestSimilarity * 100).toFixed(0)}%`);
 
                 await addPointToActiveRoute({
                     id: bestMatch.id,
                     name: bestMatch.name,
-                    lat: bestMatch.lat || -23.55052,
-                    lng: bestMatch.lng || -46.633309,
+                    lat: bestMatch.lat || -20.143196,
+                    lng: bestMatch.lng || -44.2174965,
                     scannedAt: Date.now(),
                     notes: bestMatch.notes,
                     neighborhood: bestMatch.neighborhood,
@@ -102,11 +101,32 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                     onNavigateToMap();
                 }, 2000);
             } else {
-                setStatusMsg('Nenhum endereço reconhecido.');
+                // VISUAL MATCH FAILED -> USE GEMINI AI TO READ AND REGISTER NEW
+                // Clear fields for pre-filling
+                setAddressInput('');
+                setNeighborhoodInput('');
+                setCityInput('');
+                setNotesInput('');
+                setLatInput('');
+                setLngInput('');
+
+                const aiReading = await analyzeAddressImage(capture.imageSrc);
+                if (aiReading) {
+                    if (aiReading.address) setAddressInput(aiReading.address);
+                    if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
+                    if (aiReading.city) setCityInput(aiReading.city);
+                    if (aiReading.notes) setNotesInput(aiReading.notes);
+
+                    setRegisterImage(capture.imageSrc);
+                    setRegisterFeatures(capture.features);
+                    setMode('register');
+                } else {
+                    // No AI match either
+                    setMatch(null);
+                }
             }
         } catch (err: any) {
             console.error(err);
-            setStatusMsg('Erro no reconhecimento.');
         } finally {
             setLoading(false);
         }
@@ -118,6 +138,12 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
             if (navigator.vibrate) navigator.vibrate(50);
             const capture = await captureAndExtract();
             if (!capture) throw new Error("Erro de captura.");
+
+            // Clear inputs for new registration
+            setAddressInput('');
+            setNeighborhoodInput('');
+            setCityInput('');
+            setNotesInput('');
 
             if ('geolocation' in navigator) {
                 navigator.geolocation.getCurrentPosition(
@@ -131,12 +157,24 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                 );
             }
 
+            // AI ENHANCEMENT: Complement with Gemini analysis
+            try {
+                const aiReading = await analyzeAddressImage(capture.imageSrc);
+                if (aiReading) {
+                    if (aiReading.address) setAddressInput(aiReading.address);
+                    if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
+                    if (aiReading.city) setCityInput(aiReading.city);
+                    if (aiReading.notes) setNotesInput(aiReading.notes);
+                }
+            } catch (aiErr) {
+                console.warn("AI extraction failed, proceeding with manual entry", aiErr);
+            }
+
             setRegisterImage(capture.imageSrc);
             setRegisterFeatures(capture.features);
             setMode('register');
-            setStatusMsg('Vincule os dados à etiqueta capturada.');
         } catch (err) {
-            setStatusMsg('Falha na captura.');
+            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -161,7 +199,7 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                         lat = data.results[0].geometry.location.lat;
                         lng = data.results[0].geometry.location.lng;
                     }
-                } catch (e) { console.log(e); }
+                } catch (e) { console.error(e); }
             }
 
             await saveRecord(
@@ -185,10 +223,10 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                 setRegisterImage(null);
                 setRegisterFeatures(null);
                 setAddressInput('');
-                onNavigateToMap();
+                onNavigateToRecords();
             }, 2000);
         } catch (err) {
-            setStatusMsg('Erro ao salvar.');
+            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -240,9 +278,7 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                     }
 
                     setMode('register');
-                    setStatusMsg('Vincule os dados à imagem importada.');
                 } else {
-                    setStatusMsg('Analisando arquivo...');
                     const records = await getRecords();
                     let bestMatch: LocationRecord | null = null;
                     let highestSim = 0;
@@ -261,32 +297,38 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
 
                     if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
                         setMatch(bestMatch);
-                        setStatusMsg(`Reconhecido via Arquivo: ${(highestSim * 100).toFixed(0)}%`);
-
-                        await addPointToActiveRoute({
-                            id: bestMatch.id,
-                            name: bestMatch.name,
-                            lat: bestMatch.lat || -23.55052,
-                            lng: bestMatch.lng || -46.633309,
-                            scannedAt: Date.now(),
-                            notes: bestMatch.notes,
-                            neighborhood: bestMatch.neighborhood,
-                            city: bestMatch.city
-                        });
-
                         setIsSendingToRoute(true);
                         setTimeout(() => {
                             setIsSendingToRoute(false);
-                            onNavigateToMap();
+                            onNavigateToRecords();
                         }, 2000);
                     } else {
-                        // SAFETY: Don't show "Sending to Route" if not found
-                        setStatusMsg('Nenhuma correspondência no arquivo.');
+                        // Visual match failed, use AI to read and suggest registration
                         setMatch(null);
+
+                        // Clear fields for pre-filling
+                        setAddressInput('');
+                        setNeighborhoodInput('');
+                        setCityInput('');
+                        setNotesInput('');
+                        setLatInput('');
+                        setLngInput('');
+
+                        const aiReading = await analyzeAddressImage(imageSrc);
+                        if (aiReading) {
+                            if (aiReading.address) setAddressInput(aiReading.address);
+                            if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
+                            if (aiReading.city) setCityInput(aiReading.city);
+                            if (aiReading.notes) setNotesInput(aiReading.notes);
+                        }
+
+                        setRegisterImage(imageSrc);
+                        setRegisterFeatures(features);
+                        setMode('register');
                     }
                 }
             } catch (err) {
-                setStatusMsg('Erro ao processar arquivo.');
+                console.error(err);
             } finally {
                 setLoading(false);
             }
@@ -300,20 +342,13 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
             {/* HUD Status Bar */}
             <div className="absolute top-0 z-50 w-full p-6 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-sm border-b border-white/5 animate-fade-in">
                 <div className="flex justify-between items-start">
-                    <div className="space-y-1">
-                        <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
-                            Scanner <span className="text-blue-500">Visão</span>
-                        </h1>
-                        <div className="flex items-center gap-2">
-                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">{statusMsg}</p>
-                            {accuracy !== null && (
-                                <div className="flex items-center gap-2 ml-4 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
-                                    <div className={`w-1 h-1 rounded-full ${accuracy < 20 ? 'bg-emerald-500' : accuracy < 50 ? 'bg-yellow-500' : 'bg-red-500'}`} />
-                                    <p className="text-[8px] text-zinc-400 font-bold tracking-tighter uppercase">SIGNAL: {Math.round(accuracy)}m</p>
-                                </div>
-                            )}
-                        </div>
+                    <div className="flex flex-col gap-2">
+                        {accuracy !== null && (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
+                                <div className={`w-1.5 h-1.5 rounded-full ${accuracy < 20 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : accuracy < 50 ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                                <p className="text-[9px] text-white font-black tracking-tighter uppercase italic">SINAL GPS: {Math.round(accuracy)}m</p>
+                            </div>
+                        )}
                     </div>
                     {mode === 'scan' && (
                         <button
@@ -382,7 +417,7 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
             </div>
 
             {/* Bottom Controls */}
-            <div className="absolute bottom-0 w-full px-6 pb-32 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent z-10">
+            <div className="absolute bottom-0 w-full px-6 pb-44 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent z-10">
                 {mode === 'scan' ? (
                     <div className="space-y-4 max-w-lg mx-auto">
                         <div className="grid grid-cols-2 gap-4">
@@ -406,13 +441,9 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <label className="bg-white/[0.02] border border-white/5 py-4 rounded-3xl flex items-center justify-center gap-2 cursor-pointer text-zinc-600 hover:text-zinc-400 hover:border-white/10 transition-all text-[9px] font-black uppercase tracking-widest">
-                                <ImagePlus size={14} /> Importar (Link)
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, true)} />
-                            </label>
-                            <label className="bg-blue-500/5 border border-blue-500/10 py-4 rounded-3xl flex items-center justify-center gap-2 cursor-pointer text-blue-500/40 hover:text-blue-400 hover:border-blue-500/30 transition-all text-[9px] font-black uppercase tracking-widest">
-                                <ImagePlus size={14} /> Importar (Scan)
+                        <div className="w-full">
+                            <label className="w-full bg-blue-500/10 border border-blue-500/30 py-4 rounded-3xl flex items-center justify-center gap-2 cursor-pointer text-blue-400 hover:text-blue-300 hover:border-blue-400/50 transition-all text-[10px] font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(59,130,246,0.1)]">
+                                <ScanLine size={16} /> LEITURA DE IA
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, false)} />
                             </label>
                         </div>
@@ -588,4 +619,3 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
         </div>
     );
 };
-

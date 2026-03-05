@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
-import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, Save } from 'lucide-react';
+import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, Save, Sparkles } from 'lucide-react';
 import { exportRecords, importRecords as processImport } from '../services/importExport';
 import { extractFeatures } from '../services/imageProcessing';
+import { analyzeAddressImage } from '../services/geminiService';
 
 export const RecordsView = () => {
     const [records, setRecords] = useState<LocationRecord[]>([]);
@@ -21,6 +22,8 @@ export const RecordsView = () => {
     const [editNeighborhood, setEditNeighborhood] = useState('');
     const [editCity, setEditCity] = useState('');
     const [isExtracting, setIsExtracting] = useState(false);
+    const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
+    const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
     const [photoActionTarget, setPhotoActionTarget] = useState<'main' | 'extra' | null>(null);
 
     // Multi-selection and Search
@@ -135,6 +138,7 @@ export const RecordsView = () => {
         setEditNotes(record.notes || '');
         setEditNeighborhood(record.neighborhood || '');
         setEditCity(record.city || '');
+        setAiAnalysisResult(null);
     };
 
     const openCreate = () => {
@@ -149,6 +153,7 @@ export const RecordsView = () => {
         setEditNotes('');
         setEditNeighborhood('');
         setEditCity('');
+        setAiAnalysisResult(null);
     };
 
     const handleSaveEdit = async () => {
@@ -263,6 +268,24 @@ export const RecordsView = () => {
                 const features = await extractFeatures(img);
                 setEditMainImage(imageSrc);
                 setEditMainFeatures(features);
+
+                // Auto-trigger Gemini analysis on new main image
+                setIsAnalyzingAI(true);
+                setAiAnalysisResult(null);
+                try {
+                    const aiReading = await analyzeAddressImage(imageSrc);
+                    if (aiReading) {
+                        if (aiReading.address) setEditName(aiReading.address);
+                        if (aiReading.neighborhood) setEditNeighborhood(aiReading.neighborhood);
+                        if (aiReading.city) setEditCity(aiReading.city);
+                        if (aiReading.notes) setEditNotes(aiReading.notes);
+                        setAiAnalysisResult('Dados extraídos pela IA com sucesso!');
+                    }
+                } catch (aiErr) {
+                    console.warn('AI auto-analysis failed:', aiErr);
+                } finally {
+                    setIsAnalyzingAI(false);
+                }
             } catch (err) {
                 console.error(err);
                 alert('Erro ao processar a nova foto principal.');
@@ -272,6 +295,29 @@ export const RecordsView = () => {
         };
         reader.readAsDataURL(file);
         e.target.value = '';
+    };
+
+    const handleAnalyzeWithAI = async () => {
+        if (!editMainImage) return;
+        setIsAnalyzingAI(true);
+        setAiAnalysisResult(null);
+        try {
+            const aiReading = await analyzeAddressImage(editMainImage);
+            if (aiReading) {
+                if (aiReading.address) setEditName(aiReading.address);
+                if (aiReading.neighborhood) setEditNeighborhood(aiReading.neighborhood);
+                if (aiReading.city) setEditCity(aiReading.city);
+                if (aiReading.notes) setEditNotes(prev => aiReading.notes ? aiReading.notes : prev);
+                setAiAnalysisResult('IA concluiu a leitura da etiqueta com sucesso!');
+            } else {
+                setAiAnalysisResult('Não foi possível extrair dados desta imagem.');
+            }
+        } catch (err) {
+            console.error(err);
+            setAiAnalysisResult('Erro na análise de IA.');
+        } finally {
+            setIsAnalyzingAI(false);
+        }
     };
 
     const handleRemoveAdditionalImage = (idx: string) => {
@@ -340,10 +386,10 @@ export const RecordsView = () => {
                         <div className="space-y-5 animate-fade-in">
                             <div className="flex justify-between items-start">
                                 <div className="space-y-1">
-                                    <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase leading-none">Registros e Memória</h1>
+                                    <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase leading-none">Meus Endereços</h1>
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,1)]" />
-                                        <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">Banco de Dados • {records.length} Entradas</p>
+                                        <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">{records.length} Entradas</p>
                                     </div>
                                 </div>
                             </div>
@@ -515,8 +561,8 @@ export const RecordsView = () => {
 
                             <div className="flex flex-col gap-6">
                                 {/* Thumbnail Header */}
-                                <div className="flex items-center gap-6 mb-2">
-                                    <div className="relative w-28 h-28 rounded-[2rem] overflow-hidden border-2 border-white/5 group bg-zinc-900 flex items-center justify-center">
+                                <div className="flex items-start gap-4 mb-2">
+                                    <div className="relative w-28 h-28 rounded-[2rem] overflow-hidden border-2 border-white/5 group bg-zinc-900 flex items-center justify-center shrink-0">
                                         {editMainImage ? (
                                             <img src={editMainImage} className="w-full h-full object-cover" />
                                         ) : (
@@ -535,6 +581,24 @@ export const RecordsView = () => {
                                             value={editName}
                                             onChange={(e) => setEditName(e.target.value)}
                                         />
+                                        {/* AI Analyze Button */}
+                                        {editMainImage && (
+                                            <button
+                                                type="button"
+                                                onClick={handleAnalyzeWithAI}
+                                                disabled={isAnalyzingAI}
+                                                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600/20 to-blue-600/20 border border-violet-500/30 hover:border-violet-400/60 text-violet-300 hover:text-violet-200 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50 active:scale-95 shadow-[0_0_20px_rgba(139,92,246,0.1)] hover:shadow-[0_0_30px_rgba(139,92,246,0.2)]"
+                                            >
+                                                <Sparkles size={13} className={isAnalyzingAI ? 'animate-spin' : 'animate-pulse'} />
+                                                {isAnalyzingAI ? 'IA Analisando...' : 'Analisar com IA'}
+                                            </button>
+                                        )}
+                                        {/* AI Result */}
+                                        {aiAnalysisResult && (
+                                            <div className={`text-[8px] font-black uppercase tracking-widest px-3 py-2 rounded-xl ${aiAnalysisResult.includes('sucesso') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                                {aiAnalysisResult}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

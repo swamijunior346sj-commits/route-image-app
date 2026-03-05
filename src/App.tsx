@@ -85,7 +85,12 @@ export default function App() {
   return (
     <div className="w-full h-screen bg-black text-white overflow-hidden flex flex-col font-sans">
       <div className="flex-1 w-full h-full relative">
-        {currentTab === 'scanner' && <ScannerView onNavigateToMap={() => setCurrentTab('map')} />}
+        {currentTab === 'scanner' && (
+          <ScannerView
+            onNavigateToMap={() => setCurrentTab('map')}
+            onNavigateToRecords={() => setCurrentTab('records')}
+          />
+        )}
         {currentTab === 'map' && <MapView />}
         {currentTab === 'records' && <RecordsView />}
         {currentTab === 'profile' && <ProfileView onLogout={() => setIsAuthenticated(false)} />}

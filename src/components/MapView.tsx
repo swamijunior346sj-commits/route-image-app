@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer, Circle } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin } from 'lucide-react';
+import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const mapContainerStyle = {
@@ -40,10 +40,23 @@ export const MapView = () => {
     const [showCelebration, setShowCelebration] = useState(false);
     const [accuracy, setAccuracy] = useState<number | null>(null);
     const [showRouteConfirmation, setShowRouteConfirmation] = useState(false);
+    const [sheetExpanded, setSheetExpanded] = useState(false);
+
+    // Touch drag for bottom sheet
+    const touchStartY = useRef<number>(0);
+    const handleSheetTouchStart = (e: React.TouchEvent) => {
+        touchStartY.current = e.touches[0].clientY;
+    };
+    const handleSheetTouchEnd = (e: React.TouchEvent) => {
+        const delta = touchStartY.current - e.changedTouches[0].clientY;
+        if (delta > 40) setSheetExpanded(true);   // swipe up
+        if (delta < -40) setSheetExpanded(false);  // swipe down
+    };
 
     const autocompleteTimerRef = useRef<any>(null);
     const placesServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
     const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+    const touchStartY = useRef<number>(0);
 
     const onLoad = useCallback((map: google.maps.Map) => {
         setMap(map);
@@ -252,12 +265,6 @@ export const MapView = () => {
             {/* Header HUD */}
             <div className="absolute top-0 z-20 w-full p-6 flex flex-col gap-4 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2">
-                    {accuracy !== null && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
-                            <div className={`w-1.5 h-1.5 rounded-full ${accuracy < 20 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : accuracy < 50 ? 'bg-yellow-500' : 'bg-red-500'}`} />
-                            <p className="text-[9px] text-white font-black tracking-tighter uppercase italic">SINAL GPS: {Math.round(accuracy)}m</p>
-                        </div>
-                    )}
                 </div>
 
                 <div className="relative pointer-events-auto max-w-lg">
@@ -449,24 +456,151 @@ export const MapView = () => {
                 </div>
             )}
 
-            {/* Navigation Bar Bottom */}
-            {isNavigating && (
-                <div className="absolute bottom-24 left-6 right-6 z-20 animate-slide-up">
-                    <div className="bg-zinc-950/90 backdrop-blur-3xl p-6 rounded-[2.5rem] border border-white/10 shadow-2xl flex items-center gap-5 relative overflow-hidden">
-                        <div className="absolute bottom-0 left-0 h-1 bg-blue-500/20 w-full">
-                            <div className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,1)] transition-all duration-500" style={{ width: `${((navigationIndex + 1) / routePoints.filter(p => p.id !== 'current' && !p.isDelivered).length) * 100}%` }} />
+            {/* === SPOKE-STYLE NAVIGATION BOTTOM SHEET === */}
+            {isNavigating && (() => {
+                const pendingPoints = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
+                const currentStop = pendingPoints[navigationIndex];
+                const totalStops = pendingPoints.length;
+                const progress = totalStops > 0 ? ((navigationIndex) / totalStops) * 100 : 0;
+
+                return (
+                    <div
+                        className={`absolute left-0 right-0 z-30 transition-all duration-500 ease-out ${sheetExpanded
+                                ? 'bottom-0 top-auto'
+                                : 'bottom-[80px]'
+                            }`}
+                        onTouchStart={handleSheetTouchStart}
+                        onTouchEnd={handleSheetTouchEnd}
+                    >
+                        {/* Backdrop blur when expanded */}
+                        {sheetExpanded && (
+                            <div
+                                className="fixed inset-0 bg-black/50 backdrop-blur-sm -z-10"
+                                onClick={() => setSheetExpanded(false)}
+                            />
+                        )}
+
+                        <div className={`bg-zinc-950 border-t border-white/10 shadow-[0_-30px_80px_rgba(0,0,0,0.8)] transition-all duration-500 ease-out ${sheetExpanded
+                                ? 'rounded-t-[2.5rem] max-h-[85vh] flex flex-col'
+                                : 'rounded-t-[2.5rem]'
+                            }`}>
+
+                            {/* Drag Handle + Progress Bar */}
+                            <div
+                                className="flex flex-col items-center pt-4 pb-2 cursor-grab active:cursor-grabbing"
+                                onClick={() => setSheetExpanded(prev => !prev)}
+                            >
+                                <div className="w-12 h-1 bg-zinc-700 rounded-full mb-3" />
+                                {/* Progress track */}
+                                <div className="w-full px-6 mb-1">
+                                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-blue-500 rounded-full transition-all duration-700 shadow-[0_0_8px_rgba(59,130,246,0.8)]"
+                                            style={{ width: `${progress}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between mt-1.5 px-0.5">
+                                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">
+                                            Parada {navigationIndex + 1} de {totalStops}
+                                        </span>
+                                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">
+                                            {totalStops - navigationIndex - 1} restantes
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Current Stop - always visible */}
+                            <div className="px-6 pb-4">
+                                <div className="flex items-center gap-4">
+                                    {/* Stop number badge */}
+                                    <div className="w-14 h-14 rounded-2xl bg-blue-600 flex flex-col items-center justify-center shrink-0 shadow-[0_8px_24px_rgba(37,99,235,0.4)]">
+                                        <span className="text-[8px] font-black text-blue-200 uppercase">STOP</span>
+                                        <span className="text-xl font-black text-white leading-none">{navigationIndex + 1}</span>
+                                    </div>
+
+                                    {/* Address Info */}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest truncate">
+                                            {currentStop?.neighborhood || 'ZONA OPERACIONAL'}
+                                        </p>
+                                        <h3 className="text-lg font-black italic uppercase text-white tracking-tighter leading-tight truncate">
+                                            {currentStop?.name || '---'}
+                                        </h3>
+                                        {currentStop?.notes && (
+                                            <p className="text-[9px] text-zinc-500 mt-0.5 truncate">{currentStop.notes}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Expand toggle */}
+                                    <button
+                                        onClick={() => setSheetExpanded(prev => !prev)}
+                                        className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 shrink-0"
+                                    >
+                                        {sheetExpanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                                    </button>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                    <button
+                                        onClick={() => {
+                                            // Skip this stop — mark as not-visited but move on
+                                            if (navigationIndex < pendingPoints.length - 1) {
+                                                setNavigationIndex(prev => prev + 1);
+                                            }
+                                        }}
+                                        className="bg-white/[0.03] border border-white/10 py-4 rounded-2xl text-[11px] font-black uppercase text-zinc-400 tracking-widest active:scale-95 transition-all"
+                                    >
+                                        Pular
+                                    </button>
+                                    <button
+                                        onClick={handleCompleteStop}
+                                        className="bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl text-[11px] font-black uppercase text-white tracking-widest shadow-[0_10px_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <CheckCircle2 size={16} /> Concluído
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Expanded: Full stop list */}
+                            {sheetExpanded && (
+                                <div className="flex-1 overflow-y-auto px-6 pb-32 space-y-3 border-t border-white/5 pt-4 mt-2">
+                                    <p className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-4">Todas as Paradas</p>
+                                    {pendingPoints.map((point, idx) => {
+                                        const isCurrent = idx === navigationIndex;
+                                        const isPast = idx < navigationIndex;
+                                        return (
+                                            <div
+                                                key={point.id}
+                                                className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${isCurrent
+                                                        ? 'bg-blue-600/10 border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
+                                                        : isPast
+                                                            ? 'bg-white/[0.01] border-white/5 opacity-40'
+                                                            : 'bg-white/[0.02] border-white/5'
+                                                    }`}
+                                            >
+                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-black shrink-0 ${isCurrent ? 'bg-blue-500 text-white shadow-[0_0_12px_rgba(59,130,246,0.6)]' : 'bg-zinc-900 text-zinc-500 border border-white/10'
+                                                    }`}>
+                                                    {isPast ? '✓' : idx + 1}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-[12px] font-black uppercase truncate tracking-tight ${isCurrent ? 'text-white' : 'text-zinc-400'
+                                                        }`}>{point.name}</p>
+                                                    <p className="text-[9px] text-zinc-600 uppercase truncate mt-0.5">{point.neighborhood || '---'}</p>
+                                                </div>
+                                                {isCurrent && (
+                                                    <Package size={16} className="text-blue-400 animate-pulse shrink-0" />
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
-                        <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
-                            <Navigation size={24} className="text-blue-500 animate-pulse" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-1">Missão {navigationIndex + 1} de {routePoints.filter(p => p.id !== 'current' && !p.isDelivered).length}</span>
-                            <h4 className="text-base font-black italic uppercase text-white truncate">{routePoints.filter(p => p.id !== 'current' && !p.isDelivered)[navigationIndex]?.name || "COORDENADA_X"}</h4>
-                        </div>
-                        <button onClick={handleCompleteStop} className="bg-white text-black font-black uppercase tracking-widest px-6 py-3 rounded-xl text-[10px] active:scale-95 transition-all">OK</button>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Roteirizando Overlay */}
             {isRouting && (
