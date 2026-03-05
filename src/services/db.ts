@@ -187,9 +187,16 @@ export const addPointToActiveRoute = async (point: RoutePoint): Promise<RoutePoi
 };
 
 export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => {
-    // Para simplificar, limpamos a rota anterior e inserimos a nova configuração completa
-    // Isso garante que a ordem e novos pontos sejam preservados.
+    // Sempre salvar localmente primeiro para garantir funcionamento offline
     try {
+        await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).setItem('route', points);
+    } catch (err) {
+        console.error('Falha ao salvar rota localmente:', err);
+    }
+
+    // Tentar sincronizar com Supabase
+    try {
+        // Limpar rota anterior
         await supabase.from('active_route').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
         const insertData = points.filter(p => p.id !== 'current').map(p => ({
@@ -200,17 +207,16 @@ export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => 
             neighborhood: p.neighborhood,
             city: p.city,
             is_delivered: p.isDelivered || false,
-            scanned_at: new Date(p.scannedAt || Date.now()).toISOString()
+            scanned_at: new Date(p.scannedAt || Date.now()).toISOString(),
+            external_record_id: p.id
         }));
 
         if (insertData.length > 0) {
-            await supabase.from('active_route').insert(insertData);
+            const { error: insertError } = await supabase.from('active_route').insert(insertData);
+            if (insertError) throw insertError;
         }
-
-        // Também salvamos localmente para redundância
-        await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).setItem('route', points);
     } catch (err) {
-        console.error('Falha ao atualizar rota ativa:', err);
+        console.warn('Supabase sync failed for active_route, using local storage only', err);
     }
 };
 

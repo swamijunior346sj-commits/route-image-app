@@ -442,7 +442,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                         <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px]"></div>
 
                         {/* High-Tech Scanner Frame */}
-                        <div className="relative w-72 h-72">
+                        <div className="relative w-64 h-64">
                             <div className="absolute inset-0 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.8)]">
                                 {/* Corners */}
                                 <div className="absolute top-0 left-0 w-12 h-12 border-t-2 border-l-2 border-blue-500 rounded-tl-[2rem]"></div>
@@ -483,28 +483,26 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                 )}
             </div>
 
-            {/* Bottom Controls */}
-            <div className="absolute bottom-0 w-full px-6 pb-44 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent z-10">
+            {/* Compact Bottom Controls - Now on a row to reduce vertical footprint */}
+            <div className="absolute bottom-0 w-full px-6 pb-32 pt-10 bg-gradient-to-t from-black via-black/95 to-transparent z-10">
                 {mode === 'scan' && (
-                    <div className="space-y-4 max-w-lg mx-auto">
-                        <div className="flex w-full">
-                            <button
-                                onClick={handleRegisterStart}
-                                disabled={loading}
-                                className="w-full group relative overflow-hidden bg-white/[0.03] border border-white/10 py-5 rounded-[2rem] flex items-center justify-center gap-3 transition-all hover:bg-white/[0.05] active:scale-95 disabled:opacity-30"
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                                <Camera size={18} className="text-zinc-400 group-hover:text-white transition-colors" />
-                                <span className="font-black italic uppercase text-[11px] tracking-widest text-zinc-400 group-hover:text-white transition-colors">Vincular Novo Endereço</span>
-                            </button>
-                        </div>
+                    <div className="flex flex-row items-stretch gap-3 max-w-lg mx-auto">
+                        {/* New Address Action */}
+                        <button
+                            onClick={handleRegisterStart}
+                            disabled={loading}
+                            className="flex-1 group relative overflow-hidden bg-blue-600/10 border border-blue-500/20 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all hover:bg-blue-600/20 active:scale-95 disabled:opacity-30 shadow-[0_10px_30px_rgba(59,130,246,0.1)]"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                            <Camera size={16} className="text-blue-500 group-hover:text-blue-400 transition-colors" />
+                            <span className="font-black italic uppercase text-[10px] tracking-widest text-blue-500 group-hover:text-blue-400 transition-colors">Vincular</span>
+                        </button>
 
-                        <div className="w-full">
-                            <label className="w-full bg-blue-500/10 border border-blue-500/30 py-4 rounded-3xl flex items-center justify-center gap-2 cursor-pointer text-blue-400 hover:text-blue-300 hover:border-blue-400/50 transition-all text-[10px] font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(59,130,246,0.1)]">
-                                <ScanLine size={16} /> IMPORTAR IMAGEM
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, false)} />
-                            </label>
-                        </div>
+                        {/* Import Image Action */}
+                        <label className="flex-1 bg-white/[0.03] border border-white/10 py-3.5 rounded-2xl flex items-center justify-center gap-2 cursor-pointer text-zinc-400 hover:text-white hover:border-white/20 transition-all text-[10px] font-black uppercase tracking-widest active:scale-95 shadow-lg">
+                            <ScanLine size={16} /> <span className="pt-0.5">Importar</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, false)} />
+                        </label>
                     </div>
                 )}
             </div>

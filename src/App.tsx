@@ -12,6 +12,7 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile'>('map');
   const [modelLoading, setModelLoading] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Use localStorage to pretend we have a real session active
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -47,10 +48,18 @@ export default function App() {
     setCurrentTab(tab);
   };
 
+  const navigateWithCinema = (tab: 'scanner' | 'map' | 'records' | 'profile') => {
+    setIsTransitioning(true);
+    setTimeout(() => {
+      changeTab(tab);
+      setTimeout(() => setIsTransitioning(false), 500);
+    }, 2000);
+  };
+
   if (modelLoading) {
     return (
       <LoadingOverlay
-        title="Scanner Visão"
+        title="Scanner"
         subtitle="Iniciando Motor de IA e Reconhecimento"
         icon={<ScanEye size={36} className="text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.8)]" />}
       />
@@ -71,10 +80,22 @@ export default function App() {
           />
         )}
         {currentTab === 'map' && <MapView />}
-        {currentTab === 'records' && <RecordsView />}
+        {currentTab === 'records' && (
+          <RecordsView
+            onNavigateToMap={() => navigateWithCinema('map')}
+          />
+        )}
         {currentTab === 'profile' && <ProfileView onLogout={() => setIsAuthenticated(false)} />}
       </div>
       <BottomNav currentTab={currentTab} setTab={changeTab} />
+
+      {isTransitioning && (
+        <LoadingOverlay
+          title="Transferência de Dados"
+          subtitle="Sincronizando registros com o banco geográfico"
+          icon={<ScanEye size={36} className="text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-pulse" />}
+        />
+      )}
     </div>
   );
 }

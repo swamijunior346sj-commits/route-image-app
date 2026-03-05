@@ -7,7 +7,11 @@ import { extractFeatures } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
 import { LoadingOverlay } from './LoadingOverlay';
 
-export const RecordsView = () => {
+interface RecordsViewProps {
+    onNavigateToMap?: () => void;
+}
+
+export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
     const [records, setRecords] = useState<LocationRecord[]>([]);
 
     const [editingRecord, setEditingRecord] = useState<LocationRecord | null>(null);
@@ -26,7 +30,6 @@ export const RecordsView = () => {
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
-    const [isSendingToRoute, setIsSendingToRoute] = useState(false);
     const [sheetExpandedDetail, setSheetExpandedDetail] = useState(false);
     const [sheetExpandedEdit, setSheetExpandedEdit] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
@@ -337,15 +340,16 @@ export const RecordsView = () => {
             city: r.city
         }));
 
-        setIsSendingToRoute(true);
+        const finalRoute = [...currentRoute.filter(p => p.id !== 'current'), ...newPoints];
 
-        setTimeout(async () => {
-            await updateActiveRoute([...currentRoute, ...newPoints]);
-            setIsSendingToRoute(false);
+        try {
+            await updateActiveRoute(finalRoute);
             setSelectedIds(new Set());
-            // Optional: You could navigate to Map here, but keeping it an alert for now
-            // or maybe just a subtle toast.
-        }, 3000);
+            if (onNavigateToMap) onNavigateToMap();
+        } catch (err) {
+            console.error("Erro ao enviar rota:", err);
+            alert("Houve um problema ao sincronizar o servidor. Verifique sua conexão.");
+        }
     };
 
     return (
@@ -836,15 +840,6 @@ export const RecordsView = () => {
                         </div>
                     </div>
                 </div>
-            )}
-
-            {/* SENDING ROUTE ANIMATION */}
-            {isSendingToRoute && (
-                <LoadingOverlay
-                    title="Transferência de Dados"
-                    subtitle="Codificando Vetor de Rota e Sincronizando..."
-                    icon={<MapPinned size={32} className="text-white animate-pulse" />}
-                />
             )}
 
             {/* IMPORTING ANIMATION */}

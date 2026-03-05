@@ -7,7 +7,7 @@ interface BottomNavProps {
 
 export const BottomNav = ({ currentTab, setTab }: BottomNavProps) => {
     const tabs = [
-        { id: 'scanner', icon: Camera, label: 'VISÃO' },
+        { id: 'scanner', icon: Camera, label: 'SCAN' },
         { id: 'map', icon: Map, label: 'MAPA' },
         { id: 'records', icon: List, label: 'MEUS ENDEREÇOS' },
         { id: 'profile', icon: User, label: 'CONTA' },
