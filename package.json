@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@patternfly/react-icons": "^6.4.0",
+    "@supabase/supabase-js": "^2.98.0",
     "@tensorflow-models/mobilenet": "^2.1.1",
     "@tensorflow/tfjs": "^4.22.0",
     "canvas-confetti": "^1.9.4",

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Mail, Phone, Lock, User, ArrowRight, UserPlus, LogIn, X } from 'lucide-react';
+import { supabase } from '../services/supabase';
 
 interface AuthViewProps {
     onLogin: () => void;
@@ -16,30 +17,56 @@ export const AuthView = ({ onLogin }: AuthViewProps) => {
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setErrorMsg('');
 
-        // Validação Visual Mock (fingindo requisição p/ backend)
-        setTimeout(() => {
+        try {
+            // Handle Phone vs Email logic
+            // Supabase prefers email or specifically formatted phone numbers.
+            // For now, we'll assume email if it contains '@', otherwise we'll treat as phone.
+            // Note: Phone auth requires specific setup in Supabase dashboard.
+            const isEmail = emailOrPhone.includes('@');
+
             if (isLoginMode) {
-                if (emailOrPhone.trim() && password.length >= 6) {
+                // LOGIN
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: isEmail ? emailOrPhone : `${emailOrPhone}@delivery.com`, // Fallback format for mock phones if not configured
+                    password: password,
+                });
+
+                if (error) throw error;
+                if (data.user) {
                     localStorage.setItem('isAuthenticated', 'true');
                     onLogin();
-                } else {
-                    setErrorMsg('Credenciais inválidas. Verifique seu email/telefone e senha (mín. 6 dígitos).');
                 }
             } else {
-                if (name.trim() && emailOrPhone.trim() && password.length >= 6) {
-                    localStorage.setItem('isAuthenticated', 'true');
-                    onLogin();
-                } else {
-                    setErrorMsg('Por favor preencha todos os campos. A senha deve ter no mínimo 6 dígitos.');
+                // REGISTER
+                if (!name.trim()) throw new Error('Por favor, informe seu nome completo.');
+
+                const { data, error } = await supabase.auth.signUp({
+                    email: isEmail ? emailOrPhone : `${emailOrPhone}@delivery.com`,
+                    password: password,
+                    options: {
+                        data: {
+                            full_name: name,
+                        }
+                    }
+                });
+
+                if (error) throw error;
+                if (data.user) {
+                    alert('Conta criada! Verifique seu email para confirmar (se habilitado) ou entre agora.');
+                    setIsLoginMode(true);
                 }
             }
+        } catch (err: any) {
+            console.error('Auth error:', err);
+            setErrorMsg(err.message || 'Erro inesperado ao processar autenticação.');
+        } finally {
             setIsLoading(false);
-        }, 1500);
+        }
     };
 
     return (
