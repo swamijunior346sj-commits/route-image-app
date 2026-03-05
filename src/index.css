@@ -9,6 +9,21 @@
   --primary-glow: #60a5fa;
   --primary-foreground: #ffffff;
   --destructive: #ef4444;
+  /* Dynamic viewport height for mobile */
+  --vh: 1vh;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  height: 100dvh; /* Dynamic viewport height */
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 body {
@@ -19,6 +34,33 @@ body {
   padding: 0;
   margin: 0;
   overflow-x: hidden;
+  /* PWA safe areas */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Prevent text resize on orientation change on iOS */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Custom scrollbar for premium feel */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+}
+
+/* Global input styling for mobile */
+input, textarea, select {
+  font-size: 16px !important; /* Prevents iOS zoom on focus */
 }
 
 .glass-panel {
@@ -42,44 +84,54 @@ body {
   transform: translateY(1px);
 }
 
+/* -------------------------
+   ANIMATIONS
+   ------------------------- */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(15px);
-  }
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes scanLine {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(16rem); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scan {
+  0% { top: 0; }
+  100% { top: calc(100% - 6px); }
+}
+
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-150%); }
+  100% { transform: translateX(150%); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(5px); }
+  75% { transform: translateX(-3px); }
 }
 
 .animate-fade-in {
   animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes scanLine {
-  0% {
-    transform: translateY(0);
-  }
-
-  100% {
-    transform: translateY(16rem);
-  }
-
-  /* matching the h-64 height */
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .animate-scan-line {
@@ -99,20 +151,9 @@ body {
 }
 
 @keyframes pulse-blue {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
-  }
-
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 15px rgba(59, 130, 246, 0);
-  }
-
-  100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-  }
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
 }
 
 .pulse-icon {
@@ -122,7 +163,9 @@ body {
   animation: pulse-blue 2s infinite;
 }
 
-/* leaflet overrides */
+/* -------------------------
+   LEAFLET OVERRIDES
+   ------------------------- */
 .leaflet-container {
   background: #18181b !important;
 }
@@ -137,37 +180,34 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
+/* -------------------------
+   GOOGLE MAPS OVERRIDES
+   ------------------------- */
+.gm-style .gm-style-cc,
+.gm-style .gmnoprint:not(.gm-bundled-control),
+.gm-style a[href*="maps.google.com"],
+.gm-style a[title="Open this area in Google Maps"],
+.gm-style button[title="Toggle fullscreen view"] {
+  display: none !important;
+}
+
+/* -------------------------
+   MARKER / MAP ANIMATIONS
+   ------------------------- */
 @keyframes levitate {
-  0% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-8px);
-  }
-
-  100% {
-    transform: translateY(0);
-  }
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+  100% { transform: translateY(0); }
 }
 
 .animate-levitate {
   animation: levitate 2.5s ease-in-out infinite;
 }
 
-/* Celebration Animations */
 @keyframes rocket-fly {
-  0% {
-    transform: translate(0, 0) rotate(-45deg);
-  }
-
-  50% {
-    transform: translate(10px, -20px) rotate(-45deg);
-  }
-
-  100% {
-    transform: translate(0, 0) rotate(-45deg);
-  }
+  0% { transform: translate(0, 0) rotate(-45deg); }
+  50% { transform: translate(10px, -20px) rotate(-45deg); }
+  100% { transform: translate(0, 0) rotate(-45deg); }
 }
 
 .rocket-fly {
@@ -175,17 +215,55 @@ body {
 }
 
 @keyframes bounce-slow {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-20px);
-  }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
 }
 
 .animate-bounce-slow {
   animation: bounce-slow 4s ease-in-out infinite;
+}
+
+/* -------------------------
+   MOBILE-FIRST RESPONSIVITY
+   ------------------------- */
+
+/* Safe area top - used by pt-safe class */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Small phones (< 360px) */
+@media screen and (max-width: 359px) {
+  .text-3xl { font-size: 1.5rem !important; }
+  .text-2xl { font-size: 1.25rem !important; }
+  .text-xl { font-size: 1rem !important; }
+  .p-8 { padding: 1rem !important; }
+  .p-6 { padding: 0.875rem !important; }
+  .gap-8 { gap: 1.25rem !important; }
+  .gap-6 { gap: 1rem !important; }
+  .rounded-\[2\.5rem\] { border-radius: 1.5rem !important; }
+  .rounded-\[2rem\] { border-radius: 1.25rem !important; }
+}
+
+/* Standard phones (360px - 414px) */
+@media screen and (min-width: 360px) and (max-width: 414px) {
+  .p-8 { padding: 1.25rem !important; }
+}
+
+/* Tall phones (height < 700px like SE) */
+@media screen and (max-height: 700px) {
+  .mb-10 { margin-bottom: 1.5rem !important; }
+  .mb-12 { margin-bottom: 2rem !important; }
+  .pt-10 { padding-top: 1.5rem !important; }
+}
+
+/* Landscape override - prevent content from being cut */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .pb-24, .pb-32 {
+    padding-bottom: 5rem !important;
+  }
 }

@@ -48,10 +48,10 @@ export interface AppSettings {
 
 const defaultSettings: AppSettings = {
     personalData: {
-        name: 'João Silva',
-        email: 'joao.silva@delivery.com',
-        phone: '(11) 99999-8888',
-        vehicle: 'Yamaha Fazer 250 - Placa ABC-1234'
+        name: '',
+        email: '',
+        phone: '',
+        vehicle: ''
     },
     notifications: {
         push: true,

@@ -370,7 +370,7 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
             </div>
 
             {/* Bottom Controls */}
-            <div className="absolute bottom-0 w-full px-6 pb-12 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent z-10">
+            <div className="absolute bottom-0 w-full px-6 pb-32 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent z-10">
                 {mode === 'scan' ? (
                     <div className="space-y-4 max-w-lg mx-auto">
                         <div className="grid grid-cols-2 gap-4">

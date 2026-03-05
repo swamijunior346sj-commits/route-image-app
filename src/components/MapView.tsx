@@ -1,47 +1,54 @@
-import { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { GoogleMap, useJsApiLoader, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, updateRecord, saveRecord, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import L from 'leaflet';
 import { MapPin, Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, Plus, Save, Rocket, CheckCircle2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-// Fix leaflet icon
-const customIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/679/679821.png', // Vibrant Box/Package icon
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -40],
-    className: 'drop-shadow-glow-blue animate-levitate'
-});
-
-const grayIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/679/679821.png',
-    iconSize: [35, 35],
-    iconAnchor: [17, 35],
-    popupAnchor: [0, -35],
-    className: 'grayscale opacity-60'
-});
-
-const userIcon = L.divIcon({
-    className: 'pulse-icon-container',
-    html: `<div class="w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-[0_0_10px_rgba(59,130,246,0.8)] pulse-icon"></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12]
-});
-
-const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
-    const map = useMap();
-    useEffect(() => {
-        map.setView(center, zoom);
-    }, [center, zoom, map]);
-    return null;
+const mapContainerStyle = {
+    width: '100%',
+    height: '100%'
 };
 
+const defaultCenter = {
+    lat: -20.143196,
+    lng: -44.2174965
+};
+
+// Dark mode style for Google Maps to match Luxury Gaming theme
+const darkMapStyle = [
+    { elementType: "geometry", stylers: [{ color: "#212121" }] },
+    { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
+    { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#757575" }] },
+    { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+    { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
+    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
+    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#181818" }] },
+    { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+    { featureType: "poi.park", elementType: "labels.text.stroke", stylers: [{ color: "#1b1b1b" }] },
+    { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c2c" }] },
+    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a8a8a" }] },
+    { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#373737" }] },
+    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3c3c3c" }] },
+    { featureType: "road.highway.controlled_access", elementType: "geometry", stylers: [{ color: "#4e4e4e" }] },
+    { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+    { featureType: "transit", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] },
+    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#3d3d3d" }] },
+];
+
 export const MapView = () => {
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
+    });
+
+    const [map, setMap] = useState<google.maps.Map | null>(null);
     const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
-    const [osrmPath, setOsrmPath] = useState<[number, number][]>([]);
+    const [osrmPath, setOsrmPath] = useState<{ lat: number, lng: number }[]>([]);
     const [isRouting, setIsRouting] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -49,196 +56,114 @@ export const MapView = () => {
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [navigationIndex, setNavigationIndex] = useState(0);
+    const [selectedPoint, setSelectedPoint] = useState<RoutePoint | null>(null);
 
-    // Stop Editing from Navigation Panel
     const [isEditingCurrentStop, setIsEditingCurrentStop] = useState(false);
-    const [editingPointData, setEditingPointData] = useState<{
-        id: string,
-        name: string,
-        notes: string,
-        neighborhood: string,
-        city: string,
-        lat: string,
-        lng: string
-    } | null>(null);
-
-    // Celebration
+    const [editingPointData, setEditingPointData] = useState<any>(null);
     const [showCelebration, setShowCelebration] = useState(false);
-
-    // Undo System
     const [undoVisible, setUndoVisible] = useState(false);
     const [lastCompletedPoint, setLastCompletedPoint] = useState<RoutePoint | null>(null);
     const [undoCountdown, setUndoCountdown] = useState(2);
-    const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const autocompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const undoTimerRef = useRef<any>(null);
+    const autocompleteTimerRef = useRef<any>(null);
 
-    // Silently try to get location on mount for better search suggestions
+    const onLoad = useCallback((map: google.maps.Map) => {
+        setMap(map);
+    }, []);
+
+    const onUnmount = useCallback(() => {
+        setMap(null);
+    }, []);
+
     useEffect(() => {
         if ('geolocation' in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                (err) => console.log('Silently failed to get location for search bias:', err),
+                (err) => console.log('Location bias failed:', err),
                 { enableHighAccuracy: false, timeout: 5000 }
             );
         }
+        loadRoute();
     }, []);
-
-    useEffect(() => {
-        if (!searchQuery.trim() || searchQuery.length < 3) {
-            setSearchResults([]);
-            return;
-        }
-
-        if (autocompleteTimerRef.current) {
-            clearTimeout(autocompleteTimerRef.current);
-        }
-
-        autocompleteTimerRef.current = setTimeout(async () => {
-            setIsSearching(true);
-            try {
-                let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`;
-                if (userLocation) {
-                    url += `&lat=${userLocation.lat}&lon=${userLocation.lng}`;
-                }
-                const res = await fetch(url);
-                const data = await res.json();
-                setSearchResults(data);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setIsSearching(false);
-            }
-        }, 700); // 700ms debounce for typing
-
-        return () => {
-            if (autocompleteTimerRef.current) clearTimeout(autocompleteTimerRef.current);
-        };
-    }, [searchQuery]);
 
     const loadRoute = async () => {
         const points = await getActiveRoute();
         setRoutePoints(points);
-        setOsrmPath([]);
-
-        // If the map is empty, try to auto-center on the user's current GPS location implicitly
-        if (points.length === 0) {
-            handleLocateMe(true);
-        }
-    };
-
-    useEffect(() => {
-        loadRoute();
-    }, []);
-
-    const handleClear = async () => {
-        await clearActiveRoute();
-        setRoutePoints([]);
-        setOsrmPath([]);
+        if (points.length === 0) handleLocateMe(true);
     };
 
     const handleLocateMe = (silent = false) => {
         if ('geolocation' in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
-                    setUserLocation({ lat, lng });
+                    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    setUserLocation(coords);
+                    if (map) map.panTo(coords);
 
                     setRoutePoints(prev => {
-                        // Remove previous "current" marker if it exists
                         const filtered = prev.filter(p => p.id !== 'current');
-                        return [...filtered, { id: 'current', name: 'Você está aqui', lat, lng, scannedAt: Date.now() }];
+                        return [...filtered, { id: 'current', name: 'Você está aqui', ...coords, scannedAt: Date.now() }];
                     });
                 },
                 (err) => {
-                    console.error('Localização automática falhou:', err);
-                    if (!silent) {
-                        alert('Não foi possível obter sua localização. Verifique as permissões de GPS.');
-                    }
+                    if (!silent) alert('GPS indisponível.');
                 },
                 { enableHighAccuracy: true, timeout: 5000 }
             );
-        } else {
-            if (!silent) alert('Geolocalização não suportada no seu navegador.');
         }
     };
 
-    const handleMarkerDragEnd = async (index: number, e: unknown) => {
-        const marker = (e as L.DragEndEvent).target as L.Marker;
-        const position = marker.getLatLng();
-        const pointToUpdate = routePoints[index];
-
-        // Exclude the volatile "current" location from updating DB
-        if (pointToUpdate.id === 'current') return;
-
-        // Visual instant state update
-        const updatedPoints = [...routePoints];
-        updatedPoints[index] = { ...pointToUpdate, lat: position.lat, lng: position.lng };
-        setRoutePoints(updatedPoints);
-
-        // Update active route session
-        await updateActiveRoute(updatedPoints.filter(p => p.id !== 'current'));
-        // Permanently update location DB based on precise repositioning
-        await updateRecord(pointToUpdate.id, { lat: position.lat, lng: position.lng });
-        setOsrmPath([]); // invalidate the osrm drawn line if you drag!
+    const handleClear = async () => {
+        if (confirm("Limpar rota ativa?")) {
+            await clearActiveRoute();
+            setRoutePoints([]);
+            setOsrmPath([]);
+        }
     };
-
-
 
     const handleRoteirizar = async () => {
         const validPoints = routePoints.filter(p => p.lat !== null && p.lng !== null);
-        if (validPoints.length < 2) {
-            alert("É necessário ter pelo menos 2 locais registrados na rota atual para roteirizar.");
-            return;
-        }
+        if (validPoints.length < 2) return alert("Mínimo 2 pontos.");
 
         setIsRouting(true);
-        // Force minimum 3s for cinematic feel
-        const minDuration = new Promise(resolve => setTimeout(resolve, 3000));
+        const minDuration = new Promise(r => setTimeout(r, 2000));
 
         try {
-            // ... algorithm ...
-            const fetchRoute = (async () => {
-                const unvisited = [...validPoints.filter(p => !p.isDelivered)];
-                const delivered = validPoints.filter(p => p.isDelivered);
+            const unvisited = [...validPoints.filter(p => !p.isDelivered)];
+            const delivered = validPoints.filter(p => p.isDelivered);
+            const sorted = [];
 
-                // TSP only on unvisited
-                const sorted = [];
-                if (unvisited.length > 0) {
-                    let current = unvisited.shift()!;
-                    sorted.push(current);
-                    while (unvisited.length > 0) {
-                        let nearestIdx = 0;
-                        let minDist = Infinity;
-                        for (let i = 0; i < unvisited.length; i++) {
-                            const el = unvisited[i];
-                            const dist = Math.pow(el.lat! - current.lat!, 2) + Math.pow(el.lng! - current.lng!, 2);
-                            if (dist < minDist) { minDist = dist; nearestIdx = i; }
-                        }
-                        current = unvisited.splice(nearestIdx, 1)[0];
-                        sorted.push(current);
+            if (unvisited.length > 0) {
+                let current = unvisited.shift()!;
+                sorted.push(current);
+                while (unvisited.length > 0) {
+                    let nearestIdx = 0;
+                    let minDist = Infinity;
+                    for (let i = 0; i < unvisited.length; i++) {
+                        const el = unvisited[i];
+                        const dist = Math.pow(el.lat - current.lat, 2) + Math.pow(el.lng - current.lng, 2);
+                        if (dist < minDist) { minDist = dist; nearestIdx = i; }
                     }
+                    current = unvisited.splice(nearestIdx, 1)[0];
+                    sorted.push(current);
                 }
+            }
 
-                const finalOrder = [...delivered, ...sorted];
-                setRoutePoints(finalOrder);
-                await updateActiveRoute(finalOrder.filter(p => p.id !== 'current'));
+            const finalOrder = [...delivered, ...sorted];
+            setRoutePoints(finalOrder);
+            await updateActiveRoute(finalOrder.filter(p => p.id !== 'current'));
 
-                const coordsString = finalOrder.map(p => `${p.lng},${p.lat}`).join(';');
-                const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.code === 'Ok' && data.routes[0]) {
-                    const leafletCoords: [number, number][] = data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
-                    setOsrmPath(leafletCoords);
-                }
-            })();
-
-            await Promise.all([fetchRoute, minDuration]);
+            const coordsString = finalOrder.map(p => `${p.lng},${p.lat}`).join(';');
+            const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`);
+            const data = await res.json();
+            if (data.code === 'Ok') {
+                const path = data.routes[0].geometry.coordinates.map((c: any) => ({ lat: c[1], lng: c[0] }));
+                setOsrmPath(path);
+            }
+            await minDuration;
         } catch (err) {
-            console.error(err);
-            alert("Erro ao buscar o trajeto de ruas. Verifique a internet e tente novamente.");
+            alert("Erro ao roteirizar.");
         } finally {
             setIsRouting(false);
         }
@@ -246,530 +171,229 @@ export const MapView = () => {
 
     const handleStartNavigation = () => {
         const dests = routePoints.filter(p => p.id !== 'current');
-        if (dests.length === 0) {
-            alert("Adicione pelo menos um destino para navegar.");
-            return;
-        }
+        if (dests.length === 0) return alert("Sem destinos.");
         setIsNavigating(true);
         setNavigationIndex(0);
-        if (osrmPath.length === 0) {
-            handleRoteirizar();
-        }
-    };
-
-    const handleSaveStopEdit = async () => {
-        if (!editingPointData) return;
-
-        const updatedPoint = {
-            ...routePoints.find(p => p.id === editingPointData.id)!,
-            name: editingPointData.name,
-            notes: editingPointData.notes,
-            neighborhood: editingPointData.neighborhood,
-            city: editingPointData.city,
-            lat: parseFloat(editingPointData.lat) || 0,
-            lng: parseFloat(editingPointData.lng) || 0
-        };
-
-        const updatedRoute = routePoints.map(p => p.id === editingPointData.id ? updatedPoint : p);
-        setRoutePoints(updatedRoute);
-        await updateActiveRoute(updatedRoute.filter(p => p.id !== 'current'));
-        await updateRecord(editingPointData.id, {
-            name: editingPointData.name,
-            notes: editingPointData.notes,
-            neighborhood: editingPointData.neighborhood,
-            city: editingPointData.city,
-            lat: updatedPoint.lat,
-            lng: updatedPoint.lng
-        });
-
-        setIsEditingCurrentStop(false);
-        if (navigator.vibrate) navigator.vibrate(20);
+        if (osrmPath.length === 0) handleRoteirizar();
     };
 
     const handleCompleteStop = async () => {
         const dests = routePoints.filter(p => p.id !== 'current');
         const point = dests[navigationIndex];
-
         if (!point) return;
 
-        // Save for undo
         setLastCompletedPoint(point);
         setUndoVisible(true);
         setUndoCountdown(2);
 
-        if (navigator.vibrate) navigator.vibrate([50]);
-
-        // Feedback: Show undo card for 2 seconds
         if (undoTimerRef.current) clearInterval(undoTimerRef.current);
-
         let timeLeft = 2;
         undoTimerRef.current = setInterval(() => {
             timeLeft -= 1;
             setUndoCountdown(timeLeft);
             if (timeLeft <= 0) {
-                if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+                clearInterval(undoTimerRef.current);
                 setUndoVisible(false);
                 finalizeCompletion(point.id);
             }
         }, 1000);
     };
 
-    const handleUndo = () => {
-        if (undoTimerRef.current) clearInterval(undoTimerRef.current);
-        setUndoVisible(false);
-        setLastCompletedPoint(null);
-        if (navigator.vibrate) navigator.vibrate(30);
-    };
-
-    const finalizeCompletion = async (pointId: string) => {
-        const updatedPoints = routePoints.map(p => p.id === pointId ? { ...p, isDelivered: true } : p);
-        setRoutePoints(updatedPoints);
-        await updateActiveRoute(updatedPoints.filter(p => p.id !== 'current'));
-
-        const remainingDests = updatedPoints.filter(p => p.id !== 'current' && !p.isDelivered);
-        if (remainingDests.length === 0) {
-            // FIREWORKS!
-            setShowCelebration(true);
-            triggerConfetti();
-
-            setIsNavigating(false);
-            setNavigationIndex(0);
-        } else {
-            // Find next undelivered stop
-            const destsOnly = updatedPoints.filter(p => p.id !== 'current');
-            const nextUndeliveredIdx = destsOnly.findIndex(p => !p.isDelivered);
-            if (nextUndeliveredIdx !== -1) {
-                setNavigationIndex(nextUndeliveredIdx);
-            }
-
-            // Recalculate OSRM path keeping all points (showing the full path history)
-            const coordsString = updatedPoints.map(p => `${p.lng},${p.lat}`).join(';');
-            try {
-                const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`);
-                const data = await res.json();
-                if (data.code === 'Ok') {
-                    const leafletCoords: [number, number][] = data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
-                    setOsrmPath(leafletCoords);
-                }
-            } catch (e) { console.log(e); }
-        }
-    };
-
-    const handleAddSearchToMap = async (result: any) => {
-        const newPoint: RoutePoint = {
-            id: crypto.randomUUID(),
-            name: result.display_name.split(',')[0],
-            lat: parseFloat(result.lat),
-            lng: parseFloat(result.lon),
-            scannedAt: Date.now()
-        };
-        const updated = [...routePoints, newPoint];
+    const finalizeCompletion = async (id: string) => {
+        const updated = routePoints.map(p => p.id === id ? { ...p, isDelivered: true } : p);
         setRoutePoints(updated);
         await updateActiveRoute(updated.filter(p => p.id !== 'current'));
-        setSearchResults([]);
-        setSearchQuery('');
-    };
 
-    const handleSaveSearchToCatalog = async (result: any) => {
-        await saveRecord(
-            result.display_name.split(',')[0],
-            parseFloat(result.lat),
-            parseFloat(result.lon),
-            '', // mock photo
-            [] // mock features
-        );
-        alert('Endereço salvo no catálogo de Registros com sucesso!');
-        setSearchResults([]);
-        setSearchQuery('');
+        const remaining = updated.filter(p => p.id !== 'current' && !p.isDelivered);
+        if (remaining.length === 0) {
+            setShowCelebration(true);
+            triggerConfetti();
+            setIsNavigating(false);
+        } else {
+            const nextIdx = updated.filter(p => p.id !== 'current').findIndex(p => !p.isDelivered);
+            if (nextIdx !== -1) setNavigationIndex(nextIdx);
+        }
     };
 
     const triggerConfetti = () => {
-        const duration = 5 * 1000;
-        const animationEnd = Date.now() + duration;
-        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 20000 };
-
-        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-
-        const interval: any = setInterval(function () {
-            const timeLeft = animationEnd - Date.now();
-
-            if (timeLeft <= 0) {
-                return clearInterval(interval);
-            }
-
-            const particleCount = 50 * (timeLeft / duration);
-            confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
-            confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
-        }, 250);
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#3b82f6', '#ffffff', '#6366f1'] });
     };
 
-    const getMapCenter = (): [number, number] => {
-        if (routePoints.length > 0) {
-            const lastPoint = routePoints[routePoints.length - 1];
-            if (lastPoint.lat !== null && lastPoint.lng !== null && !isNaN(lastPoint.lat) && !isNaN(lastPoint.lng)) {
-                return [lastPoint.lat, lastPoint.lng];
-            }
-        }
-        return [-20.143196, -44.2174965]; // default center (Brumadinho, MG) as requested by incorporating the map link
-    };
+    useEffect(() => {
+        if (!searchQuery.trim() || searchQuery.length < 3) return setSearchResults([]);
+        if (autocompleteTimerRef.current) clearTimeout(autocompleteTimerRef.current);
+        autocompleteTimerRef.current = setTimeout(async () => {
+            setIsSearching(true);
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=br`);
+                const data = await res.json();
+                setSearchResults(data);
+            } finally { setIsSearching(false); }
+        }, 600);
+    }, [searchQuery]);
 
-    const center = getMapCenter();
-
-    const positions = routePoints
-        .filter(p => p.lat !== null && p.lng !== null && !isNaN(p.lat) && !isNaN(p.lng))
-        .map(p => [p.lat, p.lng] as [number, number]);
+    if (!isLoaded) return <div className="h-full w-full bg-black flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>;
 
     return (
         <div className="relative w-full h-full flex flex-col pt-safe bg-black overflow-hidden">
-            {/* Header HUD - Gaming style */}
-            <div className="absolute top-0 z-[1000] w-full p-6 animate-fade-in flex flex-col gap-4 pointer-events-none">
+            {/* Header HUD */}
+            <div className="absolute top-0 z-20 w-full p-6 flex flex-col gap-4 pointer-events-none">
                 <div className="flex justify-between items-start">
                     <div className="space-y-1">
-                        <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase leading-none">Status da Operação</h1>
+                        <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase">Operação <span className="text-blue-500">Mapa</span></h1>
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,1)]" />
-                            <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">Sistemas Online • GPS Ativo</p>
+                            <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">Canais de GPS Sincronizados</p>
                         </div>
                     </div>
                 </div>
 
-                <form onSubmit={(e) => e.preventDefault()} className="relative mt-2 pointer-events-auto flex items-center max-w-lg">
-                    <div className="absolute inset-0 bg-blue-500/5 blur-xl rounded-2xl" />
+                <div className="relative pointer-events-auto max-w-lg">
                     <input
                         type="text"
-                        placeholder="LOCALIZAR COORDENADAS..."
-                        className="w-full bg-zinc-950/40 backdrop-blur-2xl border border-white/10 rounded-2xl py-4 pl-5 pr-12 text-xs text-white focus:border-blue-500/50 focus:outline-none placeholder:text-zinc-600 font-bold tracking-widest uppercase transition-all shadow-2xl"
+                        placeholder="BUSCAR COORDENADAS..."
+                        className="w-full bg-zinc-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl py-4 px-6 text-xs text-white focus:outline-none focus:border-blue-500/50 italic font-bold tracking-widest uppercase shadow-2xl"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={e => setSearchQuery(e.target.value)}
                     />
-                    <button type="submit" disabled={isSearching} className="absolute right-3 p-2 text-blue-500 hover:text-blue-400 transition-colors">
-                        {isSearching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
-                    </button>
-                </form>
+                    <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
+                </div>
 
                 {searchResults.length > 0 && (
-                    <div className="mt-2 bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-h-64 overflow-y-auto pointer-events-auto shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col p-3 gap-2 animate-in slide-in-from-top-4 duration-500 max-w-lg">
-                        <div className="sticky top-0 bg-zinc-950/40 backdrop-blur-md py-2 px-3 mb-1 flex justify-between items-center z-10 border-b border-white/5 pb-2">
-                            <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">Resultados Encontrados</span>
-                            <button type="button" onClick={() => setSearchResults([])} className="text-zinc-500 hover:text-white p-1.5 bg-white/5 rounded-full"><X size={14} /></button>
-                        </div>
+                    <div className="mt-2 bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-h-60 overflow-y-auto pointer-events-auto flex flex-col p-2 gap-1 animate-slide-up max-w-lg shadow-2xl">
                         {searchResults.map((res: any, i: number) => (
-                            <div key={i} className="flex flex-col gap-3 p-4 hover:bg-white/[0.03] rounded-2xl transition-all border border-transparent hover:border-white/5 group">
-                                <span className="text-xs font-bold text-zinc-300 group-hover:text-white leading-relaxed">{res.display_name}</span>
-                                <div className="flex gap-2 justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAddSearchToMap(res)}
-                                        className="text-[9px] flex items-center gap-1.5 bg-blue-500/10 text-blue-400 px-4 py-2 rounded-xl font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all border border-blue-500/20"
-                                    >
-                                        <Plus size={14} /> ADICIONAR
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSaveSearchToCatalog(res)}
-                                        className="text-[9px] flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-xl font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all border border-emerald-500/20"
-                                    >
-                                        <Save size={14} /> CATALOGAR
-                                    </button>
-                                </div>
-                            </div>
+                            <button key={i} onClick={() => {
+                                const p = { id: crypto.randomUUID(), name: res.display_name.split(',')[0], lat: parseFloat(res.lat), lng: parseFloat(res.lon), scannedAt: Date.now() };
+                                const updated = [...routePoints, p];
+                                setRoutePoints(updated);
+                                updateActiveRoute(updated.filter(x => x.id !== 'current'));
+                                map?.panTo({ lat: p.lat, lng: p.lng });
+                                setSearchResults([]);
+                                setSearchQuery('');
+                            }} className="text-left p-4 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/5 group">
+                                <p className="text-[10px] font-bold text-white leading-tight uppercase tracking-tight">{res.display_name}</p>
+                            </button>
                         ))}
                     </div>
                 )}
             </div>
 
-            <div className="flex-1 w-full relative z-0">
-                <MapContainer
-                    key={routePoints.length}
-                    center={center}
-                    zoom={13}
-                    className="w-full h-full z-0"
-                    zoomControl={false}
-                >
-                    <ChangeView center={center} zoom={13} />
-                    <TileLayer
-                        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                        attribution='&copy; CARTO'
+            <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={userLocation || defaultCenter}
+                zoom={14}
+                onLoad={onLoad}
+                onUnmount={onUnmount}
+                options={{
+                    styles: darkMapStyle,
+                    disableDefaultUI: true,
+                    clickableIcons: false,
+                    zoomControl: false,
+                    gestureHandling: 'greedy'
+                }}
+            >
+                {routePoints.map((p, i) => (
+                    <Marker
+                        key={p.id + i}
+                        position={{ lat: p.lat, lng: p.lng }}
+                        onClick={() => setSelectedPoint(p)}
+                        icon={p.id === 'current' ? {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            fillColor: '#3b82f6',
+                            fillOpacity: 1,
+                            strokeColor: '#ffffff',
+                            strokeWeight: 2,
+                            scale: 8
+                        } : {
+                            url: 'https://cdn-icons-png.flaticon.com/512/679/679821.png',
+                            scaledSize: new google.maps.Size(32, 32),
+                            origin: new google.maps.Point(0, 0),
+                            anchor: new google.maps.Point(16, 32)
+                        }}
                     />
+                ))}
 
-                    {osrmPath.length > 0 ? (
-                        <Polyline positions={osrmPath} color="#6366f1" weight={6} opacity={0.8} lineCap="round" lineJoin="round" />
-                    ) : positions.length > 1 ? (
-                        <Polyline positions={positions} color="#3b82f6" weight={3} opacity={0.4} dashArray="8, 12" />
-                    ) : null}
+                {osrmPath.length > 0 && (
+                    <Polyline
+                        path={osrmPath}
+                        options={{
+                            strokeColor: '#3b82f6',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 4,
+                        }}
+                    />
+                )}
 
-                    {routePoints.map((point, index) => {
-                        if (point.lat === null || point.lng === null || isNaN(point.lat) || isNaN(point.lng)) return null;
-                        return (
-                            <Marker
-                                key={`${point.id}-${index}-${point.lat}`}
-                                position={[point.lat, point.lng]}
-                                icon={point.id === 'current' ? userIcon : point.isDelivered ? grayIcon : customIcon}
-                                draggable={point.id !== 'current' && !point.isDelivered}
-                                eventHandlers={{
-                                    dragend: (e) => handleMarkerDragEnd(index, e)
-                                }}
-                            >
-                                <Popup className="luxury-popup">
-                                    <div className="p-4 min-w-[200px] bg-zinc-950 text-white rounded-3xl border border-white/10 shadow-2xl">
-                                        <div className="flex flex-col gap-3">
-                                            <div className="space-y-1">
-                                                <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Destino Carregado</p>
-                                                <h4 className="text-lg font-black italic uppercase tracking-tighter leading-none">{point.name}</h4>
-                                            </div>
+                {selectedPoint && (
+                    <InfoWindow
+                        position={{ lat: selectedPoint.lat, lng: selectedPoint.lng }}
+                        onCloseClick={() => setSelectedPoint(null)}
+                    >
+                        <div className="p-2 min-w-[150px] bg-zinc-950 text-white rounded-xl">
+                            <h4 className="text-sm font-black italic uppercase italic leading-none mb-1">{selectedPoint.name}</h4>
+                            <p className="text-[9px] text-zinc-500 uppercase tracking-widest">{selectedPoint.neighborhood || 'Zona de Entrega'}</p>
+                        </div>
+                    </InfoWindow>
+                )}
+            </GoogleMap>
 
-                                            <div className="flex flex-col gap-1 text-[10px] text-zinc-400">
-                                                <div className="flex justify-between">
-                                                    <span className="font-bold uppercase opacity-50">Registro</span>
-                                                    <span className="text-zinc-200">{new Date(point.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="font-bold uppercase opacity-50">Setor</span>
-                                                    <span className="text-zinc-200 truncate ml-4">{point.neighborhood || '---'}</span>
-                                                </div>
-                                            </div>
-
-                                            {point.id !== 'current' && (
-                                                <button
-                                                    onClick={() => {
-                                                        setEditingPointData({
-                                                            id: point.id,
-                                                            name: point.name,
-                                                            notes: point.notes || '',
-                                                            neighborhood: point.neighborhood || '',
-                                                            city: point.city || '',
-                                                            lat: point.lat?.toString() || '',
-                                                            lng: point.lng?.toString() || ''
-                                                        });
-                                                        setIsEditingCurrentStop(true);
-                                                    }}
-                                                    className="w-full bg-blue-500/10 border border-blue-500/30 text-blue-400 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all active:scale-95"
-                                                >
-                                                    MODIFICAR DADOS
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        );
-                    })}
-                </MapContainer>
-            </div>
-
-            {/* ACTION HUD - Right Side Floating */}
-            <div className="absolute top-32 right-6 z-[9999] flex flex-col gap-3">
-                <button
-                    onClick={isNavigating ? () => setIsNavigating(false) : handleStartNavigation}
-                    className={`w-14 h-14 rounded-2xl border shadow-2xl active:scale-90 transition-all flex items-center justify-center backdrop-blur-3xl ${isNavigating
-                        ? 'bg-red-500/20 border-red-500/40 text-red-500'
-                        : 'bg-zinc-950/60 border-white/10 text-blue-500 hover:border-blue-500/50'
-                        }`}
-                >
+            {/* Float Actions */}
+            <div className="absolute top-40 right-6 z-10 flex flex-col gap-3">
+                <button onClick={isNavigating ? () => setIsNavigating(false) : handleStartNavigation} className={`w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-3xl shadow-2xl transition-all border ${isNavigating ? 'bg-red-500/20 border-red-500/40 text-red-500' : 'bg-zinc-900/60 border-white/10 text-blue-500'}`}>
                     {isNavigating ? <X size={24} /> : <Navigation size={24} />}
                 </button>
-
-                {!isNavigating && (
-                    <button
-                        onClick={handleRoteirizar}
-                        disabled={isRouting}
-                        className="w-14 h-14 bg-zinc-950/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-indigo-400 hover:border-indigo-500/50 transition-all shadow-2xl flex items-center justify-center disabled:opacity-30"
-                    >
-                        {isRouting ? <Loader2 size={24} className="animate-spin text-indigo-500" /> : <Route size={24} />}
-                    </button>
-                )}
-
-                <button
-                    onClick={() => handleLocateMe(false)}
-                    className="w-14 h-14 bg-zinc-950/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-emerald-400 hover:border-emerald-500/50 transition-all shadow-2xl flex items-center justify-center"
-                >
+                <button onClick={handleRoteirizar} className="w-14 h-14 bg-zinc-900/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-indigo-400 flex items-center justify-center shadow-2xl">
+                    {isRouting ? <Loader2 size={24} className="animate-spin" /> : <Route size={24} />}
+                </button>
+                <button onClick={() => handleLocateMe()} className="w-14 h-14 bg-zinc-900/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-emerald-400 flex items-center justify-center shadow-2xl">
                     <LocateFixed size={24} />
                 </button>
-
-                {!isNavigating && (
-                    <button
-                        onClick={handleClear}
-                        className="w-14 h-14 bg-zinc-950/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-zinc-500 hover:text-red-500 hover:border-red-500/50 transition-all shadow-2xl flex items-center justify-center"
-                    >
-                        <Trash2 size={24} />
-                    </button>
-                )}
+                <button onClick={handleClear} className="w-14 h-14 bg-zinc-900/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-zinc-600 flex items-center justify-center shadow-2xl">
+                    <Trash2 size={24} />
+                </button>
             </div>
 
-            {/* Navigation HUD (Bottom Floating) */}
+            {/* Navigation Bar Bottom */}
             {isNavigating && (
-                <div className="absolute bottom-24 left-6 right-6 z-[9999] animate-slide-up">
-                    <div className="bg-zinc-950/80 backdrop-blur-3xl p-6 rounded-[2.5rem] border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex items-center gap-5 relative overflow-hidden">
-                        {/* Energy Line Progress */}
-                        <div className="absolute bottom-0 left-0 h-1 bg-zinc-900 w-full">
-                            <div
-                                className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] transition-all duration-1000 ease-out"
-                                style={{ width: `${((navigationIndex + 1) / routePoints.filter(p => p.id !== 'current').length) * 100}%` }}
-                            ></div>
+                <div className="absolute bottom-24 left-6 right-6 z-20 animate-slide-up">
+                    <div className="bg-zinc-950/90 backdrop-blur-3xl p-6 rounded-[2.5rem] border border-white/10 shadow-2xl flex items-center gap-5 relative overflow-hidden">
+                        <div className="absolute bottom-0 left-0 h-1 bg-blue-500/20 w-full">
+                            <div className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,1)] transition-all duration-500" style={{ width: `${((navigationIndex + 1) / routePoints.filter(p => p.id !== 'current').length) * 100}%` }} />
                         </div>
-
-                        <div className="w-16 h-16 bg-blue-500/10 rounded-[1.5rem] flex items-center justify-center border border-blue-500/20 shrink-0">
-                            <Navigation size={32} className="text-blue-500 animate-pulse" />
+                        <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
+                            <Navigation size={24} className="text-blue-500 animate-pulse" />
                         </div>
-
                         <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Destino {navigationIndex + 1}/{routePoints.filter(p => p.id !== 'current').length}</span>
-                            </div>
-                            <h4 className="text-lg font-black italic uppercase tracking-tighter text-white truncate leading-none">
-                                {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.name || "SCANNER_TARGET"}
-                            </h4>
+                            <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-1">Missão {navigationIndex + 1} de {routePoints.filter(p => p.id !== 'current').length}</span>
+                            <h4 className="text-base font-black italic uppercase text-white truncate">{routePoints.filter(p => p.id !== 'current')[navigationIndex]?.name || "COORDENADA_X"}</h4>
                         </div>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={handleCompleteStop}
-                                className="bg-white text-black font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-xl transition-all active:scale-95 text-[10px] hover:bg-zinc-200"
-                            >
-                                Concluído
-                            </button>
-                        </div>
+                        <button onClick={handleCompleteStop} className="bg-white text-black font-black uppercase tracking-widest px-6 py-3 rounded-xl text-[10px] active:scale-95 transition-all">OK</button>
                     </div>
                 </div>
             )}
 
-            {/* EDIT STOP MODAL */}
-            {isEditingCurrentStop && editingPointData && (
-                <div className="absolute inset-0 z-[10002] flex items-center justify-center p-6 animate-in fade-in duration-300">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsEditingCurrentStop(false)}></div>
-                    <div className="relative w-full max-w-md bg-zinc-950 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 p-8">
-                        <div className="flex justify-between items-center mb-8">
-                            <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">Modificar Unidade</h3>
-                            <button onClick={() => setIsEditingCurrentStop(false)} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="flex flex-col gap-5">
-                            <div className="space-y-2">
-                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Assinatura do Local</label>
-                                <input
-                                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
-                                    value={editingPointData.name}
-                                    onChange={e => setEditingPointData({ ...editingPointData, name: e.target.value })}
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Bairro</label>
-                                    <input
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
-                                        value={editingPointData.neighborhood}
-                                        onChange={e => setEditingPointData({ ...editingPointData, neighborhood: e.target.value })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Cidade</label>
-                                    <input
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
-                                        value={editingPointData.city}
-                                        onChange={e => setEditingPointData({ ...editingPointData, city: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Diretivas Adicionais</label>
-                                <textarea
-                                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white h-24 resize-none focus:border-blue-500/50 focus:outline-none font-medium"
-                                    value={editingPointData.notes}
-                                    onChange={e => setEditingPointData({ ...editingPointData, notes: e.target.value })}
-                                />
-                            </div>
-                            <button
-                                onClick={handleSaveStopEdit}
-                                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest py-5 rounded-3xl shadow-2xl transition-all flex items-center justify-center gap-3 mt-4 text-[10px]"
-                            >
-                                <Save size={18} />
-                                CONFIRMAR DADOS
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* UNDO NOTIFICATION CARD */}
-            {undoVisible && lastCompletedPoint && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[10001] animate-in zoom-in-90 fade-in duration-300">
-                    <div className="bg-zinc-950/90 backdrop-blur-3xl border border-blue-500/30 shadow-[0_0_50px_rgba(59,130,246,0.5)] p-8 rounded-[3rem] flex flex-col items-center min-w-[280px] gap-4">
-                        <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,1)]">
-                            <span className="text-white font-black text-xl italic">{undoCountdown}</span>
-                        </div>
-                        <div className="text-center">
-                            <h4 className="text-white font-black italic uppercase tracking-tighter text-lg">Ponto Capturado</h4>
-                            <p className="text-zinc-500 text-[10px] uppercase font-black tracking-widest mt-1">Sincronizando log...</p>
-                        </div>
-
-                        <button
-                            onClick={handleUndo}
-                            className="w-full mt-2 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest py-4 rounded-2xl flex items-center justify-center gap-3 transition-colors border border-white/5 text-[9px]"
-                        >
-                            <Trash2 size={16} className="text-blue-500" />
-                            DESFAZER AÇÃO
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* EMPTY STATE */}
-            {routePoints.length === 0 && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-                    <div className="bg-zinc-950/40 backdrop-blur-2xl px-8 py-5 rounded-3xl border border-white/5 flex items-center gap-4 animate-pulse">
-                        <MapPin size={24} className="text-zinc-600" />
-                        <span className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px]">Aguardando Iniciação de Rota</span>
-                    </div>
-                </div>
-            )}
-
-            {/* ROTEIRIZANDO OVERLAY */}
+            {/* Roteirizando Overlay */}
             {isRouting && (
-                <div className="fixed inset-0 z-[20002] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center animate-fade-in text-center p-12">
-                    <div className="relative mb-12 scale-125">
-                        <div className="w-32 h-32 border-[1px] border-blue-500/10 rounded-full"></div>
-                        <div className="absolute inset-0 border-t-[2px] border-blue-600 rounded-full animate-spin"></div>
-                        <Route size={40} className="absolute inset-0 m-auto text-blue-500 animate-pulse" />
+                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-12">
+                    <div className="relative mb-8">
+                        <div className="w-24 h-24 border-2 border-blue-500/10 rounded-full animate-spin border-t-blue-500"></div>
+                        <Route size={32} className="absolute inset-0 m-auto text-blue-500 animate-pulse" />
                     </div>
-                    <h3 className="text-4xl font-black text-white italic tracking-tighter uppercase leading-none">Cálculo de Polígono</h3>
-                    <p className="text-blue-500/40 text-[10px] font-black uppercase tracking-[0.5em] mt-6">Ajustando Coordenadas Geodésicas...</p>
+                    <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase">Calculando Rota...</h3>
+                    <p className="text-blue-500/40 text-[9px] font-black uppercase tracking-[0.4em] mt-2">Otimizando Vetores Geodésicos</p>
                 </div>
             )}
 
-            {/* CELEBRATION MODAL */}
+            {/* CELEBRATION */}
             {showCelebration && (
-                <div className="fixed inset-0 z-[20003] flex items-center justify-center p-6 animate-in fade-in duration-500">
-                    <div className="absolute inset-0 bg-black/95 backdrop-blur-3xl"></div>
-
-                    <div className="relative flex flex-col items-center text-center max-w-sm">
-                        <div className="mb-10 relative animate-bounce-slow">
-                            <div className="absolute inset-0 bg-blue-500/20 blur-[100px] rounded-full scale-150"></div>
-                            <Rocket size={120} className="text-blue-500 rotate-[-45deg] drop-shadow-[0_0_30px_rgba(59,130,246,1)]" />
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-fade-in bg-black/95 backdrop-blur-2xl text-center">
+                    <div className="flex flex-col items-center gap-6">
+                        <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
+                            <CheckCircle2 size={40} className="text-emerald-500" />
                         </div>
-
-                        <div className="space-y-5 animate-slide-up">
-                            <div className="flex justify-center mb-2">
-                                <div className="p-4 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-                                    <CheckCircle2 size={48} className="text-emerald-500" />
-                                </div>
-                            </div>
-                            <h2 className="text-5xl font-black text-white italic tracking-tighter uppercase leading-none">
-                                Missão <br /> 100%
-                            </h2>
-                            <p className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px]">
-                                Todos os alvos foram alcançados com sucesso.
-                            </p>
-
-                            <div className="pt-10 w-full">
-                                <button
-                                    onClick={() => setShowCelebration(false)}
-                                    className="w-full bg-white text-black font-black uppercase tracking-widest py-6 rounded-3xl shadow-[0_20px_50px_rgba(255,255,255,0.1)] active:scale-95 transition-all text-xs hover:bg-zinc-200"
-                                >
-                                    FIM DA OPERAÇÃO
-                                </button>
-                            </div>
-                        </div>
+                        <h2 className="text-4xl font-black text-white italic tracking-tighter uppercase">Operação Concluída</h2>
+                        <p className="text-zinc-500 font-black uppercase tracking-widest text-[9px]">Todos os destinos foram alcançados.</p>
+                        <button onClick={() => setShowCelebration(false)} className="bg-white text-black font-black uppercase tracking-widest py-4 px-10 rounded-2xl text-[10px] mt-4">Retornar</button>
                     </div>
                 </div>
             )}

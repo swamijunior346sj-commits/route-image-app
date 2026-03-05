@@ -251,7 +251,7 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
                         </div>
                     </div>
                     <div className="flex flex-col space-y-1">
-                        <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter">João Silva</h2>
+                        <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter">{settings.personalData.name || 'Novo Agente'}</h2>
                         <div className="flex items-center gap-3">
                             <div className="flex gap-1">
                                 {[1, 2, 3, 4, 5].map(i => (
