@@ -56,7 +56,6 @@ export const MapView = () => {
     const autocompleteTimerRef = useRef<any>(null);
     const placesServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
     const geocoderRef = useRef<google.maps.Geocoder | null>(null);
-    const touchStartY = useRef<number>(0);
 
     const onLoad = useCallback((map: google.maps.Map) => {
         setMap(map);
@@ -466,8 +465,8 @@ export const MapView = () => {
                 return (
                     <div
                         className={`absolute left-0 right-0 z-30 transition-all duration-500 ease-out ${sheetExpanded
-                                ? 'bottom-0 top-auto'
-                                : 'bottom-[80px]'
+                            ? 'bottom-0 top-auto'
+                            : 'bottom-[80px]'
                             }`}
                         onTouchStart={handleSheetTouchStart}
                         onTouchEnd={handleSheetTouchEnd}
@@ -481,8 +480,8 @@ export const MapView = () => {
                         )}
 
                         <div className={`bg-zinc-950 border-t border-white/10 shadow-[0_-30px_80px_rgba(0,0,0,0.8)] transition-all duration-500 ease-out ${sheetExpanded
-                                ? 'rounded-t-[2.5rem] max-h-[85vh] flex flex-col'
-                                : 'rounded-t-[2.5rem]'
+                            ? 'rounded-t-[2.5rem] max-h-[85vh] flex flex-col'
+                            : 'rounded-t-[2.5rem]'
                             }`}>
 
                             {/* Drag Handle + Progress Bar */}
@@ -574,10 +573,10 @@ export const MapView = () => {
                                             <div
                                                 key={point.id}
                                                 className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${isCurrent
-                                                        ? 'bg-blue-600/10 border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
-                                                        : isPast
-                                                            ? 'bg-white/[0.01] border-white/5 opacity-40'
-                                                            : 'bg-white/[0.02] border-white/5'
+                                                    ? 'bg-blue-600/10 border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
+                                                    : isPast
+                                                        ? 'bg-white/[0.01] border-white/5 opacity-40'
+                                                        : 'bg-white/[0.02] border-white/5'
                                                     }`}
                                             >
                                                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-black shrink-0 ${isCurrent ? 'bg-blue-500 text-white shadow-[0_0_12px_rgba(59,130,246,0.6)]' : 'bg-zinc-900 text-zinc-500 border border-white/10'
