@@ -7,10 +7,10 @@ interface BottomNavProps {
 
 export const BottomNav = ({ currentTab, setTab }: BottomNavProps) => {
     const tabs = [
-        { id: 'scanner', icon: Camera, label: 'SCAN' },
+        { id: 'scanner', icon: Camera, label: 'VISÃO' },
         { id: 'map', icon: Map, label: 'MAPA' },
-        { id: 'records', icon: List, label: 'DATA' },
-        { id: 'profile', icon: User, label: 'USER' },
+        { id: 'records', icon: List, label: 'LISTA' },
+        { id: 'profile', icon: User, label: 'CONTA' },
     ] as const;
 
     return (
@@ -39,8 +39,8 @@ export const BottomNav = ({ currentTab, setTab }: BottomNavProps) => {
                         <tab.icon
                             size={20}
                             className={`mb-1.5 transition-all duration-300 ${isActive
-                                    ? 'text-blue-500 scale-125 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]'
-                                    : 'text-zinc-600 group-hover:text-zinc-400 group-hover:scale-110'
+                                ? 'text-blue-500 scale-125 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]'
+                                : 'text-zinc-600 group-hover:text-zinc-400 group-hover:scale-110'
                                 }`}
                         />
 
