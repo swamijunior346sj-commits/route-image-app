@@ -1,4 +1,4 @@
-import { Database, Loader2 } from 'lucide-react';
+import { Database } from 'lucide-react';
 
 interface LoadingOverlayProps {
     title?: string;

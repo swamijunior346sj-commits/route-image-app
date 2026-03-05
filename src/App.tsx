@@ -6,7 +6,7 @@ import { BottomNav } from './components/BottomNav';
 import { AuthView } from './components/AuthView';
 import { ProfileView } from './components/ProfileView';
 import { loadModel } from './services/imageProcessing';
-import { ScanEye, Loader2 } from 'lucide-react';
+import { ScanEye } from 'lucide-react';
 import { LoadingOverlay } from './components/LoadingOverlay';
 
 export default function App() {
