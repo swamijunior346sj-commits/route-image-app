@@ -4,6 +4,7 @@ import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services
 import type { RoutePoint } from '../services/db';
 import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { LoadingOverlay } from './LoadingOverlay';
 
 const mapContainerStyle = {
     width: '100%',
@@ -418,7 +419,13 @@ export const MapView = () => {
         });
     };
 
-    if (!isLoaded) return <div className="w-full h-full bg-black flex items-center justify-center font-black text-white">CARREGANDO MAPA...</div>;
+    if (!isLoaded) return (
+        <LoadingOverlay
+            title="Motor Cartográfico"
+            subtitle="Renderizando Vetores e Camadas de Tráfego"
+            icon={<MapPin size={32} className="text-white animate-pulse" />}
+        />
+    );
 
     return (
         <div className="relative w-full h-full bg-black overflow-hidden">

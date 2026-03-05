@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { LogOut, User, Bell, Shield, Settings, ChevronLeft, ChevronRight, Save, Key, Mail, Phone, Bike, Eye, EyeOff, Moon, ScanLine, Route, LocateFixed } from 'lucide-react';
 import { getSettings, updateSettings } from '../services/db';
 import type { AppSettings } from '../services/db';
+import { LoadingOverlay } from './LoadingOverlay';
 
 interface ProfileViewProps {
     onLogout: () => void;
@@ -51,7 +52,13 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
         if (navigator.vibrate) navigator.vibrate(10);
     };
 
-    if (loading || !settings) return <div className="p-10 text-center text-zinc-500">Caregando...</div>;
+    if (loading || !settings) return (
+        <LoadingOverlay
+            title="Terminal de Agente"
+            subtitle="Autenticando e Recuperando Preferências"
+            icon={<Shield size={32} className="text-white animate-pulse" />}
+        />
+    );
 
     if (subview === 'personal') {
         return (

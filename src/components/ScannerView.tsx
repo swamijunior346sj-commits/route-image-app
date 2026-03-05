@@ -5,6 +5,7 @@ import { getRecords, saveRecord, addPointToActiveRoute } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
+import { LoadingOverlay } from './LoadingOverlay';
 
 interface ScannerProps {
     onNavigateToMap: () => void;
@@ -663,23 +664,11 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
             {/* Cinematic Transition Overlay */}
             {isSendingToRoute && (
-                <div className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center animate-fade-in">
-                    <div className="relative mb-12">
-                        <div className="w-40 h-40 border border-blue-500/10 rounded-full flex items-center justify-center">
-                            <div className="w-32 h-32 border-2 border-blue-500/20 rounded-full animate-[spin_8s_linear_infinite]" />
-                            <div className="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin" />
-                            <MapPin className="text-white drop-shadow-[0_0_15px_rgba(59,130,246,1)] animate-bounce" size={48} />
-                        </div>
-                    </div>
-                    <div className="text-center space-y-3">
-                        <h3 className="text-4xl font-black italic text-white uppercase tracking-tighter animate-pulse">Integração de Rota</h3>
-                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em]">Codificando Vetores Geográficos...</p>
-
-                        <div className="mt-12 w-48 h-1 bg-white/5 rounded-full overflow-hidden mx-auto">
-                            <div className="h-full bg-blue-500 animate-[loading_3s_ease-in-out_infinite] w-full" />
-                        </div>
-                    </div>
-                </div>
+                <LoadingOverlay
+                    title="Integração de Rota"
+                    subtitle="Codificando Vetores Geográficos e Mapeando..."
+                    icon={<MapPin size={32} className="text-white animate-bounce" />}
+                />
             )}
 
             {/* Expanded Media Viewer */}
