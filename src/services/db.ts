@@ -190,7 +190,7 @@ export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => 
     // For simplicity in this demo, we clear and re-insert or just update specific fields
     // Here we'll just handle the delivery status toggle which is common
     for (const p of points) {
-        await supabase.from('active_route').update({ is_delivered: p.is_delivered }).eq('lat', p.lat).eq('lng', p.lng);
+        await supabase.from('active_route').update({ is_delivered: p.isDelivered }).eq('lat', p.lat).eq('lng', p.lng);
     }
 };
 

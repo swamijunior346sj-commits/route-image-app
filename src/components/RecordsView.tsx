@@ -309,63 +309,83 @@ export const RecordsView = () => {
     };
 
     return (
-        <div className="relative w-full h-full bg-black overflow-y-auto pt-safe pb-24">
-            <div className="sticky top-0 z-20 w-full p-4 glass-panel border-b-0 flex flex-col gap-2 transition-all">
-                {selectedIds.size > 0 ? (
-                    <div className="flex justify-between items-center w-full my-1 animate-fade-in">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setSelectedIds(new Set())} className="text-zinc-400 hover:text-white p-2">
-                                <X size={20} />
-                            </button>
-                            <span className="font-bold text-lg text-white">{selectedIds.size} selecionados</span>
+        <div className="relative w-full h-full bg-black overflow-y-auto pt-safe pb-32">
+            {/* Header HUD - Gaming style */}
+            <div className="sticky top-0 z-30 w-full p-6 animate-fade-in flex flex-col gap-4 pointer-events-none">
+                <div className="bg-zinc-950/40 backdrop-blur-2xl border-b border-white/5 p-6 -m-6 mb-2 pointer-events-auto">
+                    {selectedIds.size > 0 ? (
+                        <div className="flex justify-between items-center w-full animate-in slide-in-from-top-4 duration-500">
+                            <div className="flex items-center gap-4">
+                                <button onClick={() => setSelectedIds(new Set())} className="text-zinc-500 hover:text-white p-2 bg-white/5 rounded-full transition-all">
+                                    <X size={20} />
+                                </button>
+                                <div className="space-y-0.5">
+                                    <h2 className="text-xl font-black italic tracking-tighter text-white uppercase leading-none">Seleção Ativa</h2>
+                                    <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">{selectedIds.size} ALVOS MARCADOS</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button onClick={handleSendToMap} className="w-12 h-12 flex items-center justify-center bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl hover:bg-emerald-500/20 transition-all shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                                    <MapPinned size={22} />
+                                </button>
+                                <button onClick={toggleSelectAll} className="w-12 h-12 flex items-center justify-center bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-2xl hover:bg-blue-500/20 transition-all">
+                                    {selectedIds.size === displayRecords.length ? <CheckSquare size={22} /> : <Square size={22} />}
+                                </button>
+                                <button onClick={handleBulkDelete} className="w-12 h-12 flex items-center justify-center bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl hover:bg-red-500/20 transition-all">
+                                    <Trash2 size={22} />
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <button onClick={handleSendToMap} className="text-emerald-400 hover:text-emerald-300 p-2" title="Enviar para Rota do Mapa">
-                                <MapPinned size={20} />
-                            </button>
-                            <button onClick={toggleSelectAll} className="text-blue-400 hover:text-blue-300 flex items-center gap-1 p-2">
-                                {selectedIds.size === displayRecords.length ? <CheckSquare size={20} /> : <Square size={20} />}
-                                <span className="text-sm font-bold">Todos</span>
-                            </button>
-                            <button onClick={handleBulkDelete} className="text-red-400 hover:text-red-300 p-2">
-                                <Trash2 size={20} />
-                            </button>
+                    ) : (
+                        <div className="space-y-5 animate-fade-in">
+                            <div className="flex justify-between items-start">
+                                <div className="space-y-1">
+                                    <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase leading-none">Registros e Memória</h1>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,1)]" />
+                                        <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">Banco de Dados • {records.length} Entradas</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <form onSubmit={(e) => e.preventDefault()} className="relative flex items-center">
+                                <div className="absolute inset-0 bg-blue-500/5 blur-xl rounded-2xl" />
+                                <input
+                                    type="text"
+                                    placeholder="FILTRAR REGISTROS..."
+                                    className="w-full bg-black/40 backdrop-blur-2xl border border-white/10 rounded-2xl py-4 pl-5 pr-12 text-xs text-white focus:border-blue-500/50 focus:outline-none placeholder:text-zinc-600 font-bold tracking-widest uppercase transition-all shadow-2xl"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                                <div className="absolute right-4 text-zinc-600">
+                                    <Search size={18} />
+                                </div>
+                            </form>
                         </div>
-                    </div>
-                ) : (
-                    <div className="animate-fade-in">
-                        <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Registros e Memória</h1>
-                        <p className="text-sm text-zinc-300 font-medium">Banco de dados de endereços escaneados ({records.length})</p>
-                        <div className="relative mt-3">
-                            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" />
-                            <input
-                                type="text"
-                                placeholder="Buscar endereço (mín. 3 letras)..."
-                                className="w-full bg-zinc-900/80 border border-white/10 rounded-xl py-3 pl-9 pr-4 text-sm text-white focus:border-blue-500/50 focus:outline-none placeholder:text-zinc-500 transition-all"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
-            <div className="p-4 flex gap-4 my-2">
-                <button
-                    onClick={handleExport}
-                    className="flex-1 glass-panel py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"
-                >
-                    <Download size={18} />
-                    <span className="font-semibold text-sm">Exportar</span>
-                </button>
-                <label className="flex-1 glass-panel py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-colors cursor-pointer">
-                    <Upload size={18} />
-                    <span className="font-semibold text-sm">Importar</span>
-                    <input type="file" accept=".json,.csv" className="hidden" onChange={handleImport} />
-                </label>
-            </div>
+            {/* Utility Bar */}
+            {!selectedIds.size && (
+                <div className="px-6 grid grid-cols-2 gap-4 my-6">
+                    <button
+                        onClick={handleExport}
+                        className="bg-zinc-950/40 backdrop-blur-xl border border-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/[0.03] transition-all group"
+                    >
+                        <Download size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-[10px] font-black italic uppercase tracking-widest text-zinc-400 group-hover:text-white">Exportar Log</span>
+                    </button>
+                    <label className="bg-zinc-950/40 backdrop-blur-xl border border-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/[0.03] transition-all cursor-pointer group">
+                        <Upload size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-[10px] font-black italic uppercase tracking-widest text-zinc-400 group-hover:text-white">Importar Log</span>
+                        <input type="file" accept=".json,.csv" className="hidden" onChange={handleImport} />
+                    </label>
+                </div>
+            )}
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 px-6 pb-20">
+            {/* Grid display */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5 px-6 pb-20 mt-4">
                 {displayRecords.map(record => {
                     const isSelected = selectedIds.has(record.id);
                     const isSelectionMode = selectedIds.size > 0;
@@ -373,9 +393,9 @@ export const RecordsView = () => {
                     return (
                         <div
                             key={record.id}
-                            className={`relative group overflow-hidden rounded-[2.5rem] bg-zinc-950 border transition-all duration-700 cursor-pointer select-none aspect-square flex flex-col p-6 ${isSelected
-                                ? 'border-blue-500 shadow-[0_0_50px_rgba(59,130,246,0.2)] scale-[0.98]'
-                                : 'border-white/5 hover:border-white/10 shadow-2xl hover:shadow-blue-500/5'
+                            className={`relative group overflow-hidden rounded-[2rem] bg-zinc-950 border transition-all duration-500 cursor-pointer select-none aspect-square flex flex-col p-5 ${isSelected
+                                ? 'border-blue-500 shadow-[0_0_40px_rgba(59,130,246,0.3)] scale-[0.97]'
+                                : 'border-white/5 hover:border-white/10 shadow-2xl'
                                 }`}
                             onTouchStart={() => handlePressStart(record.id)}
                             onTouchEnd={handlePressEnd}
@@ -388,34 +408,34 @@ export const RecordsView = () => {
                                 else openDetail(record);
                             }}
                         >
-                            {/* Premium Decorative Gradient */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 via-transparent to-indigo-600/5 opacity-50" />
-                            <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-[80px] group-hover:bg-blue-500/20 transition-colors duration-700" />
+                            {/* Decorative Elements */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent opacity-50" />
+                            <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 rounded-full blur-[60px] group-hover:bg-blue-500/20 transition-all duration-700" />
 
-                            {/* Selection Badge - Luxury Style */}
+                            {/* Selection HUD UI */}
                             {isSelectionMode && (
-                                <div className="absolute top-4 right-4 z-20 animate-in zoom-in duration-300">
-                                    <div className={`p-1 rounded-full backdrop-blur-xl border ${isSelected
-                                        ? 'bg-blue-500 border-blue-400'
-                                        : 'bg-white/5 border-white/10 text-transparent'
+                                <div className="absolute top-4 right-4 z-20 animate-in zoom-in-90 duration-300">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected
+                                        ? 'bg-blue-500 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,1)]'
+                                        : 'bg-white/5 border-white/10'
                                         }`}>
-                                        <CheckCircle2 size={20} className={isSelected ? "text-white" : "opacity-0"} />
+                                        {isSelected && <CheckCircle2 size={14} className="text-white" />}
                                     </div>
                                 </div>
                             )}
 
-                            {/* Actions - Top Left */}
+                            {/* Hover Actions */}
                             {!isSelectionMode && (
-                                <div className="absolute top-4 right-4 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-500">
+                                <div className="absolute top-4 right-4 z-20 flex gap-2 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
                                     <button
                                         onClick={(e) => openEdit(record, e)}
-                                        className="p-2 rounded-xl bg-white/5 border border-white/5 text-zinc-500 hover:text-white hover:bg-white/10 transition-all"
+                                        className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-zinc-500 hover:text-white hover:border-blue-500/50 transition-all"
                                     >
                                         <Edit2 size={14} />
                                     </button>
                                     <button
                                         onClick={(e) => handleDelete(record.id, e)}
-                                        className="p-2 rounded-xl bg-red-500/5 border border-red-500/5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                        className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-zinc-500 hover:text-red-500 hover:border-red-500/50 transition-all"
                                     >
                                         <Trash2 size={14} />
                                     </button>
@@ -425,30 +445,32 @@ export const RecordsView = () => {
                             {/* Content Layout */}
                             <div className="relative z-10 flex flex-col h-full">
                                 <div className="mb-4">
-                                    <div className="w-10 h-10 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-blue-500/10 group-hover:border-blue-500/20 transition-all duration-500">
-                                        <MapPinned size={18} className="text-blue-500/70" />
+                                    <div className="w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center mb-5 group-hover:scale-110 group-hover:bg-blue-500/10 group-hover:border-blue-500/20 transition-all duration-700">
+                                        <MapPinned size={22} className="text-blue-500/60 group-hover:text-blue-500" />
                                     </div>
-                                    <h3 className="font-black text-white text-base md:text-lg tracking-tighter line-clamp-2 uppercase italic leading-tight group-hover:text-blue-400 transition-colors">
+                                    <h3 className="font-black text-white text-base md:text-lg tracking-tighter line-clamp-2 uppercase italic leading-[0.9] group-hover:text-blue-400 transition-colors">
                                         {record.name}
                                     </h3>
-                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-2">
-                                        {[record.neighborhood, record.city].filter(Boolean).join(' • ') || 'Local Privado'}
+                                    <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-2 opacity-60">
+                                        {record.neighborhood || 'SETOR DESCONHECIDO'}
                                     </p>
                                 </div>
 
                                 <div className="mt-auto space-y-3">
                                     <div className="flex gap-2">
-                                        <div className="bg-white/[0.02] px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
-                                            <span className="text-[8px] font-black text-blue-500/50">LT</span>
-                                            <span className="text-[10px] font-mono text-zinc-400 group-hover:text-zinc-200">{record.lat ? record.lat.toFixed(4) : '--'}</span>
+                                        <div className="bg-white/[0.03] px-2.5 py-1 rounded-xl border border-white/5 flex items-center gap-2">
+                                            <span className="text-[7px] font-black text-blue-500/50">LAT</span>
+                                            <span className="text-[9px] font-bold text-zinc-400 group-hover:text-white transition-colors">
+                                                {record.lat ? record.lat.toFixed(3) : '---'}
+                                            </span>
                                         </div>
-                                        <div className="bg-white/[0.02] px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
-                                            <span className="text-[8px] font-black text-blue-500/50">LG</span>
-                                            <span className="text-[10px] font-mono text-zinc-400 group-hover:text-zinc-200">{record.lng ? record.lng.toFixed(4) : '--'}</span>
+                                        <div className="bg-white/[0.03] px-2.5 py-1 rounded-xl border border-white/5 flex items-center gap-2">
+                                            <span className="text-[7px] font-black text-blue-500/50">LNG</span>
+                                            <span className="text-[9px] font-bold text-zinc-400 group-hover:text-white transition-colors">
+                                                {record.lng ? record.lng.toFixed(3) : '---'}
+                                            </span>
                                         </div>
                                     </div>
-
-                                    <div className="h-0.5 w-12 bg-blue-500/20 rounded-full group-hover:w-full transition-all duration-700" />
                                 </div>
                             </div>
                         </div>
@@ -456,345 +478,294 @@ export const RecordsView = () => {
                 })}
 
                 {displayRecords.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-                        <Database size={48} className="mb-4 opacity-50" />
-                        <p>{records.length > 0 ? 'Nenhum endereço encontrado.' : 'Nenhum endereço registrado.'}</p>
+                    <div className="col-span-full flex flex-col items-center justify-center py-32 text-zinc-600">
+                        <Database size={64} className="mb-6 opacity-20" />
+                        <h4 className="text-lg font-black italic uppercase tracking-widest opacity-40">Nenhum Registro Localizado</h4>
                     </div>
                 )}
             </div>
 
+            {/* Fab Create */}
             <button
                 onClick={openCreate}
-                className="fixed bottom-[100px] right-6 z-40 bg-blue-600 text-white p-4 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:bg-blue-500 transition-colors animate-fade-in"
-                title="Adicionar Endereço Manualmente"
+                className="fixed bottom-[110px] right-8 z-40 w-16 h-16 bg-blue-600 text-white rounded-[1.5rem] shadow-[0_15px_40px_rgba(37,99,235,0.4)] flex items-center justify-center hover:bg-blue-500 hover:scale-110 active:scale-90 transition-all animate-in slide-in-from-bottom-8 duration-500"
             >
-                <Plus size={24} />
+                <Plus size={32} />
             </button>
 
-            {/* Edit/Create Modal */}
+            {/* MODALS - Redesigned with Gaming Style */}
             {isEditModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-                    <div className="w-full max-w-sm glass-panel p-6 rounded-2xl border border-white/10 flex flex-col gap-4 shadow-xl relative overflow-hidden">
-                        <div className="flex justify-between items-center mb-2">
-                            <h3 className="text-lg font-bold">{editingRecord ? 'Editar Endereço' : 'Novo Endereço'}</h3>
-                            <button onClick={() => setIsEditModalOpen(false)} className="text-zinc-400 hover:text-white">
-                                <X size={20} />
-                            </button>
-                        </div>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-xl animate-fade-in">
+                    <div className="w-full max-w-md bg-zinc-950 border border-white/10 rounded-[3rem] shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-500 flex flex-col max-h-[90vh]">
+                        {/* Modal Decorative Line */}
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50" />
 
-                        <div className="flex flex-col items-center justify-center gap-2 mb-2">
-                            <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-white/20 group">
-                                {editMainImage ? (
-                                    <img src={editMainImage} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full bg-zinc-800 flex items-center justify-center"><ImageIcon className="text-zinc-600" /></div>
-                                )}
-                                <button type="button" onClick={() => setPhotoActionTarget('main')} disabled={isExtracting} className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition">
-                                    <Camera size={24} className="text-white" />
-                                    <span className="text-[10px] font-bold mt-1 max-w-[80px] text-center">Alterar Foto Principal</span>
+                        <div className="p-8 overflow-y-auto">
+                            <div className="flex justify-between items-center mb-8">
+                                <div className="space-y-1">
+                                    <p className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Escritura de Campo</p>
+                                    <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">
+                                        {editingRecord ? 'Modificar Registro' : 'Iniciação Manual'}
+                                    </h3>
+                                </div>
+                                <button onClick={() => setIsEditModalOpen(false)} className="w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-all">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="flex flex-col gap-6">
+                                {/* Thumbnail Header */}
+                                <div className="flex items-center gap-6 mb-2">
+                                    <div className="relative w-28 h-28 rounded-[2rem] overflow-hidden border-2 border-white/5 group bg-zinc-900 flex items-center justify-center">
+                                        {editMainImage ? (
+                                            <img src={editMainImage} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <ImageIcon className="text-zinc-800" size={32} />
+                                        )}
+                                        <button type="button" onClick={() => setPhotoActionTarget('main')} className="absolute inset-0 bg-blue-600/60 backdrop-blur-sm flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                                            <Camera size={24} className="text-white mb-1" />
+                                            <span className="text-[8px] font-black uppercase tracking-widest text-white">Alterar</span>
+                                        </button>
+                                    </div>
+                                    <div className="flex-1 space-y-3">
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Identidade do Alvo</label>
+                                        <input
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-sm text-white focus:border-blue-500/50 focus:outline-none font-bold placeholder:text-zinc-700"
+                                            placeholder="NOME DO LOCAL..."
+                                            value={editName}
+                                            onChange={(e) => setEditName(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Address Fields */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Setor / Bairro</label>
+                                        <input
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
+                                            value={editNeighborhood}
+                                            onChange={(e) => setEditNeighborhood(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Geo / Cidade</label>
+                                        <input
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
+                                            value={editCity}
+                                            onChange={(e) => setEditCity(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Coordinate HUD */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-blue-500/5 border border-blue-500/10 rounded-[1.5rem] p-4 group hover:bg-blue-500/10 transition-all cursor-pointer relative" onClick={handleUseCurrentLocationForEdit}>
+                                        <label className="text-[8px] font-black text-blue-500/60 uppercase tracking-widest block mb-2">Latitude Geográfica</label>
+                                        <input
+                                            className="w-full bg-transparent text-sm font-mono text-white focus:outline-none"
+                                            value={editLat}
+                                            onChange={(e) => setEditLat(e.target.value)}
+                                        />
+                                        <LocateFixed size={12} className="absolute top-4 right-4 text-blue-500 opacity-40 group-hover:opacity-100 animate-pulse" />
+                                    </div>
+                                    <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-[1.5rem] p-4 group hover:bg-indigo-500/10 transition-all cursor-pointer relative" onClick={handleUseCurrentLocationForEdit}>
+                                        <label className="text-[8px] font-black text-indigo-500/60 uppercase tracking-widest block mb-2">Longitude Geográfica</label>
+                                        <input
+                                            className="w-full bg-transparent text-sm font-mono text-white focus:outline-none"
+                                            value={editLng}
+                                            onChange={(e) => setEditLng(e.target.value)}
+                                        />
+                                        <LocateFixed size={12} className="absolute top-4 right-4 text-indigo-500 opacity-40 group-hover:opacity-100 animate-pulse" />
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={async () => {
+                                        if (!editLat || !editLng) return alert('Insira as coordenadas primeiro.');
+                                        setIsExtracting(true);
+                                        try {
+                                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${editLat}&lon=${editLng}`);
+                                            const data = await res.json();
+                                            if (data?.address) {
+                                                const addr = data.address;
+                                                setEditName(`${addr.road || addr.pedestrian || ''} ${addr.house_number ? ',' + addr.house_number : ''}`.trim());
+                                                setEditNeighborhood(addr.suburb || addr.neighbourhood || '');
+                                                setEditCity(addr.city || addr.town || '');
+                                            }
+                                        } finally { setIsExtracting(false); }
+                                    }}
+                                    disabled={isExtracting}
+                                    className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-500/20 transition-all disabled:opacity-30 shadow-[0_10px_30px_rgba(16,185,129,0.1)]"
+                                >
+                                    <LocateFixed size={16} className={isExtracting ? 'animate-spin' : ''} />
+                                    Sincronização Geográfica Automática
+                                </button>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Diretivas Adicionais</label>
+                                    <textarea
+                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-zinc-300 h-20 resize-none focus:border-blue-500/50 focus:outline-none font-medium italic"
+                                        placeholder="PONTOS DE REFERÊNCIA..."
+                                        value={editNotes}
+                                        onChange={(e) => setEditNotes(e.target.value)}
+                                    />
+                                </div>
+
+                                {/* Additional Images Section */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Ângulos de Reconhecimento</label>
+                                    <div className="flex flex-wrap gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPhotoActionTarget('extra')}
+                                            className="w-14 h-14 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center text-zinc-600 hover:text-blue-500 hover:border-blue-500/50 transition-all"
+                                        >
+                                            <Camera size={20} />
+                                        </button>
+                                        {editAdditionalImages.map((img) => (
+                                            <div key={img.id} className="relative w-14 h-14 rounded-2xl overflow-hidden border border-white/10 group">
+                                                <img src={img.image} className="w-full h-full object-cover" />
+                                                <button
+                                                    onClick={() => handleRemoveAdditionalImage(img.id)}
+                                                    className="absolute inset-0 bg-red-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white"
+                                                >
+                                                    <Trash size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Saving Logic */}
+                                <button
+                                    onClick={handleSaveEdit}
+                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] py-5 rounded-[2rem] shadow-[0_20px_50px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-3 text-xs mt-4 active:scale-95"
+                                    disabled={isExtracting}
+                                >
+                                    <Save size={20} />
+                                    {editingRecord ? 'FINALIZAR ALTERAÇÕES' : 'CONFIRMAR NOVO REGISTRO'}
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
 
-                        <div className="flex flex-col gap-2">
-                            <label className="text-xs text-zinc-400">Nome da Imagem/Local</label>
+            {/* Photo Action Sub-modal */}
+            {photoActionTarget && (
+                <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-8 animate-fade-in">
+                    <div className="w-full max-w-sm flex flex-col gap-5">
+                        <div className="text-center mb-6">
+                            <h4 className="text-3xl font-black italic uppercase tracking-tighter text-white">Capturar Mídia</h4>
+                            <p className="text-blue-500/60 font-black uppercase tracking-widest text-[10px] mt-2">Selecione a fonte de entrada</p>
+                        </div>
+
+                        <label className="w-full bg-blue-600 text-white py-6 rounded-[2rem] flex items-center justify-center gap-4 cursor-pointer font-black uppercase tracking-widest text-xs shadow-2xl hover:bg-blue-500 transition-all active:scale-95">
+                            <Camera size={24} />
+                            <span>Tirar Nova Foto</span>
                             <input
-                                type="text"
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none"
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={photoActionTarget === 'main' ? handleReplaceMainImage : handleAddImage}
                             />
-                        </div>
+                        </label>
 
-                        <div className="flex gap-4">
-                            <div className="flex flex-col gap-2 flex-1">
-                                <label className="text-xs text-zinc-400">Bairro (Opcional)</label>
-                                <input
-                                    type="text"
-                                    value={editNeighborhood}
-                                    onChange={(e) => setEditNeighborhood(e.target.value)}
-                                    placeholder="Ex: Centro"
-                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none text-xs"
-                                />
-                            </div>
-                            <div className="flex flex-col gap-2 flex-1">
-                                <label className="text-xs text-zinc-400">Cidade (Opcional)</label>
-                                <input
-                                    type="text"
-                                    value={editCity}
-                                    onChange={(e) => setEditCity(e.target.value)}
-                                    placeholder="Ex: São Paulo"
-                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none text-xs"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <label className="text-xs text-zinc-400">Notas/Referência (Opcional)</label>
-                            <textarea
-                                value={editNotes}
-                                onChange={(e) => setEditNotes(e.target.value)}
-                                placeholder="Ponto de referência, cor do portão..."
-                                className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none text-xs h-16 resize-none"
+                        <label className="w-full bg-zinc-900 border border-white/10 text-white py-6 rounded-[2rem] flex items-center justify-center gap-4 cursor-pointer font-black uppercase tracking-widest text-xs hover:bg-zinc-800 transition-all active:scale-95">
+                            <ImageIcon size={24} className="text-blue-500" />
+                            <span>Abrir Galeria</span>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={photoActionTarget === 'main' ? handleReplaceMainImage : handleAddImage}
                             />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 mb-1">
-                            <div
-                                className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 cursor-pointer active:scale-95 transition-all hover:bg-blue-500/10 group relative overflow-hidden"
-                            >
-                                <div
-                                    className="absolute inset-0 z-0"
-                                    onClick={() => {
-                                        if (navigator.vibrate) navigator.vibrate(20);
-                                        if ('geolocation' in navigator) {
-                                            handleUseCurrentLocationForEdit();
-                                        }
-                                    }}
-                                />
-                                <div className="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
-                                    <label className="text-[10px] font-black text-blue-500/60 uppercase tracking-tighter">Latitude</label>
-                                    <LocateFixed size={12} className="text-blue-500 opacity-40 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                                <input
-                                    type="text"
-                                    value={editLat}
-                                    onChange={(e) => setEditLat(e.target.value)}
-                                    className="relative z-20 w-full bg-transparent text-sm font-mono text-white tracking-widest focus:outline-none border-b border-transparent focus:border-blue-500/30"
-                                    placeholder="---.------"
-                                />
-                            </div>
-
-                            <div
-                                className="bg-indigo-500/5 border border-indigo-500/20 rounded-2xl p-4 cursor-pointer active:scale-95 transition-all hover:bg-indigo-500/10 group relative overflow-hidden"
-                            >
-                                <div
-                                    className="absolute inset-0 z-0"
-                                    onClick={() => {
-                                        if (navigator.vibrate) navigator.vibrate(20);
-                                        if ('geolocation' in navigator) {
-                                            handleUseCurrentLocationForEdit();
-                                        }
-                                    }}
-                                />
-                                <div className="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
-                                    <label className="text-[10px] font-black text-indigo-500/60 uppercase tracking-tighter">Longitude</label>
-                                    <LocateFixed size={12} className="text-indigo-500 opacity-40 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                                <input
-                                    type="text"
-                                    value={editLng}
-                                    onChange={(e) => setEditLng(e.target.value)}
-                                    className="relative z-20 w-full bg-transparent text-sm font-mono text-white tracking-widest focus:outline-none border-b border-transparent focus:border-indigo-500/30"
-                                    placeholder="---.------"
-                                />
-                            </div>
-                        </div>
+                        </label>
 
                         <button
-                            onClick={async () => {
-                                if (!editLat || !editLng) {
-                                    alert('Capture ou digite as coordenadas primeiro.');
-                                    return;
-                                }
-                                if (navigator.vibrate) navigator.vibrate(40);
-                                setIsExtracting(true);
-                                try {
-                                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${editLat}&lon=${editLng}`);
-                                    const data = await res.json();
-                                    if (data && data.address) {
-                                        const addr = data.address;
-                                        const street = addr.road || addr.pedestrian || addr.suburb || '';
-                                        const houseNumber = addr.house_number ? `, ${addr.house_number}` : '';
-                                        setEditName(`${street}${houseNumber}`);
-                                        setEditNeighborhood(addr.suburb || addr.neighbourhood || addr.city_district || '');
-                                        setEditCity(addr.city || addr.town || addr.village || '');
-                                    } else {
-                                        alert('Cidade/Endereço não identificado para estas coordenadas.');
-                                    }
-                                } catch (err) {
-                                    console.error(err);
-                                    alert('Erro ao buscar endereço.');
-                                } finally {
-                                    setIsExtracting(false);
-                                }
-                            }}
-                            disabled={isExtracting}
-                            className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
+                            type="button"
+                            onClick={() => setPhotoActionTarget(null)}
+                            className="w-full py-4 text-zinc-500 font-black uppercase tracking-widest text-[10px] hover:text-white transition-all mt-6"
                         >
-                            <Database size={14} className={isExtracting ? 'animate-spin' : ''} />
-                            SINCRONIZAR ENDEREÇO VIA GPS
+                            Abortar Operação
                         </button>
+                    </div>
+                </div>
+            )}
 
-                        <div className="flex flex-col gap-2 border-t border-white/10 pt-4 mt-2">
-                            <label className="text-xs text-zinc-400 font-bold">Imagens Auxiliares de Treinamento</label>
-                            <p className="text-[10px] text-zinc-500 leading-tight">Adicione mais ângulos ou tire novas fotos para o Escaneador reconhecer melhor este endereço.</p>
-
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                <button type="button" onClick={() => setPhotoActionTarget('extra')} disabled={isExtracting} className="w-16 h-16 rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition opacity-70 hover:opacity-100">
-                                    <Camera size={20} className="text-white mb-1" />
-                                    <span className="text-[8px] font-bold text-center leading-none">Nova<br />Foto</span>
-                                </button>
-
-                                {isExtracting && (
-                                    <div className="w-16 h-16 rounded-xl border border-white/10 bg-zinc-800 flex items-center justify-center animate-pulse">
-                                        <span className="text-[10px] text-blue-400">Lendo..</span>
-                                    </div>
+            {/* Detail Modal - Cinematic Style */}
+            {isDetailModalOpen && selectedDetail && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/95 backdrop-blur-2xl animate-fade-in">
+                    <div className="w-full max-w-sm flex flex-col gap-8 animate-in zoom-in-95 duration-700">
+                        {/* Hero Image */}
+                        <div className="relative group">
+                            <div className="absolute inset-0 bg-blue-500/20 blur-[80px] rounded-full scale-75 opacity-50" />
+                            <div className="relative w-full aspect-square rounded-[3.5rem] overflow-hidden border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.8)]">
+                                {selectedDetail.imageThumbnail ? (
+                                    <img src={selectedDetail.imageThumbnail} className="w-full h-full object-cover scale-105 group-hover:scale-100 transition-transform duration-1000" />
+                                ) : (
+                                    <div className="w-full h-full bg-zinc-950 flex items-center justify-center"><Database size={64} className="text-zinc-800" /></div>
                                 )}
+                                <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black via-black/40 to-transparent" />
 
-                                {editAdditionalImages.map((img) => (
-                                    <div key={img.id} className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/10 group">
-                                        <img src={img.image} className="w-full h-full object-cover" />
-                                        <button onClick={() => handleRemoveAdditionalImage(img.id)} className="absolute inset-0 bg-red-500/80 items-center justify-center hidden group-hover:flex transition">
-                                            <Trash size={16} className="text-white" />
-                                        </button>
+                                <div className="absolute bottom-8 left-8 right-8">
+                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-2">Alvo Identificado</p>
+                                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white leading-none line-clamp-2">
+                                        {selectedDetail.name}
+                                    </h2>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Stats HUD */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2rem] space-y-1">
+                                <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Setor Privado</span>
+                                <p className="text-sm font-black text-white italic uppercase">{selectedDetail.neighborhood || '---'}</p>
+                            </div>
+                            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2rem] space-y-1">
+                                <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Cidade Nucleo</span>
+                                <p className="text-sm font-black text-white italic uppercase">{selectedDetail.city || '---'}</p>
+                            </div>
+                        </div>
+
+                        {/* Multi-photo HUD teaser if exists */}
+                        {selectedDetail.additionalImages && selectedDetail.additionalImages.length > 0 && (
+                            <div className="flex gap-3 overflow-x-auto pb-2 -mx-2 px-2 no-scrollbar">
+                                {selectedDetail.additionalImages.map((img, i) => (
+                                    <div key={i} className="w-14 h-14 rounded-2xl border border-white/10 overflow-hidden shrink-0">
+                                        <img src={img.image} className="w-full h-full object-cover grayscale brightness-75 hover:grayscale-0 hover:brightness-100 transition-all" />
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        )}
 
                         <button
-                            onClick={handleSaveEdit}
-                            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-3 text-[10px]"
-                            disabled={isExtracting}
+                            onClick={() => setIsDetailModalOpen(false)}
+                            className="w-full bg-white text-black py-6 rounded-[2rem] font-black uppercase tracking-[0.3em] text-[10px] shadow-2xl active:scale-95 transition-all hover:bg-zinc-200"
                         >
-                            <Save size={18} />
-                            {editingRecord ? 'CONFIRMAR ALTERAÇÕES' : 'CRIAR NOVO REGISTRO'}
+                            Recolher Visão
                         </button>
-
-                        {photoActionTarget && (
-                            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-                                <div className="w-full bg-zinc-900 border border-white/10 p-5 rounded-2xl flex flex-col gap-3 shadow-2xl animate-slide-up">
-                                    <h4 className="text-center font-bold text-sm text-zinc-300 mb-2">Adicionar Mídia</h4>
-
-                                    <label className="w-full glow-btn py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer font-bold">
-                                        <Camera size={18} />
-                                        <span>Tirar Nova Foto</span>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            capture="environment"
-                                            className="hidden"
-                                            onChange={photoActionTarget === 'main' ? handleReplaceMainImage : handleAddImage}
-                                        />
-                                    </label>
-
-                                    <label className="w-full glass-panel py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer text-blue-400 hover:bg-blue-500/10 font-bold transition">
-                                        <ImageIcon size={18} />
-                                        <span>Importar Arquivo</span>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={photoActionTarget === 'main' ? handleReplaceMainImage : handleAddImage}
-                                        />
-                                    </label>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setPhotoActionTarget(null)}
-                                        className="w-full py-3 rounded-xl font-bold mt-2 text-zinc-400 hover:bg-white/5 transition"
-                                    >
-                                        Cancelar
-                                    </button>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             )}
 
-            {/* Detail View Modal */}
-            {isDetailModalOpen && selectedDetail && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-xl animate-fade-in">
-                    <div className="w-full max-w-sm glass-panel overflow-hidden rounded-[3rem] border border-white/10 shadow-2xl animate-scale-up">
-                        {/* Header Image */}
-                        <div className="h-48 relative">
-                            {selectedDetail.imageThumbnail ? (
-                                <img src={selectedDetail.imageThumbnail} className="w-full h-full object-cover" alt="Thumb" />
-                            ) : (
-                                <div className="w-full h-full bg-zinc-800 flex items-center justify-center"><Database size={48} className="text-zinc-700" /></div>
-                            )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-black/20" />
-                            <button
-                                onClick={() => setIsDetailModalOpen(false)}
-                                className="absolute top-4 right-4 p-2 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="p-8 -mt-10 relative z-10 bg-zinc-900 rounded-t-[3rem] border-t border-white/5">
-                            <div className="flex flex-col gap-6">
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Endereço Confirmado</p>
-                                    <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase leading-none">{selectedDetail.name}</h2>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-white/[0.03] border border-white/5 p-4 rounded-2xl">
-                                        <p className="text-[9px] font-bold text-zinc-500 uppercase mb-1">Bairro</p>
-                                        <p className="text-sm font-bold text-zinc-200">{selectedDetail.neighborhood || 'N/A'}</p>
-                                    </div>
-                                    <div className="bg-white/[0.03] border border-white/5 p-4 rounded-2xl">
-                                        <p className="text-[9px] font-bold text-zinc-500 uppercase mb-1">Cidade</p>
-                                        <p className="text-sm font-bold text-zinc-200">{selectedDetail.city || 'N/A'}</p>
-                                    </div>
-                                </div>
-
-                                <div className="bg-blue-500/5 border border-blue-500/10 p-5 rounded-[2rem]">
-                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <LocateFixed size={12} /> Coordenadas GPS
-                                    </p>
-                                    <div className="flex justify-between items-center font-mono">
-                                        <div>
-                                            <span className="text-[9px] text-zinc-500 block">LATITUDE</span>
-                                            <span className="text-white text-sm">{selectedDetail.lat?.toFixed(6) || '---'}</span>
-                                        </div>
-                                        <div className="w-px h-8 bg-white/10" />
-                                        <div className="text-right">
-                                            <span className="text-[9px] text-zinc-500 block">LONGITUDE</span>
-                                            <span className="text-white text-sm">{selectedDetail.lng?.toFixed(6) || '---'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {selectedDetail.notes && (
-                                    <div className="space-y-2">
-                                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Notas e Referências</p>
-                                        <p className="text-sm text-zinc-400 leading-relaxed italic">"{selectedDetail.notes}"</p>
-                                    </div>
-                                )}
-
-                                <button
-                                    onClick={() => setIsDetailModalOpen(false)}
-                                    className="w-full bg-white text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-zinc-200 transition-all mt-2"
-                                >
-                                    Fechar Detalhes
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* SENDING ROUTE ANIMATION OVERLAY */}
+            {/* SENDING ROUTE ANIMATION */}
             {isSendingRoute && (
-                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
-                    <div className="flex flex-col items-center gap-6 saturate-150">
-                        <div className="relative w-32 h-32 flex items-center justify-center">
-                            {/* Outer pulsing ring */}
-                            <div className="absolute inset-0 rounded-full border-4 border-emerald-500/30 animate-ping"></div>
-                            {/* Inner spinning gradient */}
-                            <div className="absolute inset-2 rounded-full border-4 border-t-emerald-400 border-r-blue-500 border-b-transparent border-l-transparent animate-spin"></div>
-                            {/* Center icon */}
-                            <MapPinned size={48} className="text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.8)]" />
+                <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-12 text-center animate-fade-in">
+                    <div className="relative mb-12">
+                        <div className="w-32 h-32 border border-blue-500/10 rounded-full animate-ping opacity-20" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-24 h-24 border-2 border-t-emerald-500 border-r-blue-500 border-b-transparent border-l-transparent rounded-full animate-spin shadow-[0_0_20px_rgba(59,130,246,0.5)]" />
                         </div>
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-blue-500 animate-pulse">Enviando a Rota...</h2>
-                            <p className="text-emerald-200/80 mt-2 font-medium">Processando {selectedIds.size} endereço{selectedIds.size > 1 ? 's' : ''} no mapa</p>
-                        </div>
+                        <MapPinned size={48} className="absolute inset-0 m-auto text-blue-500 animate-pulse" />
+                    </div>
+                    <h3 className="text-4xl font-black text-white italic tracking-tighter uppercase mb-4">Transferência de Dados</h3>
+                    <p className="text-blue-500/40 text-[10px] font-black uppercase tracking-[0.5em]">Codificando Vetor de Rota...</p>
+                    <div className="mt-12 w-48 h-1 bg-zinc-900 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 animate-[loading_3s_ease-in-out_infinite] w-full" />
                     </div>
                 </div>
             )}
