@@ -195,25 +195,25 @@ export const importFromCSV = async (file: File): Promise<number> => {
             delimiter: '',       // auto-detect , or ;
             complete: async (results) => {
                 try {
-                    const rows = results.data as Record<string, string>[];
+                    const rows = results.data as Record<string, any>[];
                     let count = 0;
                     for (const row of rows) {
-                        const name = row['Nome'] || row['name'] || row['Endereço'] || row['endereco'] || '';
-                        if (!name.trim()) continue;
+                        const name = row['Nome'] || row['nome'] || row['name'] || row['Name'] || row['Endereço'] || row['endereco'] || row['Endereco'] || '';
+                        if (!String(name).trim()) continue;
 
-                        const lat = parseCoord(row['Latitude'] || row['lat']);
-                        const lng = parseCoord(row['Longitude'] || row['lng']);
+                        const lat = parseCoord(row['Latitude'] || row['latitude'] || row['lat'] || row['Lat']);
+                        const lng = parseCoord(row['Longitude'] || row['longitude'] || row['lng'] || row['Lng'] || row['Lon'] || row['lon']);
 
                         await saveRecord(
-                            name.trim(),
+                            String(name).trim(),
                             lat,
                             lng,
                             '',
                             [],
                             {
-                                neighborhood: row['Bairro'] || row['bairro'] || '',
-                                city: row['Cidade'] || row['cidade'] || '',
-                                notes: row['Notas'] || row['notes'] || '',
+                                neighborhood: String(row['Bairro'] || row['bairro'] || '').trim(),
+                                city: String(row['Cidade'] || row['cidade'] || '').trim(),
+                                notes: String(row['Notas'] || row['notas'] || row['notes'] || '').trim(),
                             }
                         );
                         count++;
@@ -235,25 +235,25 @@ export const importFromXLS = async (file: File): Promise<number> => {
                 const data = new Uint8Array(e.target?.result as ArrayBuffer);
                 const wb = XLSX.read(data, { type: 'array' });
                 const ws = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws);
+                const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
                 let count = 0;
                 for (const row of rows) {
-                    const name = row['Nome'] || row['name'] || row['Endereço'] || '';
-                    if (!name.toString().trim()) continue;
+                    const name = row['Nome'] || row['nome'] || row['name'] || row['Name'] || row['Endereço'] || row['endereco'] || row['Endereco'] || '';
+                    if (!String(name).trim()) continue;
 
-                    const lat = parseCoord(row['Latitude']);
-                    const lng = parseCoord(row['Longitude']);
+                    const lat = parseCoord(row['Latitude'] || row['latitude'] || row['lat'] || row['Lat']);
+                    const lng = parseCoord(row['Longitude'] || row['longitude'] || row['lng'] || row['Lng'] || row['Lon'] || row['lon']);
 
                     await saveRecord(
-                        name.toString().trim(),
+                        String(name).trim(),
                         lat,
                         lng,
                         '',
                         [],
                         {
-                            neighborhood: (row['Bairro'] || '').toString(),
-                            city: (row['Cidade'] || '').toString(),
-                            notes: (row['Notas'] || '').toString(),
+                            neighborhood: String(row['Bairro'] || row['bairro'] || '').trim(),
+                            city: String(row['Cidade'] || row['cidade'] || '').trim(),
+                            notes: String(row['Notas'] || row['notas'] || row['notes'] || '').trim(),
                         }
                     );
                     count++;

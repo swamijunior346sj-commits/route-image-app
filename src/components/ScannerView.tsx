@@ -469,7 +469,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
                         <div className="w-full">
                             <label className="w-full bg-blue-500/10 border border-blue-500/30 py-4 rounded-3xl flex items-center justify-center gap-2 cursor-pointer text-blue-400 hover:text-blue-300 hover:border-blue-400/50 transition-all text-[10px] font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(59,130,246,0.1)]">
-                                <ScanLine size={16} /> LEITURA DE IA
+                                <ScanLine size={16} /> IMPORTAR IMAGEM
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, false)} />
                             </label>
                         </div>
