@@ -187,10 +187,30 @@ export const addPointToActiveRoute = async (point: RoutePoint): Promise<RoutePoi
 };
 
 export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => {
-    // For simplicity in this demo, we clear and re-insert or just update specific fields
-    // Here we'll just handle the delivery status toggle which is common
-    for (const p of points) {
-        await supabase.from('active_route').update({ is_delivered: p.isDelivered }).eq('lat', p.lat).eq('lng', p.lng);
+    // Para simplificar, limpamos a rota anterior e inserimos a nova configuração completa
+    // Isso garante que a ordem e novos pontos sejam preservados.
+    try {
+        await supabase.from('active_route').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+        const insertData = points.filter(p => p.id !== 'current').map(p => ({
+            name: p.name,
+            lat: p.lat,
+            lng: p.lng,
+            notes: p.notes,
+            neighborhood: p.neighborhood,
+            city: p.city,
+            is_delivered: p.isDelivered || false,
+            scanned_at: new Date(p.scannedAt || Date.now()).toISOString()
+        }));
+
+        if (insertData.length > 0) {
+            await supabase.from('active_route').insert(insertData);
+        }
+
+        // Também salvamos localmente para redundância
+        await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).setItem('route', points);
+    } catch (err) {
+        console.error('Falha ao atualizar rota ativa:', err);
     }
 };
 

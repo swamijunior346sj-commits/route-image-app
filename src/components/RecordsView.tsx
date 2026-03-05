@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
-import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, Save, Sparkles, FileText, FileSpreadsheet, FileJson, ChevronDown } from 'lucide-react';
+import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, Save, FileText, FileSpreadsheet, FileJson, ChevronDown } from 'lucide-react';
 import { exportAsCSV, exportAsJSON, exportAsXLS, exportAsPDF, importRecords as processImport } from '../services/importExport';
 import { extractFeatures } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
@@ -22,8 +22,6 @@ export const RecordsView = () => {
     const [editNeighborhood, setEditNeighborhood] = useState('');
     const [editCity, setEditCity] = useState('');
     const [isExtracting, setIsExtracting] = useState(false);
-    const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
-    const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
     const [photoActionTarget, setPhotoActionTarget] = useState<'main' | 'extra' | null>(null);
 
     // Multi-selection and Search
@@ -144,7 +142,6 @@ export const RecordsView = () => {
         setEditNotes(record.notes || '');
         setEditNeighborhood(record.neighborhood || '');
         setEditCity(record.city || '');
-        setAiAnalysisResult(null);
     };
 
     const openCreate = () => {
@@ -159,7 +156,6 @@ export const RecordsView = () => {
         setEditNotes('');
         setEditNeighborhood('');
         setEditCity('');
-        setAiAnalysisResult(null);
     };
 
     const handleSaveEdit = async () => {
@@ -275,9 +271,6 @@ export const RecordsView = () => {
                 setEditMainImage(imageSrc);
                 setEditMainFeatures(features);
 
-                // Auto-trigger Gemini analysis on new main image
-                setIsAnalyzingAI(true);
-                setAiAnalysisResult(null);
                 try {
                     const aiReading = await analyzeAddressImage(imageSrc);
                     if (aiReading) {
@@ -285,12 +278,9 @@ export const RecordsView = () => {
                         if (aiReading.neighborhood) setEditNeighborhood(aiReading.neighborhood);
                         if (aiReading.city) setEditCity(aiReading.city);
                         if (aiReading.notes) setEditNotes(aiReading.notes);
-                        setAiAnalysisResult('Dados extraídos pela IA com sucesso!');
                     }
                 } catch (aiErr) {
                     console.warn('AI auto-analysis failed:', aiErr);
-                } finally {
-                    setIsAnalyzingAI(false);
                 }
             } catch (err) {
                 console.error(err);
@@ -303,28 +293,7 @@ export const RecordsView = () => {
         e.target.value = '';
     };
 
-    const handleAnalyzeWithAI = async () => {
-        if (!editMainImage) return;
-        setIsAnalyzingAI(true);
-        setAiAnalysisResult(null);
-        try {
-            const aiReading = await analyzeAddressImage(editMainImage);
-            if (aiReading) {
-                if (aiReading.address) setEditName(aiReading.address);
-                if (aiReading.neighborhood) setEditNeighborhood(aiReading.neighborhood);
-                if (aiReading.city) setEditCity(aiReading.city);
-                if (aiReading.notes) setEditNotes(prev => aiReading.notes ? aiReading.notes : prev);
-                setAiAnalysisResult('IA concluiu a leitura da etiqueta com sucesso!');
-            } else {
-                setAiAnalysisResult('Não foi possível extrair dados desta imagem.');
-            }
-        } catch (err) {
-            console.error(err);
-            setAiAnalysisResult('Erro na análise de IA.');
-        } finally {
-            setIsAnalyzingAI(false);
-        }
-    };
+
 
     const handleRemoveAdditionalImage = (idx: string) => {
         setEditAdditionalImages(prev => prev.filter(img => img.id !== idx));

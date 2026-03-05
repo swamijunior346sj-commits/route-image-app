@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer, Circle } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin } from 'lucide-react';
+import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const mapContainerStyle = {
@@ -44,6 +44,8 @@ export const MapView = () => {
     const [editName, setEditName] = useState('');
     const [editNeighborhood, setEditNeighborhood] = useState('');
     const [editNotes, setEditNotes] = useState('');
+    const [editLat, setEditLat] = useState('');
+    const [editLng, setEditLng] = useState('');
 
     const placesServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
     const geocoderRef = useRef<google.maps.Geocoder | null>(null);
@@ -54,19 +56,41 @@ export const MapView = () => {
         setEditName(p.name);
         setEditNeighborhood(p.neighborhood || '');
         setEditNotes(p.notes || '');
+        setEditLat(p.lat ? String(p.lat) : '');
+        setEditLng(p.lng ? String(p.lng) : '');
     };
 
     const handleSavePointEdit = async () => {
         if (!editingPoint) return;
         try {
+            const lat = parseFloat(editLat);
+            const lng = parseFloat(editLng);
             const updated = routePoints.map(p =>
                 p.id === editingPoint.id
-                    ? { ...p, name: editName, neighborhood: editNeighborhood, notes: editNotes }
+                    ? {
+                        ...p,
+                        name: editName,
+                        neighborhood: editNeighborhood,
+                        notes: editNotes,
+                        lat: isNaN(lat) ? p.lat : lat,
+                        lng: isNaN(lng) ? p.lng : lng
+                    }
                     : p
             );
             await updateActiveRoute(updated);
             setRoutePoints(updated);
             setEditingPoint(null);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleDeletePoint = async (id: string) => {
+        if (!confirm("Remover este ponto da rota?")) return;
+        try {
+            const updated = routePoints.filter(p => p.id !== id);
+            await updateActiveRoute(updated);
+            setRoutePoints(updated);
         } catch (err) {
             console.error(err);
         }
@@ -113,6 +137,44 @@ export const MapView = () => {
         setRoutePoints(points);
         if (points.length === 0) handleLocateMe(true);
     };
+
+    // Efeito para Geocodificar pontos que não tem lat/lng mas tem nome (endereço)
+    useEffect(() => {
+        if (!isLoaded || !geocoderRef.current || routePoints.length === 0) return;
+
+        const pointsToGeocode = routePoints.filter(p => (p.lat === null || p.lng === null) && p.name && p.id !== 'current');
+
+        if (pointsToGeocode.length > 0) {
+            pointsToGeocode.forEach(p => {
+                const query = [p.name, p.neighborhood, p.city].filter(Boolean).join(', ');
+                geocoderRef.current?.geocode({ address: query }, (results, status) => {
+                    if (status === 'OK' && results?.[0]) {
+                        const loc = results[0].geometry.location;
+                        setRoutePoints(prev => prev.map(item =>
+                            item.id === p.id ? { ...item, lat: loc.lat(), lng: loc.lng() } : item
+                        ));
+                    }
+                });
+            });
+        }
+    }, [isLoaded, routePoints.length]);
+
+    // Efeito para centralizar o mapa nos pontos da rota
+    useEffect(() => {
+        if (map && routePoints.length > 1) {
+            const bounds = new google.maps.LatLngBounds();
+            let hasValidPoints = false;
+            routePoints.forEach(p => {
+                if (p.lat !== null && p.lng !== null) {
+                    bounds.extend({ lat: p.lat, lng: p.lng });
+                    hasValidPoints = true;
+                }
+            });
+            if (hasValidPoints) {
+                map.fitBounds(bounds, 50);
+            }
+        }
+    }, [map, routePoints]); // Depender do array inteiro para re-enquadrar ao reordenar
 
     const handleLocateMe = (silent = false) => {
         if ('geolocation' in navigator) {
@@ -178,15 +240,28 @@ export const MapView = () => {
 
             if (result && result.routes && result.routes.length > 0) {
                 setDirectionsResponse(result);
-                // Respect optimized order
+
+                // Extrair a nova ordem otimizada
                 const order = result.routes[0].waypoint_order;
                 const sortedIntermediate = order.map(idx => waypointsList[idx]);
 
-                setRoutePoints(prev => [
-                    ...prev.filter(p => p.isDelivered || p.id === 'current'),
+                // Criar nova lista com timestamps sequenciais para persistir a ordem otimizada
+                const baseTime = Date.now();
+                const reorderedPoints = [
                     ...sortedIntermediate,
                     destPoint
-                ]);
+                ].map((p, idx) => ({
+                    ...p,
+                    scannedAt: baseTime + (idx * 1000) // Incrementa 1s para cada ponto
+                }));
+
+                const finalRoute = [
+                    ...routePoints.filter(p => p.isDelivered || p.id === 'current'),
+                    ...reorderedPoints
+                ];
+
+                await updateActiveRoute(finalRoute);
+                setRoutePoints(finalRoute);
                 setShowRouteConfirmation(true);
             }
         } catch (err) {
@@ -241,6 +316,35 @@ export const MapView = () => {
             }
         );
     };
+
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            if (searchQuery.trim().length > 2) {
+                // Trigger search automatically
+                if (isLoaded && placesServiceRef.current) {
+                    setIsSearching(true);
+                    placesServiceRef.current.getPlacePredictions(
+                        {
+                            input: searchQuery,
+                            locationBias: userLocation ? new google.maps.LatLng(userLocation.lat, userLocation.lng) : undefined
+                        },
+                        (predictions, status) => {
+                            if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+                                setSearchResults(predictions);
+                            } else {
+                                setSearchResults([]);
+                            }
+                            setIsSearching(false);
+                        }
+                    );
+                }
+            } else {
+                setSearchResults([]);
+            }
+        }, 500); // Debounce of 500ms
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchQuery, isLoaded, userLocation]);
 
     const selectPrediction = (prediction: google.maps.places.AutocompletePrediction) => {
         if (!geocoderRef.current) return;
@@ -398,14 +502,46 @@ export const MapView = () => {
             {/* EDIT PANEL */}
             {editingPoint && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
-                    <div className="w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
+                    <div className="w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
                         <h3 className="text-2xl font-black italic uppercase text-zinc-900 mb-6">Modificar Ponto</h3>
                         <div className="space-y-4 mb-8">
-                            <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 font-bold" placeholder="Nome..." />
-                            <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900" placeholder="Bairro..." />
-                            <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 h-24" placeholder="Notas..." />
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Identificação</label>
+                                <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 font-bold" placeholder="Nome..." />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Bairro</label>
+                                <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900" placeholder="Bairro..." />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Latitude GPS</label>
+                                    <input value={editLat} onChange={e => setEditLat(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 text-xs font-mono" placeholder="-20.000..." />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Longitude GPS</label>
+                                    <input value={editLng} onChange={e => setEditLng(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 text-xs font-mono" placeholder="-44.000..." />
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if ('geolocation' in navigator) {
+                                        navigator.geolocation.getCurrentPosition(pos => {
+                                            setEditLat(String(pos.coords.latitude));
+                                            setEditLng(String(pos.coords.longitude));
+                                        });
+                                    }
+                                }}
+                                className="w-full bg-blue-50 text-blue-600 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-100 transition-all"
+                            >
+                                <LocateFixed size={14} /> Usar Minha Localização Atual
+                            </button>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Observações</label>
+                                <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-zinc-900 h-24 text-sm" placeholder="Notas..." />
+                            </div>
                         </div>
-                        <button onClick={handleSavePointEdit} className="w-full bg-blue-600 py-4 rounded-3xl font-black uppercase text-white shadow-lg">Salvar</button>
+                        <button onClick={handleSavePointEdit} className="w-full bg-blue-600 py-4 rounded-3xl font-black uppercase text-white shadow-lg">Salvar Alterações</button>
                         <button onClick={() => setEditingPoint(null)} className="w-full mt-4 text-zinc-400 font-black uppercase text-xs">Cancelar</button>
                     </div>
                 </div>
@@ -419,13 +555,21 @@ export const MapView = () => {
                         <h2 className="text-2xl font-black italic text-zinc-900 uppercase mb-8">Manifesto de Rota</h2>
                         <div className="max-h-[50vh] overflow-y-auto space-y-3 mb-10">
                             {routePoints.filter(p => !p.isDelivered && p.id !== 'current').map((p, idx) => (
-                                <div key={p.id} className="bg-zinc-50 border border-zinc-100 p-5 rounded-3xl flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black italic">#{idx + 1}</div>
+                                <div key={p.id} className="bg-zinc-50 border border-zinc-100 p-5 rounded-3xl flex items-center gap-4 group/item relative">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black italic shrink-0">#{idx + 1}</div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-zinc-900 font-black uppercase text-xs truncate">{p.name}</p>
                                         <p className="text-zinc-500 text-[10px] uppercase truncate">{p.neighborhood}</p>
                                     </div>
-                                    {(!p.lat || !p.lng) && <div className="text-[8px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-black uppercase">Sem GPS</div>}
+                                    <div className="flex items-center gap-2">
+                                        {(!p.lat || !p.lng) && <div className="text-[7px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-black uppercase whitespace-nowrap">Sem GPS</div>}
+                                        <button onClick={() => openEditPanel(p)} className="p-2.5 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-blue-500 transition-all shadow-sm">
+                                            <Pencil size={14} />
+                                        </button>
+                                        <button onClick={() => handleDeletePoint(p.id)} className="p-2.5 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-red-500 transition-all shadow-sm">
+                                            <Trash size={14} />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
