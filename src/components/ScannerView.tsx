@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, MapPin, ScanLine, X, Loader2, SwitchCamera, Save, LocateFixed, Database } from 'lucide-react';
+import { Camera, MapPin, ScanLine, X, Loader2, SwitchCamera, Save, LocateFixed, Database, Sparkles } from 'lucide-react';
 import { getRecords, saveRecord, addPointToActiveRoute } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
@@ -30,6 +30,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
     const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
     const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+    const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
+    const [aiStatus, setAiStatus] = useState('');
 
     // Scanned match
     const [match, setMatch] = useState<LocationRecord | null>(null);
@@ -47,6 +49,47 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
 
         const features = await extractFeatures(img);
         return { imageSrc, features };
+    };
+
+    /**
+     * Runs Gemini AI analysis with a guaranteed 2-second animated overlay.
+     * Fills address fields and returns when both the API call and the timer complete.
+     */
+    const runAiWithAnimation = async (imageSrc: string): Promise<void> => {
+        setIsAiAnalyzing(true);
+        setAiStatus('Iniciando leitura de IA...');
+
+        const statusMessages = [
+            'Detectando elementos da etiqueta...',
+            'Lendo endereço com IA...',
+            'Preenchendo campos automaticamente...',
+        ];
+        let msgIdx = 0;
+        const msgInterval = setInterval(() => {
+            msgIdx = (msgIdx + 1) % statusMessages.length;
+            setAiStatus(statusMessages[msgIdx]);
+        }, 600);
+
+        try {
+            // Run AI and minimum delay in parallel
+            const [aiReading] = await Promise.all([
+                analyzeAddressImage(imageSrc),
+                new Promise(r => setTimeout(r, 2000)), // guaranteed 2s minimum
+            ]);
+
+            if (aiReading) {
+                if (aiReading.address) setAddressInput(aiReading.address);
+                if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
+                if (aiReading.city) setCityInput(aiReading.city);
+                if (aiReading.notes) setNotesInput(aiReading.notes);
+            }
+        } catch (err) {
+            console.warn('AI analysis failed:', err);
+        } finally {
+            clearInterval(msgInterval);
+            setIsAiAnalyzing(false);
+            setAiStatus('');
+        }
     };
 
     const handleScan = useCallback(async () => {
@@ -158,21 +201,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
             }
 
             // AI ENHANCEMENT: Complement with Gemini analysis
-            try {
-                const aiReading = await analyzeAddressImage(capture.imageSrc);
-                if (aiReading) {
-                    if (aiReading.address) setAddressInput(aiReading.address);
-                    if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
-                    if (aiReading.city) setCityInput(aiReading.city);
-                    if (aiReading.notes) setNotesInput(aiReading.notes);
-                }
-            } catch (aiErr) {
-                console.warn("AI extraction failed, proceeding with manual entry", aiErr);
-            }
-
             setRegisterImage(capture.imageSrc);
             setRegisterFeatures(capture.features);
             setMode('register');
+
+            // Start AI animation AFTER modal opens
+            await runAiWithAnimation(capture.imageSrc);
         } catch (err) {
             console.error(err);
         } finally {
@@ -278,6 +312,10 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                     }
 
                     setMode('register');
+                    // Show AI animation after modal opens
+                    setLoading(false);
+                    await runAiWithAnimation(imageSrc);
+                    return; // skip finally setLoading(false) since we called it above
                 } else {
                     const records = await getRecords();
                     let bestMatch: LocationRecord | null = null;
@@ -306,25 +344,13 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                         // Visual match failed, use AI to read and suggest registration
                         setMatch(null);
 
-                        // Clear fields for pre-filling
-                        setAddressInput('');
-                        setNeighborhoodInput('');
-                        setCityInput('');
-                        setNotesInput('');
-                        setLatInput('');
-                        setLngInput('');
-
-                        const aiReading = await analyzeAddressImage(imageSrc);
-                        if (aiReading) {
-                            if (aiReading.address) setAddressInput(aiReading.address);
-                            if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
-                            if (aiReading.city) setCityInput(aiReading.city);
-                            if (aiReading.notes) setNotesInput(aiReading.notes);
-                        }
-
                         setRegisterImage(imageSrc);
                         setRegisterFeatures(features);
                         setMode('register');
+                        // Show AI animation after modal opens
+                        setLoading(false);
+                        await runAiWithAnimation(imageSrc);
+                        return; // skip finally setLoading(false)
                     }
                 }
             } catch (err) {
@@ -460,7 +486,44 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                             </button>
                         </div>
 
-                        <div className="flex flex-col gap-5 overflow-y-auto max-h-[45vh] pr-2 custom-scrollbar">
+                        <div className="flex flex-col gap-5 overflow-y-auto max-h-[45vh] pr-2 custom-scrollbar relative">
+                            {/* ── AI ANALYZING OVERLAY ── */}
+                            {isAiAnalyzing && (
+                                <div className="absolute inset-0 z-20 rounded-3xl bg-black/80 backdrop-blur-lg flex flex-col items-center justify-center gap-5 animate-in fade-in duration-300">
+                                    {/* Glowing icon */}
+                                    <div className="relative">
+                                        <div className="absolute inset-0 rounded-full bg-violet-500/30 blur-2xl scale-150 animate-pulse" />
+                                        <div className="relative w-20 h-20 rounded-3xl bg-zinc-900 border border-violet-500/30 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.4)]">
+                                            <Sparkles size={36} className="text-violet-400 animate-spin" style={{ animationDuration: '3s' }} />
+                                        </div>
+                                    </div>
+
+                                    {/* Scanner beam (horizontal sweep) */}
+                                    {registerImage && (
+                                        <div className="relative w-full h-20 rounded-2xl overflow-hidden border border-violet-500/20 mx-2">
+                                            <img src={registerImage} className="w-full h-full object-cover opacity-40" alt="" />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                                            {/* Beam */}
+                                            <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-violet-400 to-transparent animate-[scan_1.2s_ease-in-out_infinite] shadow-[0_0_12px_rgba(167,139,250,1)]" />
+                                        </div>
+                                    )}
+
+                                    {/* Status text */}
+                                    <div className="text-center space-y-1 px-4">
+                                        <p className="text-xs font-black text-white uppercase tracking-widest">{aiStatus}</p>
+                                        <div className="flex items-center justify-center gap-1 mt-1">
+                                            {[0, 1, 2].map(i => (
+                                                <div
+                                                    key={i}
+                                                    className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
+                                                    style={{ animationDelay: `${i * 0.15}s` }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {registerImage && (
                                 <div
                                     className="relative w-full h-36 rounded-[2rem] overflow-hidden border border-white/10 mb-2 shrink-0 group cursor-pointer"
@@ -573,7 +636,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords }: ScannerPro
                             className="w-full bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-[2rem] font-black italic uppercase text-xs tracking-[0.2em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-30 mt-2"
                         >
                             {loading ? <Loader2 className="animate-spin" /> : <Save size={18} />}
-                            Confirmar Registro Base
+                            Salvar
                         </button>
                     </div>
                 )}

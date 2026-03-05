@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
-import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, Save, Sparkles } from 'lucide-react';
-import { exportRecords, importRecords as processImport } from '../services/importExport';
+import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, Save, Sparkles, FileText, FileSpreadsheet, FileJson, ChevronDown } from 'lucide-react';
+import { exportAsCSV, exportAsJSON, exportAsXLS, exportAsPDF, importRecords as processImport } from '../services/importExport';
 import { extractFeatures } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
 
@@ -31,6 +31,7 @@ export const RecordsView = () => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
     const [isSendingRoute, setIsSendingRoute] = useState(false);
+    const [showExportMenu, setShowExportMenu] = useState(false);
 
     const displayRecords = searchQuery.length >= 3
         ? records.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -101,24 +102,25 @@ export const RecordsView = () => {
         }
     };
 
-    const handleExport = async () => {
-        await exportRecords();
-    };
 
     const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
+        if (!file) return;
+        try {
             await processImport(file);
             alert('Registros importados com sucesso!');
-            loadRoute();
+            await loadRecords();
+        } catch (err: any) {
+            alert(`Erro ao importar: ${err?.message || err}`);
         }
+        e.target.value = '';
     };
 
     // Detail View State
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedDetail, setSelectedDetail] = useState<LocationRecord | null>(null);
 
-    const loadRoute = () => loadRecords();
+
 
     const openDetail = (record: LocationRecord) => {
         setSelectedDetail(record);
@@ -414,18 +416,71 @@ export const RecordsView = () => {
 
             {/* Utility Bar */}
             {!selectedIds.size && (
-                <div className="px-6 grid grid-cols-2 gap-4 my-6">
-                    <button
-                        onClick={handleExport}
-                        className="bg-zinc-950/40 backdrop-blur-xl border border-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/[0.03] transition-all group"
-                    >
-                        <Download size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black italic uppercase tracking-widest text-zinc-400 group-hover:text-white">Exportar Log</span>
-                    </button>
-                    <label className="bg-zinc-950/40 backdrop-blur-xl border border-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/[0.03] transition-all cursor-pointer group">
+                <div className="px-6 my-6 space-y-3">
+                    {/* EXPORT MENU */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowExportMenu(prev => !prev)}
+                            className="w-full bg-zinc-950/40 backdrop-blur-xl border border-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/[0.03] transition-all group"
+                        >
+                            <Download size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
+                            <span className="text-[10px] font-black italic uppercase tracking-widest text-zinc-400 group-hover:text-white">Exportar Endereços</span>
+                            <ChevronDown size={14} className={`text-zinc-600 transition-transform duration-300 ${showExportMenu ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {/* Dropdown Options */}
+                        {showExportMenu && (
+                            <div className="mt-2 bg-zinc-950 border border-white/10 rounded-2xl overflow-hidden shadow-2xl animate-in slide-in-from-top-2 duration-200">
+                                <button onClick={async () => { await exportAsCSV(); setShowExportMenu(false); }}
+                                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-all text-left border-b border-white/5">
+                                    <div className="w-9 h-9 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center">
+                                        <FileSpreadsheet size={16} className="text-emerald-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-black text-white uppercase tracking-wider">CSV</p>
+                                        <p className="text-[9px] text-zinc-500">Compatível com Excel e Google Sheets</p>
+                                    </div>
+                                </button>
+                                <button onClick={async () => { await exportAsXLS(); setShowExportMenu(false); }}
+                                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-all text-left border-b border-white/5">
+                                    <div className="w-9 h-9 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center">
+                                        <FileSpreadsheet size={16} className="text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-black text-white uppercase tracking-wider">XLS (Excel)</p>
+                                        <p className="text-[9px] text-zinc-500">Planilha Excel formatada</p>
+                                    </div>
+                                </button>
+                                <button onClick={async () => { await exportAsPDF(); setShowExportMenu(false); }}
+                                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-all text-left border-b border-white/5">
+                                    <div className="w-9 h-9 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-center">
+                                        <FileText size={16} className="text-red-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-black text-white uppercase tracking-wider">PDF</p>
+                                        <p className="text-[9px] text-zinc-500">Relatório visual para impressão</p>
+                                    </div>
+                                </button>
+                                <button onClick={async () => { await exportAsJSON(); setShowExportMenu(false); }}
+                                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-all text-left">
+                                    <div className="w-9 h-9 bg-violet-500/10 border border-violet-500/20 rounded-xl flex items-center justify-center">
+                                        <FileJson size={16} className="text-violet-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-black text-white uppercase tracking-wider">JSON (Backup)</p>
+                                        <p className="text-[9px] text-zinc-500">Backup completo para reimportar</p>
+                                    </div>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* IMPORT */}
+                    <label className="w-full bg-zinc-950/40 backdrop-blur-xl border border-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/[0.03] transition-all cursor-pointer group">
                         <Upload size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black italic uppercase tracking-widest text-zinc-400 group-hover:text-white">Importar Log</span>
-                        <input type="file" accept=".json,.csv" className="hidden" onChange={handleImport} />
+                        <span className="text-[10px] font-black italic uppercase tracking-widest text-zinc-400 group-hover:text-white">Importar Endereços</span>
+                        <span className="text-[8px] text-zinc-700 font-black uppercase">.json .csv .xls .xlsx</span>
+                        <input type="file" accept=".json,.csv,.xlsx,.xls" className="hidden" onChange={handleImport} />
                     </label>
                 </div>
             )}
