@@ -420,47 +420,56 @@ export const MapView = () => {
         .map(p => [p.lat, p.lng] as [number, number]);
 
     return (
-        <div className="relative w-full h-full flex flex-col pt-safe bg-black">
-            <div className="absolute top-0 z-[1000] w-full p-4 glass-panel border-b-0 animate-fade-in flex flex-col gap-2 pointer-events-none">
-                <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Mapa de Rotas</h1>
-                <p className="text-sm text-zinc-300 font-medium">Visualização da rota escaneada</p>
+        <div className="relative w-full h-full flex flex-col pt-safe bg-black overflow-hidden">
+            {/* Header HUD - Gaming style */}
+            <div className="absolute top-0 z-[1000] w-full p-6 animate-fade-in flex flex-col gap-4 pointer-events-none">
+                <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                        <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase leading-none">Status da Operação</h1>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,1)]" />
+                            <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">Sistemas Online • GPS Ativo</p>
+                        </div>
+                    </div>
+                </div>
 
-                <form onSubmit={(e) => e.preventDefault()} className="relative mt-2 pointer-events-auto flex items-center">
+                <form onSubmit={(e) => e.preventDefault()} className="relative mt-2 pointer-events-auto flex items-center max-w-lg">
+                    <div className="absolute inset-0 bg-blue-500/5 blur-xl rounded-2xl" />
                     <input
                         type="text"
-                        placeholder="Buscar endereço no mundo..."
-                        className="w-full bg-zinc-900/90 backdrop-blur-md border border-white/20 rounded-xl py-3 pl-4 pr-12 text-sm text-white focus:border-blue-500/50 focus:outline-none placeholder:text-zinc-500 shadow-xl"
+                        placeholder="LOCALIZAR COORDENADAS..."
+                        className="w-full bg-zinc-950/40 backdrop-blur-2xl border border-white/10 rounded-2xl py-4 pl-5 pr-12 text-xs text-white focus:border-blue-500/50 focus:outline-none placeholder:text-zinc-600 font-bold tracking-widest uppercase transition-all shadow-2xl"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
-                    <button type="submit" disabled={isSearching} className="absolute right-2 p-1.5 text-blue-400 hover:text-blue-300 bg-white/5 rounded-lg transition-colors">
-                        {isSearching ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
+                    <button type="submit" disabled={isSearching} className="absolute right-3 p-2 text-blue-500 hover:text-blue-400 transition-colors">
+                        {isSearching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
                     </button>
                 </form>
 
                 {searchResults.length > 0 && (
-                    <div className="mt-2 bg-zinc-900/95 backdrop-blur-xl border border-white/20 rounded-2xl max-h-60 overflow-y-auto pointer-events-auto shadow-2xl flex flex-col p-2 gap-1 animate-slide-up relative">
-                        <div className="sticky top-0 bg-zinc-900/95 py-1 px-2 mb-2 flex justify-between items-center z-10 border-b border-white/10 pb-2">
-                            <span className="text-xs text-zinc-400 font-bold">Sugestões de Endereços ({searchResults.length})</span>
-                            <button type="button" onClick={() => setSearchResults([])} className="text-zinc-400 hover:text-white p-1 bg-white/5 rounded-lg"><X size={14} /></button>
+                    <div className="mt-2 bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-h-64 overflow-y-auto pointer-events-auto shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col p-3 gap-2 animate-in slide-in-from-top-4 duration-500 max-w-lg">
+                        <div className="sticky top-0 bg-zinc-950/40 backdrop-blur-md py-2 px-3 mb-1 flex justify-between items-center z-10 border-b border-white/5 pb-2">
+                            <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">Resultados Encontrados</span>
+                            <button type="button" onClick={() => setSearchResults([])} className="text-zinc-500 hover:text-white p-1.5 bg-white/5 rounded-full"><X size={14} /></button>
                         </div>
                         {searchResults.map((res: any, i: number) => (
-                            <div key={i} className="flex flex-col gap-2 p-3 hover:bg-white/5 rounded-xl transition-colors border-b border-white/5 last:border-0">
-                                <span className="text-sm font-medium text-zinc-200 line-clamp-2 leading-tight">{res.display_name}</span>
-                                <div className="flex gap-2 justify-end mt-1">
+                            <div key={i} className="flex flex-col gap-3 p-4 hover:bg-white/[0.03] rounded-2xl transition-all border border-transparent hover:border-white/5 group">
+                                <span className="text-xs font-bold text-zinc-300 group-hover:text-white leading-relaxed">{res.display_name}</span>
+                                <div className="flex gap-2 justify-end">
                                     <button
                                         type="button"
                                         onClick={() => handleAddSearchToMap(res)}
-                                        className="text-[10px] flex items-center gap-1 bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg font-bold hover:bg-blue-500/30 transition-colors"
+                                        className="text-[9px] flex items-center gap-1.5 bg-blue-500/10 text-blue-400 px-4 py-2 rounded-xl font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all border border-blue-500/20"
                                     >
-                                        <Plus size={14} /> NA ROTA
+                                        <Plus size={14} /> ADICIONAR
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => handleSaveSearchToCatalog(res)}
-                                        className="text-[10px] flex items-center gap-1 bg-emerald-500/20 text-emerald-400 px-3 py-2 rounded-lg font-bold hover:bg-emerald-500/30 transition-colors"
+                                        className="text-[9px] flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-xl font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all border border-emerald-500/20"
                                     >
-                                        <Save size={14} /> SALVAR CATALOGO
+                                        <Save size={14} /> CATALOGAR
                                     </button>
                                 </div>
                             </div>
@@ -478,16 +487,15 @@ export const MapView = () => {
                     zoomControl={false}
                 >
                     <ChangeView center={center} zoom={13} />
-                    {/* CartoDB Dark Matter base map */}
                     <TileLayer
                         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                         attribution='&copy; CARTO'
                     />
 
                     {osrmPath.length > 0 ? (
-                        <Polyline positions={osrmPath} color="#a855f7" weight={5} opacity={0.9} />
+                        <Polyline positions={osrmPath} color="#6366f1" weight={6} opacity={0.8} lineCap="round" lineJoin="round" />
                     ) : positions.length > 1 ? (
-                        <Polyline positions={positions} color="#3b82f6" weight={4} opacity={0.5} dashArray="10, 10" />
+                        <Polyline positions={positions} color="#3b82f6" weight={3} opacity={0.4} dashArray="8, 12" />
                     ) : null}
 
                     {routePoints.map((point, index) => {
@@ -502,30 +510,26 @@ export const MapView = () => {
                                     dragend: (e) => handleMarkerDragEnd(index, e)
                                 }}
                             >
-                                <Popup className="glass-popup">
-                                    <div className="flex flex-col">
-                                        <div className="font-bold text-zinc-900 border-b border-zinc-100 pb-1.5 mb-2 flex items-center gap-2">
-                                            <MapPin size={14} className="text-blue-500" />
-                                            {point.name}
-                                        </div>
-                                        <div className="space-y-1">
-                                            <div className="text-[10px] text-zinc-500 flex items-center gap-1.5">
-                                                <span className="font-bold w-12">HORA:</span>
-                                                {new Date(point.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                <Popup className="luxury-popup">
+                                    <div className="p-4 min-w-[200px] bg-zinc-950 text-white rounded-3xl border border-white/10 shadow-2xl">
+                                        <div className="flex flex-col gap-3">
+                                            <div className="space-y-1">
+                                                <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Destino Carregado</p>
+                                                <h4 className="text-lg font-black italic uppercase tracking-tighter leading-none">{point.name}</h4>
                                             </div>
-                                            {(point.neighborhood || point.city) && (
-                                                <div className="text-[10px] text-zinc-500 flex items-start gap-1.5">
-                                                    <span className="font-bold w-12">LOCAL:</span>
-                                                    <span className="flex-1">{[point.neighborhood, point.city].filter(Boolean).join(', ')}</span>
-                                                </div>
-                                            )}
-                                            <div className="text-[10px] text-zinc-400 font-mono mt-1 pt-1 border-t border-zinc-50">
-                                                {point.lat.toFixed(6)}, {point.lng.toFixed(6)}
-                                            </div>
-                                        </div>
 
-                                        {point.id !== 'current' && (
-                                            <div className="flex flex-col mt-4 gap-2">
+                                            <div className="flex flex-col gap-1 text-[10px] text-zinc-400">
+                                                <div className="flex justify-between">
+                                                    <span className="font-bold uppercase opacity-50">Registro</span>
+                                                    <span className="text-zinc-200">{new Date(point.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="font-bold uppercase opacity-50">Setor</span>
+                                                    <span className="text-zinc-200 truncate ml-4">{point.neighborhood || '---'}</span>
+                                                </div>
+                                            </div>
+
+                                            {point.id !== 'current' && (
                                                 <button
                                                     onClick={() => {
                                                         setEditingPointData({
@@ -539,13 +543,12 @@ export const MapView = () => {
                                                         });
                                                         setIsEditingCurrentStop(true);
                                                     }}
-                                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95"
+                                                    className="w-full bg-blue-500/10 border border-blue-500/30 text-blue-400 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all active:scale-95"
                                                 >
-                                                    <Save size={14} /> EDITAR REGISTRO
+                                                    MODIFICAR DADOS
                                                 </button>
-                                                <p className="text-[8px] text-zinc-400 text-center italic">Arraste o pin para mover rapidamente</p>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
                                     </div>
                                 </Popup>
                             </Marker>
@@ -554,110 +557,76 @@ export const MapView = () => {
                 </MapContainer>
             </div>
 
-            {/* ROTEIRIZANDO OVERLAY */}
-            {isRouting && (
-                <div className="fixed inset-0 z-[20000] bg-black/60 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in text-center p-10">
-                    <div className="relative mb-6">
-                        <div className="w-24 h-24 border-4 border-purple-500/20 rounded-full"></div>
-                        <div className="absolute inset-0 border-t-4 border-purple-500 rounded-full animate-spin"></div>
-                        <Route size={40} className="absolute inset-0 m-auto text-purple-400 animate-pulse" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white italic tracking-tighter">CALCULANDO ROTA OTIMIZADA</h3>
-                    <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">Processando TSP & OSRM Grid...</p>
-                </div>
-            )}
-
-            <div className="absolute top-24 right-4 z-[9999] flex flex-col gap-2">
+            {/* ACTION HUD - Right Side Floating */}
+            <div className="absolute top-32 right-6 z-[9999] flex flex-col gap-3">
                 <button
                     onClick={isNavigating ? () => setIsNavigating(false) : handleStartNavigation}
-                    className={`p-3 rounded-xl border shadow-xl active:scale-95 transition-all backdrop-blur-md flex items-center justify-center ${isNavigating ? 'bg-red-500/20 border-red-500/30 text-red-500' : 'bg-blue-600/30 border-blue-500/30 text-blue-400'}`}
-                    title={isNavigating ? "Parar Navegação" : "Iniciar Roteiro de Entregas"}
+                    className={`w-14 h-14 rounded-2xl border shadow-2xl active:scale-90 transition-all flex items-center justify-center backdrop-blur-3xl ${isNavigating
+                        ? 'bg-red-500/20 border-red-500/40 text-red-500'
+                        : 'bg-zinc-950/60 border-white/10 text-blue-500 hover:border-blue-500/50'
+                        }`}
                 >
-                    {isNavigating ? <X size={20} /> : <Navigation size={20} />}
+                    {isNavigating ? <X size={24} /> : <Navigation size={24} />}
                 </button>
-                <div className="h-px bg-white/10 w-full my-1"></div>
+
                 {!isNavigating && (
                     <button
                         onClick={handleRoteirizar}
                         disabled={isRouting}
-                        className="bg-purple-600/90 backdrop-blur-md p-3 rounded-xl border border-white/20 text-white hover:bg-purple-500 transition shadow-[0_0_15px_rgba(168,85,247,0.5)] disabled:opacity-50"
-                        title="Roteirizar Trajeto Real"
+                        className="w-14 h-14 bg-zinc-950/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-indigo-400 hover:border-indigo-500/50 transition-all shadow-2xl flex items-center justify-center disabled:opacity-30"
                     >
-                        {isRouting ? <Loader2 size={20} className="animate-spin" /> : <Route size={20} />}
+                        {isRouting ? <Loader2 size={24} className="animate-spin text-indigo-500" /> : <Route size={24} />}
                     </button>
                 )}
+
                 <button
                     onClick={() => handleLocateMe(false)}
-                    className="bg-blue-600/80 backdrop-blur-md p-3 rounded-xl border border-white/10 text-white hover:bg-blue-500 transition"
-                    title="Minha Localização Atual"
+                    className="w-14 h-14 bg-zinc-950/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-emerald-400 hover:border-emerald-500/50 transition-all shadow-2xl flex items-center justify-center"
                 >
-                    <LocateFixed size={20} />
+                    <LocateFixed size={24} />
                 </button>
+
                 {!isNavigating && (
                     <button
                         onClick={handleClear}
-                        className="bg-red-500/80 backdrop-blur-md p-3 rounded-xl border border-white/10 text-white hover:bg-red-400 transition"
-                        title="Limpar Rota"
+                        className="w-14 h-14 bg-zinc-950/60 backdrop-blur-3xl border border-white/10 rounded-2xl text-zinc-500 hover:text-red-500 hover:border-red-500/50 transition-all shadow-2xl flex items-center justify-center"
                     >
-                        <Trash2 size={20} />
+                        <Trash2 size={24} />
                     </button>
                 )}
             </div>
 
-            {/* Navigation Panel (Bottom Floating) */}
+            {/* Navigation HUD (Bottom Floating) */}
             {isNavigating && (
-                <div className="absolute bottom-24 left-4 right-4 z-[9999] animate-slide-up">
-                    <div className="glass-panel p-5 rounded-3xl border border-blue-500/30 shadow-[0_4px_30px_rgba(59,130,246,0.3)] flex items-center gap-4 relative overflow-hidden">
-                        {/* Proximity / Progress Bar */}
-                        <div className="absolute bottom-0 left-0 h-1.5 bg-blue-500/30 w-full">
+                <div className="absolute bottom-24 left-6 right-6 z-[9999] animate-slide-up">
+                    <div className="bg-zinc-950/80 backdrop-blur-3xl p-6 rounded-[2.5rem] border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex items-center gap-5 relative overflow-hidden">
+                        {/* Energy Line Progress */}
+                        <div className="absolute bottom-0 left-0 h-1 bg-zinc-900 w-full">
                             <div
-                                className="h-full bg-blue-500 transition-all duration-700 ease-out"
+                                className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] transition-all duration-1000 ease-out"
                                 style={{ width: `${((navigationIndex + 1) / routePoints.filter(p => p.id !== 'current').length) * 100}%` }}
                             ></div>
                         </div>
 
-                        <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shrink-0">
-                            <Navigation size={28} className="text-blue-400 animate-pulse" />
+                        <div className="w-16 h-16 bg-blue-500/10 rounded-[1.5rem] flex items-center justify-center border border-blue-500/20 shrink-0">
+                            <Navigation size={32} className="text-blue-500 animate-pulse" />
                         </div>
 
                         <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-0.5">Próxima Parada ({navigationIndex + 1} de {routePoints.filter(p => p.id !== 'current').length})</p>
-                            <h4 className="text-base font-bold text-white truncate leading-tight">
-                                {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.name || "Destino Desconhecido"}
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Destino {navigationIndex + 1}/{routePoints.filter(p => p.id !== 'current').length}</span>
+                            </div>
+                            <h4 className="text-lg font-black italic uppercase tracking-tighter text-white truncate leading-none">
+                                {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.name || "SCANNER_TARGET"}
                             </h4>
-                            {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.notes && (
-                                <p className="text-[10px] text-zinc-400 mt-0.5 line-clamp-1 italic">
-                                    " {routePoints.filter(p => p.id !== 'current')[navigationIndex]?.notes} "
-                                </p>
-                            )}
                         </div>
 
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => {
-                                    const p = routePoints.filter(p => p.id !== 'current')[navigationIndex];
-                                    setEditingPointData({
-                                        id: p.id,
-                                        name: p.name,
-                                        notes: p.notes || '',
-                                        neighborhood: p.neighborhood || '',
-                                        city: p.city || '',
-                                        lat: p.lat?.toString() || '',
-                                        lng: p.lng?.toString() || ''
-                                    });
-                                    setIsEditingCurrentStop(true);
-                                }}
-                                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-3 rounded-2xl border border-white/5 transition-all"
-                                title="Editar Endereço"
-                            >
-                                <Plus size={16} className="rotate-45" />
-                            </button>
+                        <div className="flex gap-3">
                             <button
                                 onClick={handleCompleteStop}
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-3 rounded-2xl shadow-lg transition-all active:scale-90 flex items-center gap-2 text-xs"
+                                className="bg-white text-black font-black uppercase tracking-widest px-8 py-4 rounded-2xl shadow-xl transition-all active:scale-95 text-[10px] hover:bg-zinc-200"
                             >
-                                <Save size={16} />
-                                Entregue
+                                Concluído
                             </button>
                         </div>
                     </div>
@@ -668,77 +637,54 @@ export const MapView = () => {
             {isEditingCurrentStop && editingPointData && (
                 <div className="absolute inset-0 z-[10002] flex items-center justify-center p-6 animate-in fade-in duration-300">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsEditingCurrentStop(false)}></div>
-                    <div className="relative w-full max-md bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                        <div className="p-6 border-b border-white/5 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-white">Editar Parada</h3>
-                            <button onClick={() => setIsEditingCurrentStop(false)} className="p-2 text-zinc-400 hover:text-white">
+                    <div className="relative w-full max-w-md bg-zinc-950 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 p-8">
+                        <div className="flex justify-between items-center mb-8">
+                            <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">Modificar Unidade</h3>
+                            <button onClick={() => setIsEditingCurrentStop(false)} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full">
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="p-6 flex flex-col gap-4">
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Nome do Local / Endereço</label>
+                        <div className="flex flex-col gap-5">
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Assinatura do Local</label>
                                 <input
-                                    className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
+                                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
                                     value={editingPointData.name}
                                     onChange={e => setEditingPointData({ ...editingPointData, name: e.target.value })}
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Bairro</label>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Bairro</label>
                                     <input
-                                        className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
+                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
                                         value={editingPointData.neighborhood}
                                         onChange={e => setEditingPointData({ ...editingPointData, neighborhood: e.target.value })}
-                                        placeholder="Bairro"
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Cidade</label>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Cidade</label>
                                     <input
-                                        className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
+                                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white focus:border-blue-500/50 focus:outline-none font-bold"
                                         value={editingPointData.city}
                                         onChange={e => setEditingPointData({ ...editingPointData, city: e.target.value })}
-                                        placeholder="Cidade"
                                     />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Latitude</label>
-                                    <input
-                                        className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
-                                        value={editingPointData.lat}
-                                        onChange={e => setEditingPointData({ ...editingPointData, lat: e.target.value })}
-                                        placeholder="Lat"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Longitude</label>
-                                    <input
-                                        className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white focus:border-blue-500/50 focus:outline-none"
-                                        value={editingPointData.lng}
-                                        onChange={e => setEditingPointData({ ...editingPointData, lng: e.target.value })}
-                                        placeholder="Lng"
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Observações / Notas</label>
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Diretivas Adicionais</label>
                                 <textarea
-                                    className="w-full bg-zinc-800 border border-white/10 rounded-2xl p-4 text-white h-24 resize-none focus:border-blue-500/50 focus:outline-none"
-                                    placeholder="Ex: Tocar campainha no fundo, Portão azul..."
+                                    className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-xs text-white h-24 resize-none focus:border-blue-500/50 focus:outline-none font-medium"
                                     value={editingPointData.notes}
                                     onChange={e => setEditingPointData({ ...editingPointData, notes: e.target.value })}
                                 />
                             </div>
                             <button
                                 onClick={handleSaveStopEdit}
-                                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2"
+                                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest py-5 rounded-3xl shadow-2xl transition-all flex items-center justify-center gap-3 mt-4 text-[10px]"
                             >
                                 <Save size={18} />
-                                SALVAR ALTERAÇÕES
+                                CONFIRMAR DADOS
                             </button>
                         </div>
                     </div>
@@ -748,61 +694,79 @@ export const MapView = () => {
             {/* UNDO NOTIFICATION CARD */}
             {undoVisible && lastCompletedPoint && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[10001] animate-in zoom-in-90 fade-in duration-300">
-                    <div className="bg-zinc-900 border border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.5)] p-6 rounded-[2.5rem] flex flex-col items-center min-w-[240px] gap-3 backdrop-blur-xl">
-                        <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mb-1">
-                            <span className="text-white font-bold text-lg">{undoCountdown}</span>
+                    <div className="bg-zinc-950/90 backdrop-blur-3xl border border-blue-500/30 shadow-[0_0_50px_rgba(59,130,246,0.5)] p-8 rounded-[3rem] flex flex-col items-center min-w-[280px] gap-4">
+                        <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,1)]">
+                            <span className="text-white font-black text-xl italic">{undoCountdown}</span>
                         </div>
-                        <h4 className="text-white font-bold text-center">Ponto Marcado!</h4>
-                        <p className="text-zinc-400 text-xs text-center px-4">{lastCompletedPoint.name} entregue.</p>
+                        <div className="text-center">
+                            <h4 className="text-white font-black italic uppercase tracking-tighter text-lg">Ponto Capturado</h4>
+                            <p className="text-zinc-500 text-[10px] uppercase font-black tracking-widest mt-1">Sincronizando log...</p>
+                        </div>
 
                         <button
                             onClick={handleUndo}
-                            className="w-full mt-2 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors border border-white/5"
+                            className="w-full mt-2 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest py-4 rounded-2xl flex items-center justify-center gap-3 transition-colors border border-white/5 text-[9px]"
                         >
-                            <Trash2 size={16} className="text-blue-400" />
-                            DESFAZER
+                            <Trash2 size={16} className="text-blue-500" />
+                            DESFAZER AÇÃO
                         </button>
                     </div>
                 </div>
             )}
 
+            {/* EMPTY STATE */}
             {routePoints.length === 0 && (
                 <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-                    <div className="glass-panel px-6 py-4 rounded-2xl flex items-center gap-3">
-                        <MapPin className="text-zinc-400" />
-                        <span className="text-zinc-300 font-medium">Nenhum ponto registrado na rota atual</span>
+                    <div className="bg-zinc-950/40 backdrop-blur-2xl px-8 py-5 rounded-3xl border border-white/5 flex items-center gap-4 animate-pulse">
+                        <MapPin size={24} className="text-zinc-600" />
+                        <span className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px]">Aguardando Iniciação de Rota</span>
                     </div>
+                </div>
+            )}
+
+            {/* ROTEIRIZANDO OVERLAY */}
+            {isRouting && (
+                <div className="fixed inset-0 z-[20002] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center animate-fade-in text-center p-12">
+                    <div className="relative mb-12 scale-125">
+                        <div className="w-32 h-32 border-[1px] border-blue-500/10 rounded-full"></div>
+                        <div className="absolute inset-0 border-t-[2px] border-blue-600 rounded-full animate-spin"></div>
+                        <Route size={40} className="absolute inset-0 m-auto text-blue-500 animate-pulse" />
+                    </div>
+                    <h3 className="text-4xl font-black text-white italic tracking-tighter uppercase leading-none">Cálculo de Polígono</h3>
+                    <p className="text-blue-500/40 text-[10px] font-black uppercase tracking-[0.5em] mt-6">Ajustando Coordenadas Geodésicas...</p>
                 </div>
             )}
 
             {/* CELEBRATION MODAL */}
             {showCelebration && (
-                <div className="fixed inset-0 z-[20000] flex items-center justify-center p-6 animate-in fade-in duration-500">
-                    <div className="absolute inset-0 bg-black/90 backdrop-blur-2xl"></div>
+                <div className="fixed inset-0 z-[20003] flex items-center justify-center p-6 animate-in fade-in duration-500">
+                    <div className="absolute inset-0 bg-black/95 backdrop-blur-3xl"></div>
 
                     <div className="relative flex flex-col items-center text-center max-w-sm">
-                        <div className="mb-8 relative animate-bounce-slow">
-                            <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full scale-150"></div>
-                            <Rocket size={100} className="text-blue-400 rotate-[-45deg] drop-shadow-[0_0_20px_rgba(96,165,250,0.8)] rocket-fly" />
+                        <div className="mb-10 relative animate-bounce-slow">
+                            <div className="absolute inset-0 bg-blue-500/20 blur-[100px] rounded-full scale-150"></div>
+                            <Rocket size={120} className="text-blue-500 rotate-[-45deg] drop-shadow-[0_0_30px_rgba(59,130,246,1)]" />
                         </div>
 
-                        <div className="space-y-4 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+                        <div className="space-y-5 animate-slide-up">
                             <div className="flex justify-center mb-2">
-                                <CheckCircle2 size={40} className="text-emerald-400" />
+                                <div className="p-4 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+                                    <CheckCircle2 size={48} className="text-emerald-500" />
+                                </div>
                             </div>
-                            <h2 className="text-4xl font-extrabold text-white leading-tight">
-                                Missão <br /> Concluída!
+                            <h2 className="text-5xl font-black text-white italic tracking-tighter uppercase leading-none">
+                                Missão <br /> 100%
                             </h2>
-                            <p className="text-zinc-400 font-medium">
-                                Você finalizou todas as entregas planejadas. Ótimo trabalho hoje!
+                            <p className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px]">
+                                Todos os alvos foram alcançados com sucesso.
                             </p>
 
-                            <div className="pt-8 w-full">
+                            <div className="pt-10 w-full">
                                 <button
                                     onClick={() => setShowCelebration(false)}
-                                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-5 rounded-3xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all text-lg"
+                                    className="w-full bg-white text-black font-black uppercase tracking-widest py-6 rounded-3xl shadow-[0_20px_50px_rgba(255,255,255,0.1)] active:scale-95 transition-all text-xs hover:bg-zinc-200"
                                 >
-                                    VOLTAR AO MAPA
+                                    FIM DA OPERAÇÃO
                                 </button>
                             </div>
                         </div>

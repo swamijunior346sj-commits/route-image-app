@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, MapPin, ScanLine, X, Loader2, ImagePlus, SwitchCamera, Save } from 'lucide-react';
+import { Camera, MapPin, ScanLine, X, Loader2, ImagePlus, SwitchCamera, Save, LocateFixed, Database } from 'lucide-react';
 import { getRecords, saveRecord, addPointToActiveRoute } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
@@ -213,20 +213,52 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                 const features = await extractFeatures(img);
 
                 if (isRegistering) {
+                    // SETUP FOR REGISTRATION MODAL
                     setRegisterImage(imageSrc);
                     setRegisterFeatures(features);
+                    setAddressInput('');
+                    setNeighborhoodInput('');
+                    setCityInput('');
+                    setNotesInput('');
+                    setLatInput('');
+                    setLngInput('');
+
+                    // Attempt to get initial GPS for registration
+                    if ('geolocation' in navigator) {
+                        navigator.geolocation.getCurrentPosition(
+                            (pos) => {
+                                setLatInput(pos.coords.latitude.toFixed(6));
+                                setLngInput(pos.coords.longitude.toFixed(6));
+                            },
+                            undefined,
+                            { timeout: 5000 }
+                        );
+                    }
+
                     setMode('register');
+                    setStatusMsg('Vincule os dados à imagem importada.');
                 } else {
                     setStatusMsg('Analisando arquivo...');
                     const records = await getRecords();
                     let bestMatch: LocationRecord | null = null;
                     let highestSim = 0;
+
                     for (const rec of records) {
                         const sim = cosineSimilarity(features, rec.featureVector);
                         if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
+
+                        if (rec.additionalImages) {
+                            for (const addView of rec.additionalImages) {
+                                const simAdd = cosineSimilarity(features, addView.features);
+                                if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
+                            }
+                        }
                     }
+
                     if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
                         setMatch(bestMatch);
+                        setStatusMsg(`Reconhecido via Arquivo: ${(highestSim * 100).toFixed(0)}%`);
+
                         await addPointToActiveRoute({
                             id: bestMatch.id,
                             name: bestMatch.name,
@@ -237,14 +269,23 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                             neighborhood: bestMatch.neighborhood,
                             city: bestMatch.city
                         });
+
                         setIsSendingToRoute(true);
-                        setTimeout(() => { setIsSendingToRoute(false); onNavigateToMap(); }, 2000);
+                        setTimeout(() => {
+                            setIsSendingToRoute(false);
+                            onNavigateToMap();
+                        }, 2000);
                     } else {
+                        // SAFETY: Don't show "Sending to Route" if not found
                         setStatusMsg('Nenhuma correspondência no arquivo.');
+                        setMatch(null);
                     }
                 }
-            } catch (err) { setStatusMsg('Erro ao processar arquivo.'); }
-            finally { setLoading(false); }
+            } catch (err) {
+                setStatusMsg('Erro ao processar arquivo.');
+            } finally {
+                setLoading(false);
+            }
         };
         reader.readAsDataURL(file);
         e.target.value = '';
@@ -351,16 +392,115 @@ export const ScannerView = ({ onNavigateToMap }: ScannerProps) => {
                                     <input type="text" placeholder="Cidade" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500/50 focus:outline-none" value={cityInput} onChange={e => setCityInput(e.target.value)} />
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <div className="flex-1 space-y-1.5">
-                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Latitude</label>
-                                    <input type="text" placeholder="-23.55052" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500/50 focus:outline-none" value={latInput} onChange={e => setLatInput(e.target.value)} />
+                            <div className="grid grid-cols-2 gap-3 mb-1">
+                                <div
+                                    className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 cursor-pointer active:scale-95 transition-all hover:bg-blue-500/10 group relative overflow-hidden"
+                                >
+                                    <div
+                                        className="absolute inset-0 z-0"
+                                        onClick={() => {
+                                            if (navigator.vibrate) navigator.vibrate(20);
+                                            if ('geolocation' in navigator) {
+                                                setStatusMsg('Capturando GPS...');
+                                                navigator.geolocation.getCurrentPosition(
+                                                    (pos) => {
+                                                        setLatInput(pos.coords.latitude.toFixed(6));
+                                                        setLngInput(pos.coords.longitude.toFixed(6));
+                                                        setStatusMsg('GPS Capturado!');
+                                                        setTimeout(() => setStatusMsg('Dados da Etiqueta'), 2000);
+                                                    },
+                                                    () => setStatusMsg('Falha ao obter GPS'),
+                                                    { enableHighAccuracy: true }
+                                                );
+                                            }
+                                        }}
+                                    />
+                                    <div className="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
+                                        <label className="text-[10px] font-black text-blue-500/60 uppercase tracking-tighter">Latitude</label>
+                                        <LocateFixed size={12} className="text-blue-500 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={latInput}
+                                        onChange={(e) => setLatInput(e.target.value)}
+                                        className="relative z-20 w-full bg-transparent text-sm font-mono text-white tracking-widest focus:outline-none border-b border-transparent focus:border-blue-500/30"
+                                        placeholder="---.------"
+                                    />
                                 </div>
-                                <div className="flex-1 space-y-1.5">
-                                    <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Longitude</label>
-                                    <input type="text" placeholder="-46.63330" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500/50 focus:outline-none" value={lngInput} onChange={e => setLngInput(e.target.value)} />
+
+                                <div
+                                    className="bg-indigo-500/5 border border-indigo-500/20 rounded-2xl p-4 cursor-pointer active:scale-95 transition-all hover:bg-indigo-500/10 group relative overflow-hidden"
+                                >
+                                    <div
+                                        className="absolute inset-0 z-0"
+                                        onClick={() => {
+                                            if (navigator.vibrate) navigator.vibrate(20);
+                                            if ('geolocation' in navigator) {
+                                                setStatusMsg('Capturando GPS...');
+                                                navigator.geolocation.getCurrentPosition(
+                                                    (pos) => {
+                                                        setLatInput(pos.coords.latitude.toFixed(6));
+                                                        setLngInput(pos.coords.longitude.toFixed(6));
+                                                        setStatusMsg('GPS Capturado!');
+                                                        setTimeout(() => setStatusMsg('Dados da Etiqueta'), 2000);
+                                                    },
+                                                    () => setStatusMsg('Falha ao obter GPS'),
+                                                    { enableHighAccuracy: true }
+                                                );
+                                            }
+                                        }}
+                                    />
+                                    <div className="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
+                                        <label className="text-[10px] font-black text-indigo-500/60 uppercase tracking-tighter">Longitude</label>
+                                        <LocateFixed size={12} className="text-indigo-500 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={lngInput}
+                                        onChange={(e) => setLngInput(e.target.value)}
+                                        className="relative z-20 w-full bg-transparent text-sm font-mono text-white tracking-widest focus:outline-none border-b border-transparent focus:border-indigo-500/30"
+                                        placeholder="---.------"
+                                    />
                                 </div>
                             </div>
+
+                            <button
+                                onClick={async () => {
+                                    if (!latInput || !lngInput) {
+                                        alert('Capture ou digite as coordenadas primeiro.');
+                                        return;
+                                    }
+                                    if (navigator.vibrate) navigator.vibrate(40);
+                                    setLoading(true);
+                                    setStatusMsg('Sincronizando...');
+                                    try {
+                                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latInput}&lon=${lngInput}`);
+                                        const data = await res.json();
+                                        if (data && data.address) {
+                                            const addr = data.address;
+                                            const street = addr.road || addr.pedestrian || addr.suburb || '';
+                                            const houseNumber = addr.house_number ? `, ${addr.house_number}` : '';
+                                            setAddressInput(`${street}${houseNumber}`);
+                                            setNeighborhoodInput(addr.suburb || addr.neighbourhood || addr.city_district || '');
+                                            setCityInput(addr.city || addr.town || addr.village || '');
+                                            setStatusMsg('Sincronizado!');
+                                        } else {
+                                            setStatusMsg('Local não identificado.');
+                                        }
+                                    } catch (err) {
+                                        console.error(err);
+                                        setStatusMsg('Erro na busca.');
+                                    } finally {
+                                        setLoading(false);
+                                        setTimeout(() => setStatusMsg('Dados da Etiqueta'), 2000);
+                                    }
+                                }}
+                                disabled={loading}
+                                className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
+                            >
+                                <Database size={14} className={loading ? 'animate-spin' : ''} />
+                                SINCRONIZAR ENDEREÇO VIA GPS
+                            </button>
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Notas extras</label>
                                 <textarea placeholder="Ex: Portão preto, entregar no fundo..." rows={2} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm resize-none focus:border-blue-500/50 focus:outline-none" value={notesInput} onChange={e => setNotesInput(e.target.value)} />

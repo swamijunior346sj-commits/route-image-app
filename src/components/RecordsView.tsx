@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
-import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus } from 'lucide-react';
+import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, Save } from 'lucide-react';
 import { exportRecords, importRecords as processImport } from '../services/importExport';
 import { extractFeatures } from '../services/imageProcessing';
 
@@ -111,7 +111,16 @@ export const RecordsView = () => {
         }
     };
 
+    // Detail View State
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [selectedDetail, setSelectedDetail] = useState<LocationRecord | null>(null);
+
     const loadRoute = () => loadRecords();
+
+    const openDetail = (record: LocationRecord) => {
+        setSelectedDetail(record);
+        setIsDetailModalOpen(true);
+    };
 
     const openEdit = (record: LocationRecord, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
@@ -356,7 +365,7 @@ export const RecordsView = () => {
                 </label>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 px-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 px-6 pb-20">
                 {displayRecords.map(record => {
                     const isSelected = selectedIds.has(record.id);
                     const isSelectionMode = selectedIds.size > 0;
@@ -364,7 +373,10 @@ export const RecordsView = () => {
                     return (
                         <div
                             key={record.id}
-                            className={`relative glass-panel aspect-square rounded-[2rem] overflow-hidden flex flex-col p-3 transition-all cursor-pointer select-none group ${isSelected ? 'ring-4 ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'hover:ring-2 ring-white/20'}`}
+                            className={`relative group overflow-hidden rounded-[2.5rem] bg-zinc-950 border transition-all duration-700 cursor-pointer select-none aspect-square flex flex-col p-6 ${isSelected
+                                ? 'border-blue-500 shadow-[0_0_50px_rgba(59,130,246,0.2)] scale-[0.98]'
+                                : 'border-white/5 hover:border-white/10 shadow-2xl hover:shadow-blue-500/5'
+                                }`}
                             onTouchStart={() => handlePressStart(record.id)}
                             onTouchEnd={handlePressEnd}
                             onTouchMove={handlePressEnd}
@@ -373,56 +385,70 @@ export const RecordsView = () => {
                             onMouseLeave={handlePressEnd}
                             onClick={() => {
                                 if (isSelectionMode) toggleSelection(record.id);
+                                else openDetail(record);
                             }}
                         >
-                            {/* Background Cover */}
-                            <div className="absolute inset-0 z-0">
-                                {record.imageThumbnail ? (
-                                    <>
-                                        <img src={record.imageThumbnail} className="w-full h-full object-cover pointer-events-none opacity-40 group-hover:scale-110 transition-transform duration-500" alt="Thumb" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/10"></div>
-                                    </>
-                                ) : (
-                                    <div className="w-full h-full bg-zinc-900/80 flex items-center justify-center opacity-60">
-                                        <Database size={40} className="text-zinc-700 pointer-events-none" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black border-t border-white/5 to-transparent"></div>
-                                    </div>
-                                )}
-                            </div>
+                            {/* Premium Decorative Gradient */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 via-transparent to-indigo-600/5 opacity-50" />
+                            <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-[80px] group-hover:bg-blue-500/20 transition-colors duration-700" />
 
-                            {/* Top Controls: Selection & Actions */}
-                            <div className="relative z-10 flex justify-between items-start w-full">
-                                {isSelectionMode ? (
-                                    <div className="bg-black/50 rounded-full p-1 backdrop-blur-md">
-                                        {isSelected ? <CheckCircle2 size={24} className="text-blue-500" /> : <div className="w-[24px] h-[24px] rounded-full border-[3px] border-white/40"></div>}
+                            {/* Selection Badge - Luxury Style */}
+                            {isSelectionMode && (
+                                <div className="absolute top-4 right-4 z-20 animate-in zoom-in duration-300">
+                                    <div className={`p-1 rounded-full backdrop-blur-xl border ${isSelected
+                                        ? 'bg-blue-500 border-blue-400'
+                                        : 'bg-white/5 border-white/10 text-transparent'
+                                        }`}>
+                                        <CheckCircle2 size={20} className={isSelected ? "text-white" : "opacity-0"} />
                                     </div>
-                                ) : (
-                                    <div></div> /* Spacer */
-                                )}
+                                </div>
+                            )}
 
-                                {!isSelectionMode && (
-                                    <div className="flex gap-1 bg-black/50 backdrop-blur-md rounded-2xl p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button
-                                            onClick={(e) => openEdit(record, e)}
-                                            className="text-blue-400 hover:text-blue-300 p-1.5 z-10 hover:bg-white/10 rounded-xl"
-                                        >
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button
-                                            onClick={(e) => handleDelete(record.id, e)}
-                                            className="text-red-400 hover:text-red-300 p-1.5 z-10 hover:bg-white/10 rounded-xl"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+                            {/* Actions - Top Left */}
+                            {!isSelectionMode && (
+                                <div className="absolute top-4 right-4 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-500">
+                                    <button
+                                        onClick={(e) => openEdit(record, e)}
+                                        className="p-2 rounded-xl bg-white/5 border border-white/5 text-zinc-500 hover:text-white hover:bg-white/10 transition-all"
+                                    >
+                                        <Edit2 size={14} />
+                                    </button>
+                                    <button
+                                        onClick={(e) => handleDelete(record.id, e)}
+                                        className="p-2 rounded-xl bg-red-500/5 border border-red-500/5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Content Layout */}
+                            <div className="relative z-10 flex flex-col h-full">
+                                <div className="mb-4">
+                                    <div className="w-10 h-10 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-blue-500/10 group-hover:border-blue-500/20 transition-all duration-500">
+                                        <MapPinned size={18} className="text-blue-500/70" />
                                     </div>
-                                )}
-                            </div>
+                                    <h3 className="font-black text-white text-base md:text-lg tracking-tighter line-clamp-2 uppercase italic leading-tight group-hover:text-blue-400 transition-colors">
+                                        {record.name}
+                                    </h3>
+                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-2">
+                                        {[record.neighborhood, record.city].filter(Boolean).join(' • ') || 'Local Privado'}
+                                    </p>
+                                </div>
 
-                            {/* Bottom Text Area */}
-                            <div className="relative z-10 mt-auto flex flex-col w-full px-1">
-                                <h3 className="font-bold text-white text-xs sm:text-sm md:text-base leading-tight line-clamp-2 drop-shadow-md mb-0.5">{record.name}</h3>
-                                <div className="text-[9px] sm:text-[10px] text-zinc-300 font-mono opacity-80 drop-shadow-md line-clamp-1">
-                                    <span className="text-blue-400 font-bold">L:</span> {record.lat ? record.lat.toFixed(4) : '--'} <span className="text-blue-400 font-bold ml-1">L:</span> {record.lng ? record.lng.toFixed(4) : '--'}
+                                <div className="mt-auto space-y-3">
+                                    <div className="flex gap-2">
+                                        <div className="bg-white/[0.02] px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
+                                            <span className="text-[8px] font-black text-blue-500/50">LT</span>
+                                            <span className="text-[10px] font-mono text-zinc-400 group-hover:text-zinc-200">{record.lat ? record.lat.toFixed(4) : '--'}</span>
+                                        </div>
+                                        <div className="bg-white/[0.02] px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
+                                            <span className="text-[8px] font-black text-blue-500/50">LG</span>
+                                            <span className="text-[10px] font-mono text-zinc-400 group-hover:text-zinc-200">{record.lng ? record.lng.toFixed(4) : '--'}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-0.5 w-12 bg-blue-500/20 rounded-full group-hover:w-full transition-all duration-700" />
                                 </div>
                             </div>
                         </div>
@@ -513,35 +539,91 @@ export const RecordsView = () => {
                             />
                         </div>
 
-                        <div className="flex gap-4">
-                            <div className="flex flex-col gap-2 flex-1">
-                                <label className="text-xs text-zinc-400">Latitude</label>
+                        <div className="grid grid-cols-2 gap-3 mb-1">
+                            <div
+                                className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 cursor-pointer active:scale-95 transition-all hover:bg-blue-500/10 group relative overflow-hidden"
+                            >
+                                <div
+                                    className="absolute inset-0 z-0"
+                                    onClick={() => {
+                                        if (navigator.vibrate) navigator.vibrate(20);
+                                        if ('geolocation' in navigator) {
+                                            handleUseCurrentLocationForEdit();
+                                        }
+                                    }}
+                                />
+                                <div className="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
+                                    <label className="text-[10px] font-black text-blue-500/60 uppercase tracking-tighter">Latitude</label>
+                                    <LocateFixed size={12} className="text-blue-500 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                </div>
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={editLat}
                                     onChange={(e) => setEditLat(e.target.value)}
-                                    step="any"
-                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none"
+                                    className="relative z-20 w-full bg-transparent text-sm font-mono text-white tracking-widest focus:outline-none border-b border-transparent focus:border-blue-500/30"
+                                    placeholder="---.------"
                                 />
                             </div>
-                            <div className="flex flex-col gap-2 flex-1">
-                                <label className="text-xs text-zinc-400">Longitude</label>
+
+                            <div
+                                className="bg-indigo-500/5 border border-indigo-500/20 rounded-2xl p-4 cursor-pointer active:scale-95 transition-all hover:bg-indigo-500/10 group relative overflow-hidden"
+                            >
+                                <div
+                                    className="absolute inset-0 z-0"
+                                    onClick={() => {
+                                        if (navigator.vibrate) navigator.vibrate(20);
+                                        if ('geolocation' in navigator) {
+                                            handleUseCurrentLocationForEdit();
+                                        }
+                                    }}
+                                />
+                                <div className="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
+                                    <label className="text-[10px] font-black text-indigo-500/60 uppercase tracking-tighter">Longitude</label>
+                                    <LocateFixed size={12} className="text-indigo-500 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                </div>
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={editLng}
                                     onChange={(e) => setEditLng(e.target.value)}
-                                    step="any"
-                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-white focus:border-primary focus:outline-none"
+                                    className="relative z-20 w-full bg-transparent text-sm font-mono text-white tracking-widest focus:outline-none border-b border-transparent focus:border-indigo-500/30"
+                                    placeholder="---.------"
                                 />
                             </div>
                         </div>
 
                         <button
-                            onClick={handleUseCurrentLocationForEdit}
-                            className="w-full bg-blue-600/20 text-blue-400 border border-blue-500/30 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-600/30 transition-colors"
+                            onClick={async () => {
+                                if (!editLat || !editLng) {
+                                    alert('Capture ou digite as coordenadas primeiro.');
+                                    return;
+                                }
+                                if (navigator.vibrate) navigator.vibrate(40);
+                                setIsExtracting(true);
+                                try {
+                                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${editLat}&lon=${editLng}`);
+                                    const data = await res.json();
+                                    if (data && data.address) {
+                                        const addr = data.address;
+                                        const street = addr.road || addr.pedestrian || addr.suburb || '';
+                                        const houseNumber = addr.house_number ? `, ${addr.house_number}` : '';
+                                        setEditName(`${street}${houseNumber}`);
+                                        setEditNeighborhood(addr.suburb || addr.neighbourhood || addr.city_district || '');
+                                        setEditCity(addr.city || addr.town || addr.village || '');
+                                    } else {
+                                        alert('Cidade/Endereço não identificado para estas coordenadas.');
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    alert('Erro ao buscar endereço.');
+                                } finally {
+                                    setIsExtracting(false);
+                                }
+                            }}
+                            disabled={isExtracting}
+                            className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
                         >
-                            <LocateFixed size={16} />
-                            <span className="font-semibold text-xs">Atualizar pela Posição GPS</span>
+                            <Database size={14} className={isExtracting ? 'animate-spin' : ''} />
+                            SINCRONIZAR ENDEREÇO VIA GPS
                         </button>
 
                         <div className="flex flex-col gap-2 border-t border-white/10 pt-4 mt-2">
@@ -573,10 +655,11 @@ export const RecordsView = () => {
 
                         <button
                             onClick={handleSaveEdit}
-                            className="w-full mt-2 glow-btn py-3 rounded-xl font-bold"
+                            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest py-5 rounded-3xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-3 text-[10px]"
                             disabled={isExtracting}
                         >
-                            {editingRecord ? 'Salvar Alterações' : 'Criar Registro'}
+                            <Save size={18} />
+                            {editingRecord ? 'CONFIRMAR ALTERAÇÕES' : 'CRIAR NOVO REGISTRO'}
                         </button>
 
                         {photoActionTarget && (
@@ -617,6 +700,81 @@ export const RecordsView = () => {
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Detail View Modal */}
+            {isDetailModalOpen && selectedDetail && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-xl animate-fade-in">
+                    <div className="w-full max-w-sm glass-panel overflow-hidden rounded-[3rem] border border-white/10 shadow-2xl animate-scale-up">
+                        {/* Header Image */}
+                        <div className="h-48 relative">
+                            {selectedDetail.imageThumbnail ? (
+                                <img src={selectedDetail.imageThumbnail} className="w-full h-full object-cover" alt="Thumb" />
+                            ) : (
+                                <div className="w-full h-full bg-zinc-800 flex items-center justify-center"><Database size={48} className="text-zinc-700" /></div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-black/20" />
+                            <button
+                                onClick={() => setIsDetailModalOpen(false)}
+                                className="absolute top-4 right-4 p-2 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-8 -mt-10 relative z-10 bg-zinc-900 rounded-t-[3rem] border-t border-white/5">
+                            <div className="flex flex-col gap-6">
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Endereço Confirmado</p>
+                                    <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase leading-none">{selectedDetail.name}</h2>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-white/[0.03] border border-white/5 p-4 rounded-2xl">
+                                        <p className="text-[9px] font-bold text-zinc-500 uppercase mb-1">Bairro</p>
+                                        <p className="text-sm font-bold text-zinc-200">{selectedDetail.neighborhood || 'N/A'}</p>
+                                    </div>
+                                    <div className="bg-white/[0.03] border border-white/5 p-4 rounded-2xl">
+                                        <p className="text-[9px] font-bold text-zinc-500 uppercase mb-1">Cidade</p>
+                                        <p className="text-sm font-bold text-zinc-200">{selectedDetail.city || 'N/A'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-blue-500/5 border border-blue-500/10 p-5 rounded-[2rem]">
+                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <LocateFixed size={12} /> Coordenadas GPS
+                                    </p>
+                                    <div className="flex justify-between items-center font-mono">
+                                        <div>
+                                            <span className="text-[9px] text-zinc-500 block">LATITUDE</span>
+                                            <span className="text-white text-sm">{selectedDetail.lat?.toFixed(6) || '---'}</span>
+                                        </div>
+                                        <div className="w-px h-8 bg-white/10" />
+                                        <div className="text-right">
+                                            <span className="text-[9px] text-zinc-500 block">LONGITUDE</span>
+                                            <span className="text-white text-sm">{selectedDetail.lng?.toFixed(6) || '---'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {selectedDetail.notes && (
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Notas e Referências</p>
+                                        <p className="text-sm text-zinc-400 leading-relaxed italic">"{selectedDetail.notes}"</p>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={() => setIsDetailModalOpen(false)}
+                                    className="w-full bg-white text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-zinc-200 transition-all mt-2"
+                                >
+                                    Fechar Detalhes
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
