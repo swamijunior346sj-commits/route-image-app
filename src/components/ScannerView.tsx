@@ -14,7 +14,6 @@ import {
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
 import { LoadingOverlay } from './LoadingOverlay';
-import { NotificationsView } from './NotificationsView';
 
 interface ScannerProps {
     onNavigateToMap: () => void;
@@ -33,7 +32,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     // --- Functional State ---
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
-    const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm' | 'notifications'>(initialViewMode);
+    const [viewMode, setViewMode] = useState<'dashboard' | 'confirm'>(initialViewMode === 'camera' ? 'dashboard' : initialViewMode as 'dashboard' | 'confirm');
     const [cameraMode, setCameraMode] = useState<'register' | 'scan'>('scan');
     const [isCockpitOpen, setIsCockpitOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
