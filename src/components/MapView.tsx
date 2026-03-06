@@ -282,46 +282,52 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
 
     return (
         <div className="relative w-full h-full bg-bg-start overflow-hidden font-sans">
-            {/* Header / Search Bar */}
-            <header className="absolute top-0 left-0 right-0 z-20 px-6 pt-14 pb-12 flex items-center justify-between pointer-events-none gap-4">
-                <div className="flex-1 pointer-events-auto max-w-md">
-                    {isLoaded && (
-                        <Autocomplete
-                            onLoad={onLoad}
-                            onPlaceChanged={onPlaceChanged}
-                        >
-                            <div className="relative group">
-                                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                                    <span className="material-symbols-outlined text-primary !text-[20px] group-focus-within:scale-110 transition-transform">search</span>
-                                </div>
-                                <input
-                                    ref={searchInputRef}
-                                    type="text"
-                                    placeholder="Buscar endereços ou locais..."
-                                    className="w-full h-12 pl-12 pr-4 bg-bg-start/80 backdrop-blur-xl border border-white/10 rounded-2xl text-white text-sm font-medium placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-2xl transition-all"
-                                />
-                            </div>
-                        </Autocomplete>
-                    )}
-                </div>
+            {/* Top UI Elements - Hidden during active navigation for cleaner view */}
+            {!isNavigating && (
+                <>
+                    {/* Centered Top Search Bar */}
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-[60%] max-w-sm pointer-events-none">
+                        <div className="pointer-events-auto">
+                            {isLoaded && (
+                                <Autocomplete
+                                    onLoad={onLoad}
+                                    onPlaceChanged={onPlaceChanged}
+                                >
+                                    <div className="relative group">
+                                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                                            <span className="material-symbols-outlined text-primary !text-[20px] group-focus-within:scale-110 transition-transform">search</span>
+                                        </div>
+                                        <input
+                                            ref={searchInputRef}
+                                            type="text"
+                                            placeholder="Buscar locais..."
+                                            className="w-full h-12 pl-12 pr-4 bg-bg-start/80 backdrop-blur-xl border border-white/10 rounded-2xl text-white text-[11px] md:text-sm font-medium placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-2xl transition-all"
+                                        />
+                                    </div>
+                                </Autocomplete>
+                            )}
+                        </div>
+                    </div>
 
-                <div className="flex gap-3 pointer-events-auto">
-                    <button
-                        onClick={() => setMapTheme(prev => prev === 'night' ? 'silver' : 'night')}
-                        className={`size-12 rounded-[1.25rem] border backdrop-blur-xl transition-all flex items-center justify-center shadow-2xl ${mapTheme === 'night'
-                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
-                            : 'bg-primary/10 border-primary/20 text-primary'
-                            }`}
-                    >
-                        <span className="material-symbols-outlined !text-[24px]">
-                            {mapTheme === 'night' ? 'light_mode' : 'dark_mode'}
-                        </span>
-                    </button>
-                    <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center shadow-2xl">
-                        <span className="material-symbols-outlined !text-[24px]">delete_sweep</span>
-                    </button>
-                </div>
-            </header>
+                    {/* Top Right Quick Actions */}
+                    <div className="absolute top-6 right-4 z-20 flex gap-2 pointer-events-auto">
+                        <button
+                            onClick={() => setMapTheme(prev => prev === 'night' ? 'silver' : 'night')}
+                            className={`size-12 rounded-[1.25rem] backdrop-blur-xl transition-all flex items-center justify-center shadow-2xl ${mapTheme === 'night'
+                                ? 'bg-amber-500/10 border border-amber-500/20 text-amber-500'
+                                : 'bg-primary/10 border border-primary/20 text-primary'
+                                }`}
+                        >
+                            <span className="material-symbols-outlined !text-[24px]">
+                                {mapTheme === 'night' ? 'light_mode' : 'dark_mode'}
+                            </span>
+                        </button>
+                        <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center shadow-2xl">
+                            <span className="material-symbols-outlined !text-[24px]">delete_sweep</span>
+                        </button>
+                    </div>
+                </>
+            )}
 
             {/* Main Content Area */}
             <div className="absolute inset-0 z-0">
