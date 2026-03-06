@@ -448,3 +448,30 @@ export const importRecords = async (records: LocationRecord[]) => {
     }));
     await supabase.from('location_records').upsert(sbRecords);
 };
+
+export const clearAllUserData = async (): Promise<void> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const userId = session.user.id;
+
+    // 1. Clear Supabase Tables
+    await Promise.all([
+        supabase.from('location_records').delete().eq('user_id', userId),
+        supabase.from('active_route').delete().eq('user_id', userId),
+        supabase.from('app_settings').update({
+            personal_data: defaultSettings.personalData,
+            notifications: defaultSettings.notifications,
+            map_preferences: defaultSettings.mapPreferences
+        }).eq('id', userId)
+    ]);
+
+    // 2. Clear Local Storage
+    const stores = [
+        localforage.createInstance({ name: 'RouteImageApp', storeName: 'locationRecords' }),
+        localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }),
+        localforage.createInstance({ name: 'RouteImageApp', storeName: 'dailyRoute' })
+    ];
+
+    await Promise.all(stores.map(s => s.clear()));
+};

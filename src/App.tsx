@@ -185,9 +185,21 @@ export default function App() {
         {currentTab === 'profile' && (
           <ProfileView
             onLogout={async () => {
-              await supabase.auth.signOut();
-              localStorage.removeItem('isAuthenticated');
-              setIsAuthenticated(false);
+              console.log("👋 Encerrando sessão...");
+              try {
+                // Pre-clear state to be fast
+                setIsAuthenticated(false);
+                setUser(null);
+                setSettings(defaultSettings);
+                localStorage.removeItem('isAuthenticated');
+
+                await supabase.auth.signOut();
+              } catch (e) {
+                console.error("Logout error:", e);
+              } finally {
+                // Ensure everything is clean
+                window.location.reload();
+              }
             }}
             onBack={() => changeTab('map')}
             onNavigateToAdmin={user?.email === ADMIN_EMAIL ? () => setIsAdminOpen(true) : undefined}

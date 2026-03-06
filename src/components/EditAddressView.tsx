@@ -211,10 +211,9 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end justify-center pb-6">
                                 <button
                                     onClick={() => setShowCockpit(!showCockpit)}
-                                    className="px-8 py-3 bg-primary shadow-[0_0_25px_rgba(59,130,246,0.5)] rounded-2xl text-sm font-black text-white uppercase italic tracking-widest flex items-center gap-3 active:scale-95 transition-all z-20"
+                                    className="size-16 bg-primary shadow-[0_0_30px_rgba(59,130,246,0.6)] rounded-full flex items-center justify-center active:scale-95 transition-all z-20 border border-white/20"
                                 >
-                                    <span className="material-symbols-outlined !text-[20px]">settings_input_composite</span>
-                                    Cockpit
+                                    <span className="material-symbols-outlined !text-[28px] text-white">photo_camera</span>
                                 </button>
                             </div>
 
@@ -222,58 +221,64 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
                             {showCockpit && (
                                 <div
                                     ref={cockpitRef}
-                                    className="absolute inset-0 bg-bg-start/80 backdrop-blur-xl z-30 animate-fade-in flex flex-col items-center justify-center p-8 space-y-4"
+                                    className="absolute inset-0 bg-[#0F172A]/95 backdrop-blur-2xl z-30 animate-fade-in flex flex-col p-4 overflow-y-auto no-scrollbar"
                                 >
-                                    <button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="w-full p-5 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-between group active:bg-primary/20 transition-all"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="size-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary">
-                                                <span className="material-symbols-outlined !text-[24px]">add_a_photo</span>
-                                            </div>
-                                            <div className="text-left">
-                                                <p className="text-sm font-black text-white italic uppercase tracking-tight">Nova Captura</p>
-                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Treinar reconhecimento</p>
-                                            </div>
-                                        </div>
-                                        <span className="material-symbols-outlined text-slate-600">chevron_right</span>
-                                    </button>
+                                    <div className="flex justify-between items-center mb-4 px-2">
+                                        <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Sistemas Cockpit</span>
+                                        <button onClick={() => setShowCockpit(false)}>
+                                            <span className="material-symbols-outlined text-slate-500 !text-[18px]">close</span>
+                                        </button>
+                                    </div>
 
-                                    <button className="w-full p-5 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-between active:bg-white/10 transition-all">
-                                        <div className="flex items-center gap-4">
-                                            <div className="size-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-500">
-                                                <span className="material-symbols-outlined !text-[24px]">memory</span>
+                                    <div className="space-y-2.5">
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="w-full p-4 bg-white/5 border border-white/10 rounded-[1.5rem] flex items-center justify-between group active:bg-primary/20 transition-all"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="size-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
+                                                    <span className="material-symbols-outlined !text-[20px]">add_a_photo</span>
+                                                </div>
+                                                <div className="text-left leading-tight">
+                                                    <p className="text-xs font-black text-white italic uppercase">Nova Captura</p>
+                                                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Treinar IA</p>
+                                                </div>
                                             </div>
-                                            <div className="text-left">
-                                                <p className="text-sm font-black text-white italic uppercase tracking-tight">Editar Memória</p>
-                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{additionalImages.length} itens salvos</p>
-                                            </div>
-                                        </div>
-                                        <span className="material-symbols-outlined text-slate-600">chevron_right</span>
-                                    </button>
+                                            <span className="material-symbols-outlined text-slate-600 !text-[18px]">chevron_right</span>
+                                        </button>
 
-                                    <button
-                                        onClick={() => { setImage(''); setAdditionalImages([]); setShowCockpit(false); }}
-                                        className="w-full p-5 bg-red-500/5 border border-red-500/10 rounded-3xl flex items-center justify-between active:bg-red-500/20 transition-all"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="size-12 rounded-2xl bg-red-500/20 flex items-center justify-center text-red-500">
-                                                <span className="material-symbols-outlined !text-[24px]">delete_forever</span>
+                                        <button className="w-full p-4 bg-white/5 border border-white/10 rounded-[1.5rem] flex items-center justify-between active:bg-white/10 transition-all">
+                                            <div className="flex items-center gap-3">
+                                                <div className="size-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-500">
+                                                    <span className="material-symbols-outlined !text-[20px]">memory</span>
+                                                </div>
+                                                <div className="text-left leading-tight">
+                                                    <p className="text-xs font-black text-white italic uppercase">Memória IA</p>
+                                                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{additionalImages.length} itens</p>
+                                                </div>
                                             </div>
-                                            <div className="text-left">
-                                                <p className="text-sm font-black text-red-500 italic uppercase tracking-tight">Excluir Tudo</p>
-                                                <p className="text-[10px] text-red-500/50 font-bold uppercase tracking-widest">Limpar cache local</p>
-                                            </div>
-                                        </div>
-                                    </button>
+                                            <span className="material-symbols-outlined text-slate-600 !text-[18px]">chevron_right</span>
+                                        </button>
 
-                                    <button
-                                        onClick={() => setShowCockpit(false)}
-                                        className="mt-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] hover:text-white transition-colors"
-                                    >
-                                        Fechar Cockpit
-                                    </button>
+                                        <button
+                                            onClick={() => { if (confirm("Limpar toda a memória IA deste endereço?")) { setImage(''); setAdditionalImages([]); setShowCockpit(false); } }}
+                                            className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-[1.5rem] flex items-center justify-between active:bg-red-500/30 transition-all"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="size-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-500">
+                                                    <span className="material-symbols-outlined !text-[20px]">delete_sweep</span>
+                                                </div>
+                                                <div className="text-left leading-tight">
+                                                    <p className="text-xs font-black text-red-500 italic uppercase">Excluir</p>
+                                                    <p className="text-[9px] text-red-500/50 font-bold uppercase tracking-widest">Limpar cache</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </div>
+
+                                    <div className="mt-4 pb-2 text-center">
+                                        <p className="text-[8px] font-bold text-slate-600 uppercase tracking-[0.3em]">Protocolo v.2.4 Active</p>
+                                    </div>
                                 </div>
                             )}
 

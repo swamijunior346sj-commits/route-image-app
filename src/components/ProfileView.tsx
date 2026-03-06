@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { updateSettings } from '../services/db';
+import { updateSettings, clearAllUserData } from '../services/db';
 import type { AppSettings } from '../services/db';
 import { LoadingOverlay } from './LoadingOverlay';
 
@@ -61,12 +61,7 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin, sett
                     <span className="text-[10px] font-black tracking-[0.3em] text-primary/80 mb-0.5">Gestão de Conta</span>
                     <h1 className="text-white font-black text-xl tracking-tighter italic">Meu Perfil</h1>
                 </div>
-                <button
-                    onClick={handleLogout}
-                    className="flex items-center justify-center size-10 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all"
-                >
-                    <span className="material-symbols-outlined !text-[22px]">logout</span>
-                </button>
+                <div className="size-10"></div>
             </header>
 
             <main className="flex-1 overflow-y-auto px-6 pt-32 pb-40 no-scrollbar">
@@ -197,6 +192,47 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin, sett
                         </button>
                     </section>
                 )}
+
+                {/* Account Actions */}
+                <section className="space-y-4 mt-12 mb-20">
+                    <h3 className="text-[11px] font-black tracking-[0.2em] uppercase text-slate-500 ml-1 opacity-60">Ações Destrutivas</h3>
+
+                    <button
+                        onClick={async () => {
+                            if (confirm("ATENÇÃO: Isso apagará TODOS os seus endereços, rotas e configurações. O processo é irreversível. Deseja continuar?")) {
+                                await clearAllUserData();
+                                window.location.reload();
+                            }
+                        }}
+                        className="w-full glass-card rounded-[2.5rem] p-5 px-6 border-red-500/10 flex items-center justify-between active:scale-[0.98] transition-all group"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="size-10 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500">
+                                <span className="material-symbols-outlined !text-[20px]">delete_forever</span>
+                            </div>
+                            <div className="text-left">
+                                <p className="text-sm font-bold text-red-500/90">Limpar Todos os Dados</p>
+                                <p className="text-[10px] text-red-500/40 font-medium capitalize">Reset total da conta • Manter Login</p>
+                            </div>
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={handleLogout}
+                        className="w-full glass-card rounded-[2.5rem] p-5 px-6 border-white/5 flex items-center justify-between active:scale-[0.98] transition-all group"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="size-10 rounded-2xl bg-white/5 flex items-center justify-center text-white/50">
+                                <span className="material-symbols-outlined !text-[20px]">logout</span>
+                            </div>
+                            <div className="text-left">
+                                <p className="text-sm font-bold text-white/90">Sair da Conta</p>
+                                <p className="text-[10px] text-slate-500 font-medium capitalize">Encerrar sessão no dispositivo</p>
+                            </div>
+                        </div>
+                        <span className="material-symbols-outlined text-slate-600">chevron_right</span>
+                    </button>
+                </section>
 
                 {/* Footer Info inside scrollable area */}
                 <div className="pt-12 pb-20 text-center opacity-40">
