@@ -82,7 +82,9 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin, sett
                                         {settings.personalData.avatar ? (
                                             <img src={settings.personalData.avatar} alt="User avatar" className="w-full h-full object-cover shrink-0" />
                                         ) : (
-                                            <span className="text-4xl font-black text-white italic">{settings.personalData.name[0]}</span>
+                                            <span className="text-4xl font-black text-white italic">
+                                                {settings.personalData.name ? settings.personalData.name[0].toUpperCase() : 'U'}
+                                            </span>
                                         )}
                                     </div>
                                     <div className="absolute -bottom-2 -right-2 size-10 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg border-2 border-bg-start">
@@ -93,7 +95,7 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin, sett
                             </label>
                         </div>
 
-                        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic">{settings.personalData.name}</h2>
+                        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic">{settings.personalData.name || 'Usuário'}</h2>
                         <div className="flex items-center gap-3 mt-4">
                             <span className="px-3 py-1 bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest rounded-xl border border-primary/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
                                 Plano {settings.subscriptionPlan}

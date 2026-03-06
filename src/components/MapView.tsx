@@ -64,7 +64,7 @@ interface MapViewProps {
 }
 
 export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
-    const { isLoaded } = useJsApiLoader({ id: 'google-map-script', googleMapsApiKey, libraries });
+    const { isLoaded, loadError } = useJsApiLoader({ id: 'google-map-script', googleMapsApiKey, libraries });
 
     const [route, setRoute] = useState<RoutePoint[]>([]);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -128,6 +128,16 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
             if (navigator.vibrate) navigator.vibrate(50);
         }
     };
+
+    if (loadError) return (
+        <div className="w-full h-full bg-bg-start flex flex-col items-center justify-center px-8 text-center">
+            <span className="material-symbols-outlined !text-[48px] text-red-500 mb-6">map_error</span>
+            <h2 className="text-white font-bold text-lg mb-2">Falha na Sincronização</h2>
+            <p className="text-white/40 text-xs uppercase font-medium tracking-widest leading-relaxed">
+                Não foi possível conectar aos servidores de mapas. Verifique sua conexão ou a chave de API.
+            </p>
+        </div>
+    );
 
     if (!isLoaded) return (
         <div className="w-full h-full bg-bg-start flex flex-col items-center justify-center">

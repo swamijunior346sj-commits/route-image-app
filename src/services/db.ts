@@ -337,9 +337,19 @@ export const getSettings = async (): Promise<AppSettings> => {
     const data = settingsRes.data;
     const profile = profileRes.data;
 
+    if (!profile) {
+        // Create initial profile if missing
+        await supabase.from('profiles').insert({
+            id: session.user.id,
+            subscription_plan: 'free',
+            daily_scan_count: 0
+        });
+    }
+
     if (!data) {
+        console.log("📝 Gerando configurações iniciais para usuário...");
         // Create initial settings if missing
-        await supabase.from('app_settings').insert({
+        const newSettings = {
             id: session.user.id,
             personal_data: {
                 name: session.user.user_metadata?.full_name || 'Usuário',
@@ -349,7 +359,8 @@ export const getSettings = async (): Promise<AppSettings> => {
             },
             notifications: defaultSettings.notifications,
             map_preferences: defaultSettings.mapPreferences
-        });
+        };
+        await supabase.from('app_settings').insert(newSettings);
         return { ...defaultSettings, subscriptionPlan: (profile?.subscription_plan as any) || 'free' };
     }
 

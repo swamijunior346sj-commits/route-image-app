@@ -33,23 +33,49 @@ export default function App() {
 
   useEffect(() => {
     const initApp = async () => {
+      console.log("🚀 Iniciando RouteVision...");
       try {
-        await loadModel();
-        // Get initial session
-        const { data: { session } } = await supabase.auth.getSession();
-        setUser(session?.user ?? null);
+        // Run model loading in background to not block the main UI
+        console.log("📦 Disparando modelos IA no background...");
+        loadModel().then(() => console.log("✅ Modelos IA Carregados!")).catch(e => console.error("❌ Erro no carregamento do modelo:", e));
+
+        console.log("🔑 Verificando sessão...");
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("❌ Erro na sessão:", sessionError);
+        }
+
         if (session) {
+          console.log("👤 Usuário logado detected:", session.user.email);
+          setUser(session.user);
           setIsAuthenticated(true);
-          const s = await getSettings();
-          setSettings(s);
+
+          console.log("⚙️ Carregando configurações...");
+          try {
+            const s = await getSettings();
+            if (s) setSettings(s);
+          } catch (e) {
+            console.warn("⚠️ Falha ao carregar configurações, seguindo com padrão", e);
+          }
+        } else {
+          console.log("📢 Nenhuma sessão ativa encontrada.");
+          setIsAuthenticated(false);
+          localStorage.removeItem('isAuthenticated');
         }
       } catch (err) {
-        console.error("Failed to load model", err);
+        console.error("❌ Erro fatal na inicialização:", err);
       } finally {
+        console.log("✅ Finalizando estado de carregamento.");
         setModelLoading(false);
       }
     };
     initApp();
+
+    // Failsafe: Force stop loading after 5 seconds no matter what
+    const timeout = setTimeout(() => {
+      setModelLoading(false);
+    }, 5000);
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -75,6 +101,7 @@ export default function App() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => {
+      clearTimeout(timeout);
       subscription.unsubscribe();
       window.removeEventListener('popstate', handlePopState);
     };
@@ -155,19 +182,27 @@ export default function App() {
             onBack={() => changeTab('map')}
           />
         )}
-        {currentTab === 'profile' && settings && (
-          <ProfileView
-            onLogout={async () => {
-              await supabase.auth.signOut();
-              localStorage.removeItem('isAuthenticated');
-              setIsAuthenticated(false);
-            }}
-            onBack={() => changeTab('map')}
-            onNavigateToAdmin={user?.email === ADMIN_EMAIL ? () => setIsAdminOpen(true) : undefined}
-            isAdmin={user?.email === ADMIN_EMAIL}
-            settings={settings}
-            onUpdateSettings={setSettings}
-          />
+        {currentTab === 'profile' && (
+          settings ? (
+            <ProfileView
+              onLogout={async () => {
+                await supabase.auth.signOut();
+                localStorage.removeItem('isAuthenticated');
+                setIsAuthenticated(false);
+              }}
+              onBack={() => changeTab('map')}
+              onNavigateToAdmin={user?.email === ADMIN_EMAIL ? () => setIsAdminOpen(true) : undefined}
+              isAdmin={user?.email === ADMIN_EMAIL}
+              settings={settings}
+              onUpdateSettings={setSettings}
+            />
+          ) : (
+            <LoadingOverlay
+              title="Acessando Conta"
+              subtitle="Sincronizando preferências seguras..."
+              icon={<span className="material-symbols-outlined !text-[32px] animate-spin text-primary">sync</span>}
+            />
+          )
         )}
       </div>
       {!isAdminOpen && <BottomNav currentTab={currentTab} setTab={changeTab} />}
