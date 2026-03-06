@@ -106,15 +106,15 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin, sett
                 {/* Dashboard Stats */}
                 <section className="grid grid-cols-3 gap-3 mb-10">
                     <div className="glass-card rounded-[1.5rem] p-4 flex flex-col items-center text-center">
-                        <span className="text-2xl font-black text-white">4.9</span>
+                        <span className="text-2xl font-black text-white">---</span>
                         <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Rating</span>
                     </div>
                     <div className="glass-card rounded-[1.5rem] p-4 flex flex-col items-center text-center">
-                        <span className="text-2xl font-black text-white">1.2k</span>
+                        <span className="text-2xl font-black text-white">0</span>
                         <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Entregas</span>
                     </div>
                     <div className="glass-card rounded-[1.5rem] p-4 flex flex-col items-center text-center">
-                        <span className="text-2xl font-black text-white">124h</span>
+                        <span className="text-2xl font-black text-white">0h</span>
                         <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Tempo</span>
                     </div>
                 </section>

@@ -34,7 +34,7 @@ import { getSettings, type AppSettings, defaultSettings } from './services/db';
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute'>('map');
+  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute'>('scanner');
   const [modelLoading, setModelLoading] = useState(true);
   const [mapVersion, setMapVersion] = useState(0);
   const [isAdminOpen, setIsAdminOpen] = useState(false);

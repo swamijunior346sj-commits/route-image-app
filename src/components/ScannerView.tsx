@@ -336,7 +336,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                             width: { ideal: 4096 },
                             height: { ideal: 2160 },
                             //@ts-ignore
-                            advanced: [{ torch }]
+                            advanced: [
+                                { torch },
+                                { focusMode: 'continuous' },
+                                { whiteBalanceMode: 'continuous' },
+                                { exposureMode: 'continuous' }
+                            ]
                         }}
                         className="w-full h-full object-cover"
                     />
@@ -355,11 +360,17 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 </div>
 
                 {/* Minimalist Reader View */}
-                <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-auto" onClick={handleCapture}>
-                    {/* Floating Status HUD removed as requested */}
-
+                <div
+                    className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-auto cursor-pointer"
+                    onClick={(e) => {
+                        // Only capture if we didn't click a button
+                        if ((e.target as HTMLElement).tagName !== 'BUTTON' && !(e.target as HTMLElement).closest('button')) {
+                            handleCapture();
+                        }
+                    }}
+                >
                     {/* Viewfinder Only */}
-                    <div className="w-80 h-56 border border-white/10 rounded-[3rem] scan-focus relative overflow-hidden backdrop-blur-[2px]">
+                    <div className="w-80 h-56 border border-white/10 rounded-[3rem] scan-focus relative overflow-hidden backdrop-blur-[2px] pointer-events-none">
                         <div className="scanning-line" />
                         <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-primary rounded-tl-xl" />
                         <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-primary rounded-tr-xl" />
@@ -370,7 +381,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                     {/* Minimal Close Button */}
                     <button
                         onClick={(e) => { e.stopPropagation(); setViewMode('dashboard'); }}
-                        className="absolute top-14 left-6 size-12 rounded-full glass-ui flex items-center justify-center text-white/40 active:scale-90 transition-all"
+                        className="absolute top-14 left-6 size-12 rounded-full glass-ui flex items-center justify-center text-white/40 active:scale-90 transition-all z-[110]"
                     >
                         <span className="material-symbols-outlined">close</span>
                     </button>
@@ -378,7 +389,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                     {/* Flash Toggle */}
                     <button
                         onClick={(e) => { e.stopPropagation(); setTorch(!torch); }}
-                        className={`absolute top-14 right-6 size-12 rounded-full glass-ui flex items-center justify-center active:scale-90 transition-all ${torch ? 'text-yellow-400' : 'text-white/40'}`}
+                        className={`absolute top-14 right-6 size-12 rounded-full glass-ui flex items-center justify-center active:scale-90 transition-all z-[110] ${torch ? 'text-yellow-400' : 'text-white/40'}`}
                     >
                         <span className="material-symbols-outlined">{torch ? 'flash_on' : 'flash_off'}</span>
                     </button>

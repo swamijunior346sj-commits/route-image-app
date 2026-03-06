@@ -537,7 +537,10 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                     <button onClick={() => { setIsNavigating(true); setIsHudMinimized(false); }} className="flex-1 h-14 px-5 rounded-2xl bg-primary shadow-premium flex justify-between items-center text-white animate-in slide-in-from-bottom active:scale-95 transition-all">
                         <div className="flex flex-col items-start leading-none text-left min-w-0 pr-2">
                             <span className="text-[9px] font-black uppercase tracking-widest text-white/70 truncate w-full">Próxima Parada</span>
-                            <span className="text-[14px] font-bold truncate w-full mt-1.5">{activePoint.name}</span>
+                            <span className="text-[14px] font-bold truncate w-full mt-1.5">
+                                {activePoint.name}
+                                <span className="text-white/40 ml-2 text-[10px]">ID: {activePoint.id.substring(activePoint.id.length - 6).toUpperCase()}</span>
+                            </span>
                         </div>
                         <span className="material-symbols-outlined !text-[24px]">navigation</span>
                     </button>
