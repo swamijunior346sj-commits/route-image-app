@@ -18,6 +18,7 @@ interface DailyRouteViewProps {
 export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }: DailyRouteViewProps) => {
     const [points, setPoints] = useState<RoutePoint[]>([]);
     const [isOptimizing, setIsOptimizing] = useState(false);
+    const [optimizationLog, setOptimizationLog] = useState('');
     const [editingPoint, setEditingPoint] = useState<RoutePoint | null>(null);
 
     // Stats
@@ -46,10 +47,67 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
     };
 
     const handleOptimize = async () => {
+        if (points.length < 2) return;
         setIsOptimizing(true);
-        // Simulate thinking time for "Premium AI" feel
-        await new Promise(r => setTimeout(r, 1500));
-        setIsOptimizing(false);
+        setOptimizationLog('Iniciando Motores de IA...');
+
+        try {
+            // Get current location
+            setOptimizationLog('Localizando seu dispositivo...');
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+            });
+            const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+
+            // Filter points with coordinates
+            const pointsToOptimize = points.filter(p => p.lat !== null && p.lng !== null);
+            const pointsWithoutCoords = points.filter(p => p.lat === null || p.lng === null);
+
+            if (pointsToOptimize.length === 0) {
+                setOptimizationLog('Nenhum ponto válido para otimizar.');
+                await new Promise(r => setTimeout(r, 1000));
+                setIsOptimizing(false);
+                return;
+            }
+
+            setOptimizationLog('Processando Matriz de Distância...');
+            const service = new google.maps.DistanceMatrixService();
+            const response = await service.getDistanceMatrix({
+                origins: [origin],
+                destinations: pointsToOptimize.map(p => ({ lat: p.lat!, lng: p.lng! })),
+                travelMode: google.maps.TravelMode.DRIVING,
+            });
+
+            if (response.rows[0].elements) {
+                setOptimizationLog('IA calculando melhor trajetória...');
+                const distances = response.rows[0].elements.map((el, idx) => ({
+                    index: idx,
+                    distance: el.distance?.value || 999999,
+                    duration: el.duration?.text || ''
+                }));
+
+                // Sort points based on distance
+                const sortedPoints = [...pointsToOptimize].sort((a, b) => {
+                    const distA = distances.find(d => pointsToOptimize[d.index].id === a.id)?.distance || 0;
+                    const distB = distances.find(d => pointsToOptimize[d.index].id === b.id)?.distance || 0;
+                    return distA - distB;
+                });
+
+                const finalRoute = [...sortedPoints, ...pointsWithoutCoords];
+                setPoints(finalRoute);
+                await updateDailyRoute(finalRoute);
+
+                setOptimizationLog('Rota Otimizada com Sucesso!');
+                if (navigator.vibrate) navigator.vibrate([50, 100, 50]);
+                await new Promise(r => setTimeout(r, 800));
+            }
+        } catch (error) {
+            console.error('Optimization failed:', error);
+            alert('Não foi possível otimizar a rota: ' + (error as Error).message);
+        } finally {
+            setIsOptimizing(false);
+            setOptimizationLog('');
+        }
     };
 
     const handleToggleDelivered = async (id: string) => {
@@ -322,6 +380,25 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
 
             {/* Nav Fade Overlay */}
             <nav className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-bg-start via-bg-start/80 to-transparent pointer-events-none z-10"></nav>
+
+            {/* AI Optimization Overlay */}
+            {isOptimizing && (
+                <div className="fixed inset-0 z-[10000] bg-black/95 flex flex-col items-center justify-center p-8 backdrop-blur-3xl animate-in fade-in duration-500">
+                    <div className="relative size-48 flex items-center justify-center mb-12">
+                        <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-[ping_3s_infinite]" />
+                        <div className="absolute inset-4 rounded-full border-2 border-primary/40 animate-[ping_2s_infinite]" />
+                        <div className="absolute inset-0 border-t-4 border-primary rounded-full animate-spin" />
+                        <span className="material-symbols-outlined !text-[64px] text-primary animate-pulse">auto_awesome</span>
+                    </div>
+                    <h2 className="text-2xl font-black italic uppercase tracking-widest text-white mb-3 text-center tracking-tighter">Otimizador Neural™</h2>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em] text-center max-w-xs leading-loose">{optimizationLog}</p>
+                    <div className="mt-12 flex gap-1">
+                        {[0, 1, 2].map(i => (
+                            <div key={i} className="size-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { GoogleMap, useJsApiLoader, DirectionsRenderer, OverlayView } from '@react-google-maps/api';
+import { useEffect, useState, useRef } from 'react';
+import { GoogleMap, useJsApiLoader, DirectionsRenderer, OverlayView, Autocomplete } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
 import confetti from 'canvas-confetti';
@@ -77,6 +77,8 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
     const [isNavigating, setIsNavigating] = useState(false);
     const [isHudMinimized, setIsHudMinimized] = useState(false);
+    const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     const activePoint = route.find(p => !p.isDelivered);
 
@@ -138,6 +140,25 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
         }
     };
 
+    const onLoad = (auto: google.maps.places.Autocomplete) => {
+        setAutocomplete(auto);
+    };
+
+    const onPlaceChanged = () => {
+        if (autocomplete !== null) {
+            const place = autocomplete.getPlace();
+            if (place.geometry && place.geometry.location) {
+                const newPos = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng()
+                };
+                setMapCenter(newPos);
+                // Optional: Clear search after selection to keep UI clean
+                if (searchInputRef.current) searchInputRef.current.value = '';
+            }
+        }
+    };
+
     if (loadError) return (
         <div className="w-full h-full bg-bg-start flex flex-col items-center justify-center px-8 text-center">
             <span className="material-symbols-outlined !text-[48px] text-red-500 mb-6">map_error</span>
@@ -157,13 +178,31 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
 
     return (
         <div className="relative w-full h-full bg-bg-start overflow-hidden font-sans">
-            {/* Header */}
-            <header className="absolute top-0 left-0 right-0 z-20 px-6 pt-14 pb-12 flex items-center justify-between pointer-events-none">
-                <div></div>
+            {/* Header / Search Bar */}
+            <header className="absolute top-0 left-0 right-0 z-20 px-6 pt-14 pb-12 flex items-center justify-between pointer-events-none gap-4">
+                <div className="flex-1 pointer-events-auto max-w-md">
+                    {isLoaded && (
+                        <Autocomplete
+                            onLoad={onLoad}
+                            onPlaceChanged={onPlaceChanged}
+                        >
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                                    <span className="material-symbols-outlined text-primary !text-[20px] group-focus-within:scale-110 transition-transform">search</span>
+                                </div>
+                                <input
+                                    ref={searchInputRef}
+                                    type="text"
+                                    placeholder="Buscar endereços ou locais..."
+                                    className="w-full h-12 pl-12 pr-4 bg-bg-start/80 backdrop-blur-xl border border-white/10 rounded-2xl text-white text-sm font-medium placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-2xl transition-all"
+                                />
+                            </div>
+                        </Autocomplete>
+                    )}
+                </div>
 
                 <div className="flex gap-3 pointer-events-auto">
-
-                    <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center">
+                    <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center shadow-2xl">
                         <span className="material-symbols-outlined !text-[24px]">delete_sweep</span>
                     </button>
                 </div>
