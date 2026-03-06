@@ -72,10 +72,11 @@ export default function App() {
     };
     initApp();
 
-    // Failsafe: Force stop loading after 5 seconds no matter what
+    // Failsafe: Force stop loading after 1.5 seconds no matter what
     const timeout = setTimeout(() => {
+      console.log("⏱️ Failsafe acionado: forçando fechamento do loading");
       setModelLoading(false);
-    }, 5000);
+    }, 1500);
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {

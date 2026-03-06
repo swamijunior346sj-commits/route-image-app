@@ -250,47 +250,121 @@ export const AdminView = ({ onBack }: AdminViewProps) => {
 
                 {activeTab === 'users' && (
                     <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex flex-col gap-4">
-                            <h3 className="text-xl font-black italic tracking-tight">Base de Agentes</h3>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-500 icon-thin">search</span>
-                                <input
-                                    type="text"
-                                    placeholder="Pesquisar por nome ou e-mail..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-xs font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-slate-600"
-                                />
+                        <section>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-extrabold tracking-tight">Métricas e Ações</h2>
+                                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded-full uppercase tracking-wider">Tempo Real</span>
                             </div>
-                        </div>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="glass-card p-4 rounded-2xl flex flex-col items-center text-center gap-1">
+                                    <span className="material-symbols-outlined text-primary icon-thin text-xl">group</span>
+                                    <p className="text-[10px] text-slate-400 font-medium uppercase">Total</p>
+                                    <p className="text-lg font-bold tracking-tight">{stats.users}</p>
+                                </div>
+                                <div className="glass-card p-4 rounded-2xl flex flex-col items-center text-center gap-1">
+                                    <span className="material-symbols-outlined text-emerald-400 icon-thin text-xl">check_circle</span>
+                                    <p className="text-[10px] text-slate-400 font-medium uppercase">Ativos</p>
+                                    <p className="text-lg font-bold tracking-tight">{stats.users}</p>
+                                </div>
+                                <div className="glass-card p-4 rounded-2xl flex flex-col items-center text-center gap-1">
+                                    <span className="material-symbols-outlined text-amber-400 icon-thin text-xl">person_add</span>
+                                    <p className="text-[10px] text-slate-400 font-medium uppercase">Novos</p>
+                                    <p className="text-lg font-bold tracking-tight">2</p>
+                                </div>
+                            </div>
+                        </section>
 
-                        <div className="space-y-4">
-                            {users.filter(u => {
-                                const name = (u.app_settings?.[0]?.personal_data?.name || '').toLowerCase();
-                                const email = (u.app_settings?.[0]?.personal_data?.email || '').toLowerCase();
-                                return name.includes(searchQuery.toLowerCase()) || email.includes(searchQuery.toLowerCase());
-                            }).map(user => (
-                                <div key={user.id} className="glass-card p-4 rounded-2xl border border-white/5 bg-white/5 flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black italic shadow-inner">
-                                            {user.app_settings?.[0]?.personal_data?.name?.[0] || '?'}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold">{user.app_settings?.[0]?.personal_data?.name || 'Agente Anonimo'}</p>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${user.subscription_plan === 'free' ? 'bg-slate-500/10 text-slate-500' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                                    {user.subscription_plan}
-                                                </span>
-                                                <p className="text-[10px] text-slate-500 font-medium">{user.app_settings?.[0]?.personal_data?.email}</p>
+                        <section className="glass-card p-5 rounded-2xl">
+                            <div className="flex items-center justify-between mb-8">
+                                <div>
+                                    <h3 className="font-bold text-sm">Pico de Acessos</h3>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">Atividade nas últimas 24h</p>
+                                </div>
+                                <span className="material-symbols-outlined text-slate-400 text-sm icon-thin">trending_up</span>
+                            </div>
+                            <div className="relative h-32 w-full flex items-end justify-between px-1 gap-2">
+                                {[40, 60, 85, 100, 70, 50].map((height, i) => (
+                                    <div key={i} className={`w-full ${height === 70 ? 'bg-primary/20 border-x border-white/5' : 'bg-primary/10'} rounded-t-lg relative group transition-all`} style={{ height: `${height}%` }}>
+                                        <div className={`absolute top-0 w-full ${height === 70 ? 'h-1.5 bg-primary shadow-[0_0_15px_rgba(56,189,248,0.8)]' : 'h-1 bg-primary shadow-[0_0_10px_rgba(56,189,248,0.5)]'}`}></div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex justify-between mt-4 text-[9px] text-slate-400 font-semibold uppercase tracking-widest">
+                                <span>00h</span><span>04h</span><span>08h</span><span>12h</span><span>16h</span><span>20h</span>
+                            </div>
+                        </section>
+
+                        <section className="glass-card p-5 rounded-2xl">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-bold text-sm">Usuários Recentes</h3>
+                                <div className="flex gap-2">
+                                    <button className="p-1.5 glass-card rounded-lg flex items-center justify-center"><span className="material-symbols-outlined text-xs icon-thin">filter_list</span></button>
+                                    <button className="p-1.5 glass-card rounded-lg flex items-center justify-center"><span className="material-symbols-outlined text-xs icon-thin">sort</span></button>
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                {users.slice(0, 5).map((user, idx) => (
+                                    <div key={user.id} className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-2xl border border-white/10 overflow-hidden bg-white/5 flex items-center justify-center font-bold text-primary">
+                                                {user.app_settings?.[0]?.personal_data?.name?.[0]?.toUpperCase() || 'A'}
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-semibold text-white/90">{user.app_settings?.[0]?.personal_data?.name || `Agente ${idx + 1}`}</p>
+                                                <p className="text-[10px] text-slate-400 capitalize">Motorista • {user.subscription_plan}</p>
                                             </div>
                                         </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
+                                                <input
+                                                    defaultChecked={user.subscription_plan !== 'free'}
+                                                    className="peer absolute block w-4 h-4 rounded-full bg-white border-2 border-transparent appearance-none cursor-pointer z-10 transition-transform duration-200 checked:translate-x-4 opacity-0"
+                                                    id={`toggle${idx}`}
+                                                    name={`toggle${idx}`}
+                                                    type="checkbox"
+                                                />
+                                                <label
+                                                    className="block overflow-hidden h-4 rounded-full bg-white/10 cursor-pointer peer-checked:bg-primary transition-colors duration-200 relative after:content-[''] after:absolute after:top-0 after:left-0 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                                                    htmlFor={`toggle${idx}`}
+                                                ></label>
+                                            </div>
+                                            <button className="p-1.5 rounded-xl hover:bg-white/5 text-slate-400">
+                                                <span className="material-symbols-outlined text-lg icon-thin">more_vert</span>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <button className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white active:scale-90 transition-all">
-                                        <span className="material-symbols-outlined icon-thin">more_vert</span>
-                                    </button>
+                                ))}
+                                {users.length === 0 && (
+                                    <div className="text-center py-4 text-xs text-slate-500">Nenhum usuário cadastrado.</div>
+                                )}
+                            </div>
+                            <button className="w-full mt-6 py-3 text-xs font-bold text-white/90 glass-card rounded-2xl hover:bg-white/10 transition-all border-white/10">
+                                Ver Todos os Usuários
+                            </button>
+                        </section>
+
+                        <section className="glass-card p-5 rounded-2xl">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-sm">Alertas de Status</h3>
+                                <span className="material-symbols-outlined text-slate-400 text-sm icon-thin">history</span>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0"></div>
+                                    <div>
+                                        <p className="text-[11px] font-medium text-white/90">Sistema de segurança atualizado</p>
+                                        <p className="text-[9px] text-slate-400 mt-0.5">Há 5 minutos</p>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
+                                <div className="flex items-start gap-3">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
+                                    <div>
+                                        <p className="text-[11px] font-medium text-white/90">Novo upgrade premium ativado</p>
+                                        <p className="text-[9px] text-slate-400 mt-0.5">Há 24 minutos</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
                     </section>
                 )}
 
