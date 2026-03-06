@@ -131,8 +131,11 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
             } catch (e) { console.warn('Pre-capture focus failed', e); }
         }
 
+        const imageSrc = webcamRef.current.getScreenshot();
+        if (!imageSrc) return null;
+
+        // Extract features for Visual ID in parallel or after capture
         const features = await extractFeatures(video);
-        const imageSrc = webcamRef.current.getScreenshot() || '';
         return { imageSrc, features };
     }, []);
 
@@ -226,7 +229,9 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
 
             const capture = await captureAndExtract();
             if (!capture) {
-                alert("Falha na captura.");
+                console.error("Capture returned null");
+                alert("Falha ao capturar imagem da câmera. Verifique as permissões.");
+                setLoading(false);
                 return;
             }
 
@@ -375,9 +380,9 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                         screenshotFormat="image/jpeg"
                         onUserMedia={handleCameraLoad}
                         videoConstraints={{
-                            facingMode: { exact: "environment" },
-                            width: { min: 1280, ideal: 3840, max: 7680 },
-                            height: { min: 720, ideal: 2160, max: 4320 },
+                            facingMode: "environment",
+                            width: { ideal: 3840 },
+                            height: { ideal: 2160 },
                             aspectRatio: 1.777777778,
                             // @ts-ignore
                             advanced: [
@@ -389,30 +394,15 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                         }}
                         className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 camera-grid opacity-30" />
 
-                    {/* Simple Viewfinder HUD */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-72 h-48 border border-white/5 rounded-3xl relative overflow-hidden">
-                            <div className="absolute top-4 left-4 w-4 h-4 border-t border-l border-white/10 rounded-tl" />
-                            <div className="absolute top-4 right-4 w-4 h-4 border-t border-r border-white/10 rounded-tr" />
-                            <div className="absolute bottom-4 left-4 w-4 h-4 border-b border-l border-white/10 rounded-bl" />
-                            <div className="absolute bottom-4 right-4 w-4 h-4 border-b border-r border-white/10 rounded-br" />
-                        </div>
-                    </div>
+                    {/* Viewfinder removed to avoid obstructing image */}
                 </div>
 
                 {/* Minimalist Reader View */}
                 <div
                     className="absolute inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none"
                 >
-                    {/* Viewfinder Only - Simplified */}
-                    <div className="w-80 h-56 border border-white/5 rounded-[3rem] relative overflow-hidden backdrop-blur-[1px]">
-                        <div className="absolute top-6 left-6 w-6 h-6 border-t border-l border-white/10 rounded-tl-xl" />
-                        <div className="absolute top-6 right-6 w-6 h-6 border-t border-r border-white/10 rounded-tr-xl" />
-                        <div className="absolute bottom-6 left-6 w-6 h-6 border-b border-l border-white/10 rounded-bl-xl" />
-                        <div className="absolute bottom-6 right-6 w-6 h-6 border-b border-r border-white/10 rounded-br-xl" />
-                    </div>
+                    {/* Full screen interactive area */}
 
                     {/* Interactive Area for Scan Mode */}
                     {cameraMode === 'scan' && (
