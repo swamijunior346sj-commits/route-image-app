@@ -9,30 +9,32 @@ const defaultCenter = { lat: -23.5505, lng: -46.6333 };
 const mapContainerStyle = { width: '100%', height: '100%' };
 
 const NIGHT_MAP_STYLE = [
-    { "elementType": "geometry", "stylers": [{ "color": "#0F172A" }] },
-    { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
-    { "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
-    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0F172A" }] },
-    { "featureType": "administrative", "elementType": "geometry", "stylers": [{ "visibility": "off" }] },
+    { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },
+    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] },
+    { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
+    { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
     { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
-    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1E293B" }] },
-    { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748B" }] },
-    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#1E293B" }] },
-    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#334155" }] },
-    { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#CBD5E1" }] },
+    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
+    { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
+    { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
+    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] },
+    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] },
     { "featureType": "transit", "stylers": [{ "visibility": "off" }] },
-    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#082F49" }] }
+    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] }
 ];
 
-const SILVER_MAP_STYLE = [
-    { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
-    { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
-    { "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
-    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f5f5" }] },
-    { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#bdbdbd" }] },
+const WAZE_MAP_STYLE = [
+    { "featureType": "landscape", "stylers": [{ "color": "#fdfaf3" }] },
+    { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
     { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
-    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#dadada" }] },
-    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#c9c9c9" }] }
+    { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#e1e1e1" }, { "weight": 1.5 }] },
+    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#ffcc66" }] },
+    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#f1c40f" }, { "weight": 2 }] },
+    { "featureType": "road.arterial", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
+    { "featureType": "road.local", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
+    { "featureType": "water", "stylers": [{ "color": "#7fc9bd" }] },
+    { "featureType": "landscape.natural.terrain", "stylers": [{ "color": "#d6e8d1" }] },
+    { "featureType": "landscape.man_made", "stylers": [{ "color": "#f7f1df" }] }
 ];
 
 // Custom Marker Components
@@ -92,7 +94,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     const mapRef = useRef<google.maps.Map | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [isHudMinimized, setIsHudMinimized] = useState(false);
-    const [mapTheme, setMapTheme] = useState<'night' | 'silver'>('night');
+    const [mapTheme, setMapTheme] = useState<'night' | 'waze'>('night');
     const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,7 +104,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     useEffect(() => {
         const checkTheme = () => {
             const isLight = document.documentElement.classList.contains('light-mode');
-            setMapTheme(isLight ? 'silver' : 'night');
+            setMapTheme(isLight ? 'waze' : 'night');
         };
         checkTheme();
         const observer = new MutationObserver(checkTheme);
@@ -312,7 +314,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                     {/* Top Right Quick Actions */}
                     <div className="absolute top-6 right-4 z-20 flex gap-2 pointer-events-auto">
                         <button
-                            onClick={() => setMapTheme(prev => prev === 'night' ? 'silver' : 'night')}
+                            onClick={() => setMapTheme(prev => prev === 'night' ? 'waze' : 'night')}
                             className={`size-12 rounded-[1.25rem] backdrop-blur-xl transition-all flex items-center justify-center shadow-2xl ${mapTheme === 'night'
                                 ? 'bg-amber-500/10 border border-amber-500/20 text-amber-500'
                                 : 'bg-primary/10 border border-primary/20 text-primary'
@@ -346,7 +348,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                             fullscreenControl: false,
                             clickableIcons: false,
                             gestureHandling: 'greedy', // Better for mobile touch
-                            styles: mapTheme === 'night' ? NIGHT_MAP_STYLE : SILVER_MAP_STYLE
+                            styles: mapTheme === 'night' ? NIGHT_MAP_STYLE : WAZE_MAP_STYLE
                         }}
                     >
                         {/* Full Route Outline (Subtle Background Path) */}
@@ -357,25 +359,25 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                                     suppressMarkers: true,
                                     preserveViewport: true, // Crucial: Stop auto-zoom out on route change
                                     polylineOptions: {
-                                        strokeColor: '#3B82F6',
+                                        strokeColor: '#303f9f',
                                         strokeWeight: 4,
-                                        strokeOpacity: 0.3,
+                                        strokeOpacity: 0.2,
                                         zIndex: 1
                                     }
                                 }}
                             />
                         )}
 
-                        {/* Active Leg Highlight (Vibrant Glowing Path to Next Stop) */}
+                        {/* Active Leg Highlight (Vibrant Waze Blue Path) */}
                         {directions && (
                             <DirectionsRenderer
                                 directions={directions}
                                 options={{
                                     suppressMarkers: true,
-                                    preserveViewport: true, // Crucial: Stop auto-zoom out on route change
+                                    preserveViewport: true,
                                     polylineOptions: {
-                                        strokeColor: '#60A5FA',
-                                        strokeWeight: 7,
+                                        strokeColor: '#33CCFF',
+                                        strokeWeight: 9,
                                         strokeOpacity: 1,
                                         zIndex: 10
                                     }
