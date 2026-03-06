@@ -120,6 +120,19 @@ export const DeliveryDetailView = ({ delivery, onBack, onNavigateToMap }: Delive
 
             <footer className="fixed bottom-0 left-0 right-0 p-6 pb-12 z-50 bg-gradient-to-t from-bg-start via-bg-start/95 to-transparent flex gap-3">
                 <button
+                    onClick={() => {
+                        if (delivery.lat && delivery.lng) {
+                            window.open(`https://waze.com/ul?ll=${delivery.lat},${delivery.lng}&navigate=yes`, '_blank');
+                        } else {
+                            alert("Coordenadas não disponíveis para este alvo.");
+                        }
+                    }}
+                    className="size-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-all group"
+                    title="Navegar com Waze"
+                >
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_icon.svg" className="size-8 opacity-60 group-hover:opacity-100 transition-opacity" alt="Waze" />
+                </button>
+                <button
                     onClick={onBack}
                     className="size-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-all"
                 >

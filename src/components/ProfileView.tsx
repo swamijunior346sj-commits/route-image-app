@@ -6,9 +6,10 @@ import { LoadingOverlay } from './LoadingOverlay';
 interface ProfileViewProps {
     onLogout: () => void;
     onBack?: () => void;
+    onNavigateToAdmin?: () => void;
 }
 
-export const ProfileView = ({ onLogout, onBack }: ProfileViewProps) => {
+export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin }: ProfileViewProps) => {
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -177,25 +178,32 @@ export const ProfileView = ({ onLogout, onBack }: ProfileViewProps) => {
                 </section>
 
                 <section className="space-y-4 mt-8">
-                    <h3 className="text-[11px] font-black tracking-[0.2em] uppercase text-slate-500 ml-1 opacity-60">Financeiro & Segurança</h3>
-                    <div className="glass-card rounded-[2.5rem] p-4 px-6 border-white/5 flex items-center justify-between">
+                    <h3 className="text-[11px] font-black tracking-[0.2em] uppercase text-red-500/60 ml-1 opacity-60">Administração</h3>
+                    <button
+                        onClick={onNavigateToAdmin}
+                        className="w-full glass-card rounded-[2.5rem] p-4 px-6 border-white/5 flex items-center justify-between active:scale-[0.98] transition-all group"
+                    >
                         <div className="flex items-center gap-4">
-                            <div className="size-10 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-400">
-                                <span className="material-symbols-outlined !text-[20px]">payments</span>
+                            <div className="size-10 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-400 group-hover:bg-red-500/20 transition-colors">
+                                <span className="material-symbols-outlined !text-[20px]">admin_panel_settings</span>
                             </div>
-                            <div>
-                                <p className="text-sm font-bold text-white/90">Minha Carteira</p>
-                                <p className="text-[10px] text-slate-500 font-medium capitalize">Extrato de repasses</p>
+                            <div className="text-left">
+                                <p className="text-sm font-bold text-white/90">Painel ADM</p>
+                                <p className="text-[10px] text-slate-500 font-medium capitalize">Controle de sistema • ERP</p>
                             </div>
                         </div>
-                        <span className="text-sm font-black text-white italic">R$ 1.450</span>
-                    </div>
+                        <span className="material-symbols-outlined text-slate-600 group-hover:translate-x-1 transition-transform">chevron_right</span>
+                    </button>
                 </section>
+
+                {/* Footer Info inside scrollable area */}
+                <div className="pt-12 pb-20 text-center opacity-40">
+                    <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.5em]">RouteVision v.2.4.0 • 2024</p>
+                </div>
             </main>
 
-            <footer className="fixed bottom-0 left-0 right-0 p-12 text-center pointer-events-none">
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.5em]">RouteVision v.2.4.0 • 2024</p>
-            </footer>
+            {/* Nav Fade Overlay */}
+            <nav className="fixed bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-bg-start via-bg-start/80 to-transparent pointer-events-none z-10"></nav>
         </div>
     );
 };

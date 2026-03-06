@@ -8,6 +8,7 @@ import { AuthView } from './components/AuthView';
 import { ProfileView } from './components/ProfileView';
 import { loadModel } from './services/imageProcessing';
 import { LoadingOverlay } from './components/LoadingOverlay';
+import { AdminView } from './components/AdminView';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -15,6 +16,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute'>('map');
   const [modelLoading, setModelLoading] = useState(true);
   const [mapVersion, setMapVersion] = useState(0);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
 
 
   // Use localStorage to pretend we have a real session active
@@ -91,11 +93,19 @@ export default function App() {
           />
         )}
         {currentTab === 'profile' && <ProfileView
-          onLogout={() => setIsAuthenticated(false)}
+          onLogout={() => {
+            localStorage.removeItem('isAuthenticated');
+            setIsAuthenticated(false);
+          }}
           onBack={() => changeTab('map')}
+          onNavigateToAdmin={() => setIsAdminOpen(true)}
         />}
       </div>
-      <BottomNav currentTab={currentTab} setTab={changeTab} />
+      {!isAdminOpen && <BottomNav currentTab={currentTab} setTab={changeTab} />}
+
+      {isAdminOpen && (
+        <AdminView onBack={() => setIsAdminOpen(false)} />
+      )}
 
 
     </div>

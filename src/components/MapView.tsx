@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { GoogleMap, useJsApiLoader, DirectionsRenderer, OverlayView, TrafficLayer } from '@react-google-maps/api';
-import { getActiveRoute, updateActiveRoute } from '../services/db';
+import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
 import confetti from 'canvas-confetti';
 
@@ -15,7 +15,7 @@ const mapOptions = {
     mapTypeControl: false,
     streetViewControl: false,
     fullscreenControl: false,
-    clickableIcons: false, // Prevent Google POI clicks
+    clickableIcons: false,
 };
 
 const getMapStyles = (showPOIs: boolean) => [
@@ -25,28 +25,15 @@ const getMapStyles = (showPOIs: boolean) => [
     { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
     { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": showPOIs ? "#64748b" : "transparent" }] },
     { "featureType": "poi", "elementType": "labels.icon", "stylers": [{ "visibility": showPOIs ? "on" : "off" }] },
-    { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
-    { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#1e293b" }] },
     { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1E293B" }] },
-    { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#334155" }] },
-    { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
     { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#3B82F6" }, { "lightness": -40 }] },
-    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e3a8a" }] },
-    { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
-    { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#2f3948" }] },
-    { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
     { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#082f49" }] },
-    { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#0c4a6e" }] },
-    { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#0c4a6e" }] }
 ];
 
 // Custom Marker Components
 const NumberedMarker = ({ number, color }: { number: number, color: string }) => (
     <div className="relative group" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
-        <div
-            className="size-10 rounded-full border-[3px] border-white/20 shadow-2xl flex items-center justify-center relative z-10 active:scale-90 transition-transform backdrop-blur-md"
-            style={{ backgroundColor: `${color}CC` }}
-        >
+        <div className="size-10 rounded-full border-[3px] border-white/20 shadow-2xl flex items-center justify-center relative z-10 active:scale-90 transition-transform backdrop-blur-md" style={{ backgroundColor: `${color}CC` }}>
             <span className="text-white font-black text-xs italic">{number}</span>
         </div>
         <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 rotate-45 z-0" style={{ backgroundColor: `${color}CC`, borderRight: '2px solid rgba(255,255,255,0.1)', borderBottom: '2px solid rgba(255,255,255,0.1)' }}></div>
@@ -130,15 +117,18 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
         const updated = route.map(p => p.id === pointId ? { ...p, isDelivered: true } : p);
         setRoute(updated);
         await updateActiveRoute(updated);
-
-        confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#3B82F6', '#60A5FA', '#FFFFFF']
-        });
-
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#3B82F6', '#60A5FA', '#FFFFFF'] });
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    };
+
+    const handleClearRoute = async () => {
+        if (confirm("Deseja apagar toda a rota ativa? Esta ação não pode ser desfeita.")) {
+            await clearActiveRoute();
+            setRoute([]);
+            setDirections(null);
+            setIsNavigating(false);
+            if (navigator.vibrate) navigator.vibrate(50);
+        }
     };
 
     if (!isLoaded) return (
@@ -150,92 +140,84 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
 
     return (
         <div className="relative w-full h-full bg-bg-start overflow-hidden font-sans">
-            {/* HUD Header */}
+            {/* Header */}
             <header className="absolute top-0 left-0 right-0 z-20 px-6 pt-14 pb-12 flex items-center justify-between pointer-events-none">
                 <div className="flex flex-col pointer-events-auto">
                     <span className="text-[10px] font-black tracking-[0.3em] text-primary/80 uppercase">GPS Activo</span>
-                    <h1 className="text-white font-black text-2xl tracking-tighter italic">Navegação</h1>
+                    <h1 className="text-white font-black text-2xl tracking-tighter italic">{activeTab === 'map' ? 'Navegação' : 'Itinerário'}</h1>
                 </div>
 
                 <div className="flex gap-3 pointer-events-auto">
-                    <button
-                        onClick={() => setTraffic(!traffic)}
-                        className={`size-12 rounded-[1.25rem] flex items-center justify-center transition-all ${traffic ? 'bg-primary text-white shadow-premium' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}
-                    >
+                    <button onClick={() => setTraffic(!traffic)} className={`size-12 rounded-[1.25rem] flex items-center justify-center transition-all ${traffic ? 'bg-primary text-white shadow-premium' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}>
                         <span className="material-symbols-outlined !text-[24px]">traffic</span>
                     </button>
-                    <button
-                        onClick={() => setShowPOIs(!showPOIs)}
-                        className={`size-12 rounded-[1.25rem] flex items-center justify-center transition-all ${!showPOIs ? 'bg-primary text-white shadow-premium' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}
-                    >
+                    <button onClick={() => setShowPOIs(!showPOIs)} className={`size-12 rounded-[1.25rem] flex items-center justify-center transition-all ${!showPOIs ? 'bg-primary text-white shadow-premium' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}>
                         <span className="material-symbols-outlined !text-[24px]">{showPOIs ? 'visibility' : 'visibility_off'}</span>
                     </button>
-                    <button className="size-12 rounded-[1.25rem] bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400 flex items-center justify-center">
-                        <span className="material-symbols-outlined !text-[24px]">settings</span>
+                    <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center">
+                        <span className="material-symbols-outlined !text-[24px]">delete_sweep</span>
                     </button>
                 </div>
             </header>
 
-            {/* Map Container */}
+            {/* Main Content Area */}
             <div className="absolute inset-0 z-0">
-                <GoogleMap
-                    mapContainerStyle={mapContainerStyle}
-                    center={currentPos}
-                    zoom={15}
-                    options={{
-                        ...mapOptions,
-                        styles: getMapStyles(showPOIs)
-                    }}
-                >
-                    {traffic && <TrafficLayer />}
-                    {directions && (
-                        <DirectionsRenderer
-                            directions={directions}
-                            options={{
-                                suppressMarkers: true,
-                                polylineOptions: {
-                                    strokeColor: '#3B82F6',
-                                    strokeWeight: 6,
-                                    strokeOpacity: 0.8
-                                }
-                            }}
-                        />
-                    )}
-
-                    <OverlayView
-                        position={currentPos}
-                        mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                {activeTab === 'map' ? (
+                    <GoogleMap
+                        mapContainerStyle={mapContainerStyle}
+                        center={currentPos}
+                        zoom={15}
+                        options={{ ...mapOptions, styles: getMapStyles(showPOIs) }}
                     >
-                        <CurrentMarker />
-                    </OverlayView>
-
-                    {route.map((p, idx) => {
-                        if (p.lat === null || p.lng === null) return null;
-                        return (
-                            <OverlayView
-                                key={p.id}
-                                position={{ lat: p.lat, lng: p.lng }}
-                                mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                            >
+                        {traffic && <TrafficLayer />}
+                        {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true, polylineOptions: { strokeColor: '#3B82F6', strokeWeight: 6, strokeOpacity: 0.8 } }} />}
+                        <OverlayView position={currentPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}><CurrentMarker /></OverlayView>
+                        {route.map((p, idx) => p.lat && p.lng && (
+                            <OverlayView key={p.id} position={{ lat: p.lat, lng: p.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                                 {p.isDelivered ? <DeliveredMarker /> : <NumberedMarker number={idx + 1} color={idx === 0 ? '#3B82F6' : '#475569'} />}
                             </OverlayView>
-                        );
-                    })}
-                </GoogleMap>
+                        ))}
+                    </GoogleMap>
+                ) : (
+                    <div className="w-full h-full bg-bg-start pt-32 px-6 overflow-y-auto no-scrollbar pb-48">
+                        {route.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full opacity-20 text-center">
+                                <span className="material-symbols-outlined !text-[64px] mb-4">route</span>
+                                <p className="font-black uppercase tracking-widest text-xs">Nenhuma rota ativa</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {route.map((p, idx) => (
+                                    <div key={p.id} className={`glass-card rounded-3xl p-5 border-l-4 transition-all ${p.isDelivered ? 'border-emerald-500 opacity-60' : 'border-primary'}`}>
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Parada #{idx + 1}</span>
+                                                <h3 className="text-lg font-black text-white italic truncate uppercase">{p.name}</h3>
+                                                <p className="text-xs text-slate-500 font-bold uppercase mt-1">{p.neighborhood}</p>
+                                            </div>
+                                            {p.isDelivered ? (
+                                                <span className="material-symbols-outlined text-emerald-500">check_circle</span>
+                                            ) : (
+                                                <button onClick={() => handleComplete(p.id)} className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center active:scale-95 transition-all">
+                                                    <span className="material-symbols-outlined">check</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
-            {/* Floating Navigation HUD */}
-            {activePoint && isNavigating && !isHudMinimized && (
-                <div className="absolute bottom-36 inset-x-6 z-20 animate-slide-up">
+            {/* Navigation HUD */}
+            {activeTab === 'map' && activePoint && isNavigating && !isHudMinimized && (
+                <div className="absolute bottom-56 inset-x-6 z-20 animate-slide-up">
                     <div className="glass-card rounded-[2.5rem] p-6 shadow-2xl border-white/10 relative overflow-hidden group">
-                        <button
-                            onClick={() => setIsHudMinimized(true)}
-                            className="absolute top-6 right-6 z-20 text-slate-500 hover:text-white transition-colors"
-                        >
+                        <button onClick={() => setIsHudMinimized(true)} className="absolute top-6 right-6 z-20 text-slate-500 hover:text-white transition-colors">
                             <span className="material-symbols-outlined !text-[20px]">close</span>
                         </button>
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[40px] -mr-16 -mt-16 group-hover:bg-primary/20 transition-all duration-700"></div>
-
                         <div className="flex justify-between items-start mb-5 relative z-10">
                             <div>
                                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-1 block">Próximo Alvo</span>
@@ -246,36 +228,26 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                                 <p className="text-lg font-black text-white italic">14 min</p>
                             </div>
                         </div>
-
-                        <div className="flex items-center gap-3 mb-8 relative z-10">
-                            <span className="material-symbols-outlined !text-[18px] text-primary/60">location_on</span>
-                            <p className="text-[13px] text-slate-400 font-medium truncate italic opacity-80">{activePoint.neighborhood || 'Bairro ñ info.'}</p>
-                        </div>
-
                         <div className="flex gap-3 relative z-10">
+                            <button className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-all group"
+                                onClick={() => { if (activePoint.lat && activePoint.lng) window.open(`https://waze.com/ul?ll=${activePoint.lat},${activePoint.lng}&navigate=yes`, '_blank'); }}
+                            >
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_icon.svg" className="size-7 opacity-60 group-hover:opacity-100 transition-opacity" alt="Waze" />
+                            </button>
                             <button className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-all">
                                 <span className="material-symbols-outlined !text-[24px]">phone</span>
                             </button>
-                            <button
-                                onClick={() => handleComplete(activePoint.id)}
-                                className="flex-1 h-14 bg-emerald-500 shadow-[0_10px_20px_-5px_rgba(16,185,129,0.4)] text-white font-black italic uppercase tracking-[0.2em] rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all group/btn"
-                            >
+                            <button onClick={() => handleComplete(activePoint.id)} className="flex-1 h-14 bg-emerald-500 shadow-premium text-white font-black italic uppercase tracking-[0.2em] rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all group/btn">
                                 <span className="material-symbols-outlined group-hover:rotate-12 transition-transform">verified</span>
-                                CONFIRMAR ENTREGA
+                                CONFIRMAR
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {activePoint && (!isNavigating || isHudMinimized) && (
-                <button
-                    onClick={() => {
-                        setIsNavigating(true);
-                        setIsHudMinimized(false);
-                    }}
-                    className="absolute bottom-36 right-6 z-20 h-16 px-6 rounded-2xl glass-card flex items-center gap-3 text-primary shadow-2xl animate-fade-in active:scale-95 transition-all"
-                >
+            {activeTab === 'map' && activePoint && (!isNavigating || isHudMinimized) && (
+                <button onClick={() => { setIsNavigating(true); setIsHudMinimized(false); }} className="absolute bottom-56 right-6 z-20 h-16 px-6 rounded-2xl glass-card flex items-center gap-3 text-primary shadow-2xl animate-fade-in active:scale-95 transition-all">
                     <span className="material-symbols-outlined !text-[28px] animate-pulse">navigation</span>
                     <div className="flex flex-col items-start leading-none">
                         <span className="text-[10px] font-black uppercase tracking-widest">Iniciar</span>
@@ -284,8 +256,8 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                 </button>
             )}
 
-            {/* Bottom Floating Bar */}
-            <div className="absolute bottom-10 inset-x-6 z-20 flex gap-4">
+            {/* Tab Bar - Elevated to avoid overlap */}
+            <div className="absolute bottom-32 inset-x-6 z-20 flex gap-4">
                 <button
                     onClick={() => setActiveTab('map')}
                     className={`flex-1 h-14 rounded-[1.5rem] flex items-center justify-center gap-2 font-black italic uppercase tracking-widest text-[11px] transition-all ${activeTab === 'map' ? 'bg-white text-bg-start shadow-xl' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}
@@ -301,6 +273,9 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                     LISTAGEM
                 </button>
             </div>
+
+            {/* Nav Fade Overlay */}
+            <nav className="fixed bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-bg-start via-bg-start/80 to-transparent pointer-events-none z-10"></nav>
         </div>
     );
 };

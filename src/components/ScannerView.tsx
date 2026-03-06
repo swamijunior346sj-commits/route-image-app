@@ -50,7 +50,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
     const [aiStatus, setAiStatus] = useState('');
     const [facingMode] = useState<'environment' | 'user'>('environment');
 
-    const VALOR_POR_PACOTE = 2.50;
+    const VALOR_POR_PACOTE = 2.25;
     const SIMILARITY_THRESHOLD = 0.80;
 
     const loadDashboardData = useCallback(async () => {
@@ -323,7 +323,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
 
     if (viewMode === 'camera') {
         return (
-            <div className="fixed inset-0 z-[100] bg-black flex flex-col font-sans overflow-hidden">
+            <div className="fixed inset-0 z-[11000] bg-black flex flex-col font-sans overflow-hidden">
                 {/* Camera Layer */}
                 <div className="absolute inset-0 z-0">
                     <Webcam
@@ -461,7 +461,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
         const coordsValue = latInput && lngInput ? `${latInput}, ${lngInput}` : '';
 
         return (
-            <div className="fixed inset-0 z-[200] bg-bg-start flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-500 overflow-hidden font-sans">
+            <div className="fixed inset-0 z-[11000] bg-bg-start flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-500 overflow-hidden font-sans">
                 <header className="sticky top-0 z-50 backdrop-blur-xl bg-bg-start/60 border-b border-white/5 px-6 pt-10 pb-5">
                     <div className="flex items-center justify-between">
                         <button
@@ -638,7 +638,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                         </div>
                         <div className="bg-white/5 rounded-2xl p-4 border border-white/5 shadow-inner">
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 opacity-60">Ganhos</p>
-                            <p className="text-2xl font-black text-white/90">R$ {stats.earnings.toFixed(0)}</p>
+                            <p className="text-2xl font-black text-white/90">R$ {stats.earnings.toFixed(2).replace('.', ',')}</p>
                         </div>
                     </div>
                 </section>
@@ -715,17 +715,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                 </section>
             </main>
 
-            {/* Premium Header Footer */}
-            <footer className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg-start via-bg-start/95 to-transparent p-6 pb-32 z-50">
-                <button
-                    onClick={handleStartCamera}
-                    className="w-full h-18 bg-primary hover:bg-primary/90 text-white font-black italic uppercase tracking-[0.3em] rounded-2xl shadow-fab active:scale-[0.96] transition-all flex items-center justify-center gap-3 group"
-                >
-                    <span className="material-symbols-outlined !text-[28px] group-hover:rotate-90 transition-transform duration-500">add_circle</span>
-                    <span>NOVO REGISTRO</span>
-                    <span className="material-symbols-outlined ml-2 opacity-40 group-hover:translate-x-1 transition-transform">chevron_right</span>
-                </button>
-            </footer>
+            {/* Nav Fade Overlay */}
+            <nav className="fixed bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-bg-start via-bg-start/80 to-transparent pointer-events-none z-10"></nav>
 
             {/* Registering/AI Analysis Overlay */}
             {isAiAnalyzing && (

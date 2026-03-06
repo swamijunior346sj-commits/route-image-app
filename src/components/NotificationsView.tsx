@@ -4,7 +4,7 @@ interface NotificationsViewProps {
 
 export const NotificationsView = ({ onBack }: NotificationsViewProps) => {
     return (
-        <div className="fixed inset-0 z-[150] bg-bg-start flex flex-col font-sans animate-in fade-in slide-in-from-right duration-500 overflow-hidden">
+        <div className="fixed inset-0 z-[11000] bg-bg-start flex flex-col font-sans animate-in fade-in slide-in-from-right duration-500 overflow-hidden">
             {/* Header HUD */}
             <header className="sticky top-0 z-50 px-6 pt-14 pb-6 backdrop-blur-3xl bg-bg-start/60 flex items-center justify-between border-b border-white/5">
                 <button
@@ -22,7 +22,7 @@ export const NotificationsView = ({ onBack }: NotificationsViewProps) => {
                 </button>
             </header>
 
-            <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 no-scrollbar">
+            <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-48 no-scrollbar">
                 {/* Today Section */}
                 <section className="space-y-4">
                     <h2 className="text-[11px] font-black tracking-[0.2em] uppercase text-slate-500 ml-1 opacity-60">Hoje</h2>
@@ -86,12 +86,14 @@ export const NotificationsView = ({ onBack }: NotificationsViewProps) => {
                         </div>
                     </div>
                 </section>
+
+                <div className="pt-12 pb-20 text-center opacity-40">
+                    <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.5em]">Central de Inteligência RouteVision™</p>
+                </div>
             </main>
 
-            {/* Bottom Safe Indicator Footer */}
-            <footer className="fixed bottom-0 left-0 right-0 p-12 text-center pointer-events-none">
-                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.5em]">Central de Inteligência RouteVision™</p>
-            </footer>
+            {/* Bottom Safe Indicator Fade Overlay */}
+            <nav className="fixed bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-bg-start via-bg-start/80 to-transparent pointer-events-none z-10"></nav>
         </div>
     );
 };
