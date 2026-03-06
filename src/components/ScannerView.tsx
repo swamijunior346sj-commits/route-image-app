@@ -1,19 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import {
-    Bell,
-    Camera,
-    Navigation,
-    MapPin,
-    MoreVertical,
-    PlusCircle,
-    Sparkles,
-    Loader2,
-    CheckCircle2,
-    ChevronRight,
-    Search,
-} from 'lucide-react';
-import {
     getRecords,
     saveRecord,
     addPointToActiveRoute,
@@ -27,6 +14,7 @@ import {
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
 import { LoadingOverlay } from './LoadingOverlay';
+import { NotificationsView } from './NotificationsView';
 
 interface ScannerProps {
     onNavigateToMap: () => void;
@@ -43,7 +31,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
     const webcamRef = useRef<Webcam>(null);
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
-    const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm'>('dashboard');
+    const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm' | 'notifications'>('dashboard');
     const [torch, setTorch] = useState(false);
     const [lastCapturePreview, setLastCapturePreview] = useState<string | null>(null);
 
@@ -65,12 +53,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
     const VALOR_POR_PACOTE = 2.50;
     const SIMILARITY_THRESHOLD = 0.80;
 
-    // --- Initial Load ---
-    useEffect(() => {
-        loadDashboardData();
-    }, []);
-
-    const loadDashboardData = async () => {
+    const loadDashboardData = useCallback(async () => {
         try {
             const [appSettings, route] = await Promise.all([
                 getSettings(),
@@ -100,15 +83,27 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
             }
         } catch (err) {
             console.error('Failed to load dashboard:', err);
-        } finally {
-            // Dashboard load complete
         }
-    };
+    }, []);
+
+    // --- Initial Load ---
+    useEffect(() => {
+        loadDashboardData();
+    }, [loadDashboardData]);
+
+    useEffect(() => {
+        if (viewMode === 'dashboard') loadDashboardData();
+    }, [viewMode, loadDashboardData]);
+
+    useEffect(() => {
+        loadDashboardData();
+    }, [isSendingToRoute, loadDashboardData]);
 
     // --- Camera Logic ---
     const captureAndExtract = useCallback(async (): Promise<{ imageSrc: string, features: number[] } | null> => {
         if (!webcamRef.current) return null;
-        const video = (webcamRef.current as any).video;
+        // @ts-ignore - access to video element
+        const video = webcamRef.current.video as HTMLVideoElement | null;
         if (!video || video.readyState !== 4) return null;
 
         const features = await extractFeatures(video);
@@ -325,7 +320,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
     };
 
     // --- UI Helpers ---
-    const user = settings?.personalData;
 
     if (viewMode === 'camera') {
         return (
@@ -403,7 +397,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                                 <img src={lastCapturePreview} className="w-full h-full object-cover rounded-xl" alt="Preview" />
                             ) : (
                                 <div className="w-full h-full bg-white/5 rounded-xl flex items-center justify-center">
-                                    <MapPin size={24} className="text-white/10" />
+                                    <span className="material-symbols-outlined text-white/10 !text-[24px]">location_on</span>
                                 </div>
                             )}
                         </div>
@@ -411,11 +405,10 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                     </div>
 
                     <div className="flex items-center justify-between mt-8">
-                        {/* Manual Trigger (re-labeled as Nova Foto/Câmera) */}
+                        {/* Manual Trigger */}
                         <button
                             onClick={() => {
                                 if (navigator.vibrate) navigator.vibrate(50);
-                                // Visual feedback only, capture is handled by center button
                             }}
                             className="flex flex-col items-center gap-2 group"
                         >
@@ -433,7 +426,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                                 className="size-24 rounded-full bg-gradient-to-tr from-primary to-accent text-white flex items-center justify-center glow-blue active:scale-[0.92] transition-all shadow-inner relative overflow-hidden group"
                             >
                                 {loading ? (
-                                    <Loader2 className="animate-spin" size={40} />
+                                    <span className="material-symbols-outlined !text-[40px] animate-spin">sync</span>
                                 ) : (
                                     <span className="material-symbols-outlined !text-[44px] !font-light group-hover:scale-110 transition-transform">barcode_scanner</span>
                                 )}
@@ -468,8 +461,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
         const coordsValue = latInput && lngInput ? `${latInput}, ${lngInput}` : '';
 
         return (
-            <div className="fixed inset-0 z-[200] bg-bg-deep flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-500 overflow-hidden font-sans">
-                <header className="sticky top-0 z-50 backdrop-blur-xl bg-bg-deep/60 border-b border-white/5 px-6 pt-10 pb-5">
+            <div className="fixed inset-0 z-[200] bg-bg-start flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-500 overflow-hidden font-sans">
+                <header className="sticky top-0 z-50 backdrop-blur-xl bg-bg-start/60 border-b border-white/5 px-6 pt-10 pb-5">
                     <div className="flex items-center justify-between">
                         <button
                             onClick={() => setViewMode('camera')}
@@ -483,7 +476,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                 </header>
 
                 <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 no-scrollbar">
-                    {/* Capture Preview Section (Replaces the "Tirar Foto" placeholder if image exists) */}
+                    {/* Capture Preview Section */}
                     <div className="space-y-3">
                         <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
                             Foto da Etiqueta
@@ -501,8 +494,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                             )}
 
                             {isAiAnalyzing && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-bg-deep/80 backdrop-blur-md animate-in fade-in scale-in duration-500">
-                                    <Sparkles className="text-primary animate-pulse mb-4" size={32} />
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-bg-start/80 backdrop-blur-md animate-in fade-in scale-in duration-500">
+                                    <span className="material-symbols-outlined !text-[32px] text-primary animate-pulse mb-4">auto_awesome</span>
                                     <p className="text-xs font-bold text-white uppercase tracking-widest">{aiStatus}</p>
                                     <div className="mt-4 flex gap-1">
                                         <div className="size-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></div>
@@ -580,13 +573,13 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                     </div>
                 </main>
 
-                <footer className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg-graphite via-bg-graphite/90 to-transparent p-6 pb-10 z-[210]">
+                <footer className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg-start via-bg-start/90 to-transparent p-6 pb-10 z-[210]">
                     <button
                         onClick={handleSaveEntry}
                         disabled={loading || !addressInput.trim()}
-                        className="w-full h-16 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold text-[16px] rounded-2xl shadow-[0_15px_30px_-10px_rgba(59,130,246,0.5)] active:scale-[0.97] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                        className="w-full h-16 bg-primary hover:bg-primary/90 text-white font-black italic uppercase tracking-[0.3em] rounded-2xl shadow-premium active:scale-[0.97] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                     >
-                        {loading ? <Loader2 size={18} className="animate-spin" /> : (
+                        {loading ? <span className="material-symbols-outlined animate-spin !text-[20px]">sync</span> : (
                             <>
                                 <span className="material-symbols-outlined !font-semibold">verified</span>
                                 <span>Salvar Endereço</span>
@@ -599,84 +592,87 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
     }
 
     return (
-        <div className="relative w-full h-full bg-bg-deep overflow-hidden flex flex-col font-sans">
-            <header className="sticky top-0 z-50 backdrop-blur-2xl bg-bg-deep/80 border-b border-white/5 px-6 pt-12 pb-6 flex items-center justify-between">
+        <div className="relative w-full h-full bg-bg-start overflow-hidden flex flex-col font-sans">
+            <header className="sticky top-0 z-50 backdrop-blur-2xl bg-bg-start/80 border-b border-white/5 px-6 pt-12 pb-6 flex items-center justify-between">
                 <div className="flex flex-col">
                     <span className="text-[11px] font-bold text-primary tracking-[0.2em] uppercase mb-0.5">Visão Geral</span>
-                    <h1 className="text-2xl font-extrabold tracking-tight text-white">Dashboard</h1>
+                    <h1 className="text-2xl font-black tracking-tight text-white/90">Dashboard</h1>
                 </div>
-                <button className="relative flex items-center justify-center size-12 rounded-2xl bg-white/[0.03] border border-white/10 text-slate-300 active:scale-95 transition-all">
-                    <Bell size={22} className="opacity-70" />
-                    <span className="absolute top-3.5 right-3.5 size-2 bg-blue-500 rounded-full border-2 border-bg-deep"></span>
+                <button
+                    onClick={() => setViewMode('notifications')}
+                    className="relative flex items-center justify-center size-12 rounded-2xl bg-white/5 border border-white/10 text-slate-400 active:scale-95 transition-all"
+                >
+                    <span className="material-symbols-outlined !text-[24px]">notifications</span>
+                    <span className="absolute top-3.5 right-3.5 size-2 bg-primary rounded-full border-2 border-bg-start shadow-[0_0_8px_rgba(59,130,246,1)]"></span>
                 </button>
             </header>
 
-            <main className="px-6 py-8 space-y-8 pb-40 overflow-y-auto no-scrollbar flex-1 animate-in fade-in duration-700">
+            <main className="px-6 py-8 space-y-8 pb-40 overflow-y-auto no-scrollbar flex-1 animate-slide-up">
                 {/* Profile Card */}
-                <section className="glass-panel rounded-[2.5rem] p-6 relative overflow-hidden group">
-                    <div className="absolute -top-10 -right-10 size-40 bg-primary/20 blur-[60px] group-hover:bg-primary/30 transition-all duration-700"></div>
+                <section className="glass-card rounded-[2.5rem] p-6 relative overflow-hidden group">
+                    <div className="absolute -top-10 -right-10 size-40 bg-primary/10 blur-[60px] group-hover:bg-primary/20 transition-all duration-700"></div>
 
                     <div className="flex items-center gap-4 mb-6 relative z-10">
                         <div className="size-16 rounded-[1.25rem] bg-gradient-to-br from-primary to-accent p-[1px] shadow-lg">
-                            <div className="w-full h-full rounded-[1.25rem] bg-bg-deep flex items-center justify-center overflow-hidden">
-                                {user?.avatar ? (
-                                    <img src={user.avatar} className="w-full h-full object-cover" alt="Profile" />
+                            <div className="w-full h-full rounded-[1.25rem] bg-[#0F172A] flex items-center justify-center overflow-hidden">
+                                {settings?.personalData.avatar ? (
+                                    <img src={settings.personalData.avatar} className="w-full h-full object-cover" alt="Profile" />
                                 ) : (
-                                    <div className="text-white font-black text-xl italic">{user?.name ? user.name[0].toUpperCase() : 'C'}</div>
+                                    <div className="text-white font-black text-xl italic">{settings?.personalData.name ? settings.personalData.name[0].toUpperCase() : 'C'}</div>
                                 )}
                             </div>
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-white tracking-tight">{user?.name || 'Motorista'}</h2>
+                            <h2 className="text-lg font-bold text-white tracking-tight">{settings?.personalData.name || 'Motorista'}</h2>
                             <div className="flex items-center gap-2">
                                 <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                                <span className="text-xs font-semibold text-emerald-500 uppercase tracking-wide">Em serviço agora</span>
+                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Protocolo Ativo</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 relative z-10">
-                        <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/5 shadow-inner">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Entregas</p>
-                            <p className="text-2xl font-black text-white">{stats.deliveries}<span className="text-slate-600 text-lg">/{stats.total}</span></p>
+                        <div className="bg-white/5 rounded-2xl p-4 border border-white/5 shadow-inner">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 opacity-60">Entregas</p>
+                            <p className="text-2xl font-black text-white/90">{stats.deliveries}<span className="text-slate-500 text-lg">/{stats.total}</span></p>
                         </div>
-                        <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/5 shadow-inner">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Ganhos</p>
-                            <p className="text-2xl font-black text-white">R$ {stats.earnings.toFixed(0)}</p>
+                        <div className="bg-white/5 rounded-2xl p-4 border border-white/5 shadow-inner">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 opacity-60">Ganhos</p>
+                            <p className="text-2xl font-black text-white/90">R$ {stats.earnings.toFixed(0)}</p>
                         </div>
                     </div>
                 </section>
 
                 {/* Next Stop Section */}
-                <section className="space-y-4 animate-in slide-in-from-left-4 duration-500 delay-100">
-                    <h3 className="text-[12px] font-bold tracking-widest uppercase text-slate-500 ml-1 opacity-50">Próxima Parada</h3>
+                <section className="space-y-4">
+                    <h3 className="text-[12px] font-bold tracking-widest uppercase text-slate-400 ml-1 opacity-50">Próxima Parada</h3>
                     {nextStop ? (
-                        <div className="glass-panel rounded-[2rem] p-5 border-l-4 border-l-primary group active:scale-[0.98] transition-all">
+                        <div className="glass-card rounded-[2.5rem] p-5 border-l-4 border-l-primary group active:scale-[0.98] transition-all">
                             <div className="flex justify-between items-start mb-4">
-                                <div className="space-y-1.5">
-                                    <span className="text-[9px] font-black py-1 px-2.5 bg-primary/20 text-blue-400 rounded-lg uppercase tracking-wider">Destino Atual</span>
-                                    <h4 className="text-lg font-extrabold text-white leading-tight pr-4">{nextStop.name}</h4>
+                                <div className="space-y-1.5 px-1">
+                                    <span className="text-[9px] font-black py-1 px-2.5 bg-primary/20 text-primary rounded-lg uppercase tracking-wider">Destino Atual</span>
+                                    <h4 className="text-lg font-bold text-white leading-tight pr-4">{nextStop.name}</h4>
                                 </div>
-                                <button className="size-10 rounded-xl bg-white/[0.03] flex items-center justify-center text-slate-500 hover:text-white transition-all">
-                                    <MoreVertical size={18} />
+                                <button className="size-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-all">
+                                    <span className="material-symbols-outlined">more_vert</span>
                                 </button>
                             </div>
-                            <div className="flex items-center gap-3 text-slate-400 mb-6">
-                                <MapPin size={16} className="text-primary/60" />
+                            <div className="flex items-center gap-3 text-slate-400 mb-6 px-1">
+                                <span className="material-symbols-outlined !text-[18px] text-primary/60">location_on</span>
                                 <span className="text-sm font-medium opacity-80 truncate">{nextStop.neighborhood || 'Endereço sem bairro'}</span>
                             </div>
                             <button
                                 onClick={onNavigateToMap}
-                                className="w-full py-4 bg-white/[0.04] hover:bg-primary border border-white/10 rounded-2xl text-white font-black text-sm transition-all flex items-center justify-center gap-2 group/btn"
+                                className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-white font-bold text-sm transition-all flex items-center justify-center gap-2 group/btn"
                             >
-                                <Navigation size={18} className="group-hover/btn:animate-pulse" />
-                                <span>INICIAR NAVEGAÇÃO</span>
+                                <span className="material-symbols-outlined !text-[20px] group-hover/btn:animate-pulse">navigation</span>
+                                <span className="tracking-widest">INICIAR NAVEGAÇÃO</span>
                             </button>
                         </div>
                     ) : (
-                        <div className="glass-panel p-8 rounded-[2rem] border-dash flex flex-col items-center justify-center text-center opacity-40">
-                            <div className="size-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                                <CheckCircle2 size={24} className="text-slate-500" />
+                        <div className="glass-card p-10 rounded-[2.5rem] flex flex-col items-center justify-center text-center opacity-40">
+                            <div className="size-14 bg-white/5 rounded-full flex items-center justify-center mb-4 border border-white/5">
+                                <span className="material-symbols-outlined text-slate-500">check_circle</span>
                             </div>
                             <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Sem entregas pendentes</p>
                         </div>
@@ -684,9 +680,9 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                 </section>
 
                 {/* Add Entry Section */}
-                <section className="space-y-5 animate-in slide-in-from-bottom-5 duration-700 delay-200">
+                <section className="space-y-5">
                     <div className="flex justify-between items-center ml-1">
-                        <h3 className="text-[12px] font-bold tracking-widest uppercase text-slate-500 opacity-50">Adicionar Endereço</h3>
+                        <h3 className="text-[12px] font-bold tracking-widest uppercase text-slate-400 opacity-50">Adicionar Endereço</h3>
                         <div className="h-[1px] flex-1 mx-4 bg-white/5"></div>
                     </div>
 
@@ -696,22 +692,22 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                             className="w-full relative group transition-all"
                         >
                             <div className="absolute inset-y-0 left-5 flex items-center text-slate-500 group-hover:text-primary transition-colors">
-                                <Search size={20} />
+                                <span className="material-symbols-outlined">search</span>
                             </div>
-                            <div className="w-full bg-white/[0.03] border border-white/10 rounded-[1.25rem] py-5 pl-14 pr-5 text-left">
-                                <span className="text-sm text-slate-500 font-medium">Pesquisar ou Listagem Diária</span>
+                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-14 pr-5 text-left text-sm text-slate-500 font-medium">
+                                Pesquisar ou Listagem Diária
                             </div>
                         </button>
 
                         <div
                             onClick={handleStartCamera}
-                            className="glass-panel rounded-[2rem] p-10 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-5 cursor-pointer hover:border-primary/50 hover:bg-white/[0.05] active:scale-[0.97] transition-all group"
+                            className="glass-card rounded-[2.5rem] p-10 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-5 cursor-pointer hover:border-primary/50 hover:bg-white/10 active:scale-[0.97] transition-all group"
                         >
-                            <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 shadow-lg transition-transform">
-                                <Camera size={32} />
+                            <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 shadow-lg transition-transform border border-primary/20">
+                                <span className="material-symbols-outlined !text-[36px]">photo_camera</span>
                             </div>
                             <div className="text-center space-y-1">
-                                <p className="text-base font-extrabold text-white tracking-tight">Foto da Etiqueta</p>
+                                <p className="text-base font-bold text-white tracking-tight">Foto da Etiqueta</p>
                                 <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest opacity-60">Toque para escanear com IA</p>
                             </div>
                         </div>
@@ -719,25 +715,44 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                 </section>
             </main>
 
-            {/* Premium FAB Footer */}
-            <footer className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg-deep via-bg-deep/95 to-transparent p-6 pb-12 z-50">
+            {/* Premium Header Footer */}
+            <footer className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg-start via-bg-start/95 to-transparent p-6 pb-32 z-50">
                 <button
                     onClick={handleStartCamera}
-                    className="w-full h-18 bg-gradient-to-r from-blue-700 to-blue-500 text-white font-black text-lg rounded-[1.25rem] shadow-fab active:scale-[0.96] active:brightness-110 transition-all flex items-center justify-center gap-3 group"
+                    className="w-full h-18 bg-primary hover:bg-primary/90 text-white font-black italic uppercase tracking-[0.3em] rounded-2xl shadow-fab active:scale-[0.96] transition-all flex items-center justify-center gap-3 group"
                 >
-                    <PlusCircle size={28} className="group-hover:rotate-90 transition-transform duration-500" />
+                    <span className="material-symbols-outlined !text-[28px] group-hover:rotate-90 transition-transform duration-500">add_circle</span>
                     <span>NOVO REGISTRO</span>
-                    <ChevronRight size={18} className="ml-2 opacity-40 group-hover:translate-x-1 transition-transform" />
+                    <span className="material-symbols-outlined ml-2 opacity-40 group-hover:translate-x-1 transition-transform">chevron_right</span>
                 </button>
             </footer>
+
+            {/* Registering/AI Analysis Overlay */}
+            {isAiAnalyzing && (
+                <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center p-8 backdrop-blur-3xl animate-fade-in transition-all">
+                    <div className="relative size-48 flex items-center justify-center mb-12">
+                        <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-[ping_3s_infinite]" />
+                        <div className="absolute inset-4 rounded-full border-2 border-primary/40 animate-[ping_2s_infinite]" />
+                        <div className="absolute inset-0 border-t-4 border-primary rounded-full animate-spin" />
+                        <span className="material-symbols-outlined !text-[64px] text-primary animate-pulse">auto_awesome</span>
+                    </div>
+                    <h2 className="text-2xl font-black italic uppercase tracking-widest text-white mb-3 text-center tracking-tighter">Protocolo RouteVision™</h2>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em] text-center">{aiStatus}</p>
+                </div>
+            )}
 
             {/* Sync Overlay */}
             {isSendingToRoute && (
                 <LoadingOverlay
                     title="Processando Rota"
                     subtitle="Identificando via Matriz de IA e Sincronizando..."
-                    icon={<Loader2 size={32} className="animate-spin text-white" />}
+                    icon={<span className="material-symbols-outlined !text-[32px] animate-spin text-white">sync</span>}
                 />
+            )}
+
+            {/* Notifications View Overlay */}
+            {viewMode === 'notifications' && (
+                <NotificationsView onBack={() => setViewMode('dashboard')} />
             )}
         </div>
     );

@@ -7,8 +7,9 @@ import { BottomNav } from './components/BottomNav';
 import { AuthView } from './components/AuthView';
 import { ProfileView } from './components/ProfileView';
 import { loadModel } from './services/imageProcessing';
-import { ScanEye } from 'lucide-react';
 import { LoadingOverlay } from './components/LoadingOverlay';
+
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute'>('map');
@@ -56,9 +57,9 @@ export default function App() {
   if (modelLoading) {
     return (
       <LoadingOverlay
-        title="Scanner"
-        subtitle="Iniciando Motor de IA e Reconhecimento"
-        icon={<ScanEye size={36} className="text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.8)]" />}
+        title="Protocolo RouteVision"
+        subtitle="Iniciando Motores de IA e Reconhecimento Neural"
+        icon={<span className="material-symbols-outlined !text-[44px] text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.8)]">center_focus_weak</span>}
       />
     );
   }
@@ -76,7 +77,7 @@ export default function App() {
             onNavigateToDailyRoute={() => changeTab('dailyRoute')}
           />
         )}
-        {currentTab === 'map' && <MapView key={mapVersion} />}
+        {currentTab === 'map' && <MapView key={mapVersion} googleMapsApiKey={GOOGLE_MAPS_API_KEY} />}
         {currentTab === 'records' && (
           <RecordsView
             onNavigateToMap={() => changeTab('map')}

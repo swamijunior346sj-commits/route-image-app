@@ -25,7 +25,7 @@ const toRow = (r: LocationRecord) => ({
 });
 
 /** Formats a text representation of GPS coordinates correcting comma to period */
-const parseCoord = (val: any): number | null => {
+const parseCoord = (val: unknown): number | null => {
     if (val === null || val === undefined) return null;
     const str = String(val).trim().replace(',', '.');
     if (!str) return null;
@@ -145,6 +145,7 @@ export const exportAsPDF = async () => {
     });
 
     // Footer
+    // @ts-ignore - jspdf internals access
     const pageCount = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
@@ -195,7 +196,7 @@ export const importFromCSV = async (file: File): Promise<number> => {
             delimiter: '',       // auto-detect , or ;
             complete: async (results) => {
                 try {
-                    const rows = results.data as Record<string, any>[];
+                    const rows = results.data as Record<string, unknown>[];
                     let count = 0;
                     for (const row of rows) {
                         const name = row['Nome'] || row['nome'] || row['name'] || row['Name'] || row['Endereço'] || row['endereco'] || row['Endereco'] || '';
@@ -235,7 +236,7 @@ export const importFromXLS = async (file: File): Promise<number> => {
                 const data = new Uint8Array(e.target?.result as ArrayBuffer);
                 const wb = XLSX.read(data, { type: 'array' });
                 const ws = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
+                const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
                 let count = 0;
                 for (const row of rows) {
                     const name = row['Nome'] || row['nome'] || row['name'] || row['Name'] || row['Endereço'] || row['endereco'] || row['Endereco'] || '';

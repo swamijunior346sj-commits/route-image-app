@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, LogOut, Check, Bike, Star, Clock, CreditCard, Bell, Eye, Moon, Navigation, ChevronRight } from 'lucide-react';
 import { getSettings, updateSettings } from '../services/db';
 import type { AppSettings } from '../services/db';
 import { LoadingOverlay } from './LoadingOverlay';
@@ -24,7 +23,6 @@ export const ProfileView = ({ onLogout, onBack }: ProfileViewProps) => {
 
     const handleLogout = () => {
         if (confirm("Deseja realmente sair da sua conta?")) {
-            localStorage.removeItem('isAuthenticated');
             onLogout();
         }
     };
@@ -54,170 +52,150 @@ export const ProfileView = ({ onLogout, onBack }: ProfileViewProps) => {
         reader.readAsDataURL(file);
     };
 
-    if (loading || !settings) return (
-        <LoadingOverlay
-            title="Sincronizando Perfil"
-            subtitle="Carregando estatísticas e preferências..."
-        />
-    );
+    if (loading || !settings) return <LoadingOverlay title="Acessando Perfil" subtitle="Carregando dados biométricos..." />;
 
     return (
-        <div className="fixed inset-0 bg-bg-deep flex flex-col font-sans overflow-x-hidden pb-12 overflow-y-auto no-scrollbar">
-            {/* Header Banner Section */}
-            <div className="relative h-72 w-full overflow-hidden shrink-0">
-                <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-primary/20 rounded-full blur-[80px]"></div>
-                <div className="absolute bottom-[-20%] left-[-10%] w-64 h-64 bg-accent/10 rounded-full blur-[80px]"></div>
+        <div className="relative w-full h-full bg-bg-start overflow-hidden flex flex-col font-sans">
+            <header className="fixed top-0 left-0 right-0 z-50 px-6 pt-12 pb-6 flex items-center justify-between">
+                <button
+                    onClick={onBack}
+                    className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 active:scale-95 transition-all text-white/90"
+                >
+                    <span className="material-symbols-outlined !text-[24px]">arrow_back_ios_new</span>
+                </button>
+                <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-black tracking-[0.3em] text-primary/80 mb-0.5">Gestão de Conta</span>
+                    <h1 className="text-white font-black text-xl tracking-tighter italic">Meu Perfil</h1>
+                </div>
+                <button
+                    onClick={handleLogout}
+                    className="flex items-center justify-center size-10 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all"
+                >
+                    <span className="material-symbols-outlined !text-[22px]">logout</span>
+                </button>
+            </header>
 
-                <div className="absolute inset-0 pt-10 px-6 flex flex-col items-center justify-start bg-white/[0.02] backdrop-blur-xl border-b border-white/5">
-                    {/* Back Button */}
-                    <button
-                        onClick={onBack}
-                        className="absolute top-10 left-6 size-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/90 active:scale-90 transition-all"
-                    >
-                        <ChevronLeft size={20} />
-                    </button>
+            <main className="flex-1 overflow-y-auto px-6 pt-32 pb-40 no-scrollbar">
+                {/* Profile Header Card */}
+                <section className="relative mb-10">
+                    <div className="glass-card rounded-[3rem] p-8 flex flex-col items-center text-center overflow-hidden">
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-primary/10 blur-[60px] -mr-20 -mt-20"></div>
 
-                    <div className="relative group">
-                        <label className="cursor-pointer block">
-                            <div className="size-24 rounded-full border-2 border-primary/30 p-1 bg-white/5 shadow-2xl relative overflow-hidden group">
-                                {settings.personalData.avatar ? (
-                                    <img alt="Perfil" className="w-full h-full rounded-full object-cover group-hover:opacity-75 transition-opacity" src={settings.personalData.avatar} />
-                                ) : (
-                                    <div className="w-full h-full rounded-full bg-primary/10 flex items-center justify-center">
-                                        <span className="text-3xl font-black text-primary">{settings.personalData.name?.charAt(0) || 'R'}</span>
+                        <div className="relative mb-6">
+                            <label className="cursor-pointer block">
+                                <div className="size-28 rounded-[2.5rem] bg-gradient-to-br from-primary via-accent to-white p-[2px] shadow-2xl relative">
+                                    <div className="w-full h-full rounded-[2.5rem] bg-bg-start overflow-hidden flex items-center justify-center">
+                                        {settings.personalData.avatar ? (
+                                            <img src={settings.personalData.avatar} alt="User avatar" className="w-full h-full object-cover shrink-0" />
+                                        ) : (
+                                            <span className="text-4xl font-black text-white italic">{settings.personalData.name[0]}</span>
+                                        )}
                                     </div>
-                                )}
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-bold uppercase tracking-widest">Alterar</div>
-                            </div>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-                        </label>
-                        <div className="absolute bottom-0 right-0 size-7 bg-primary rounded-full border-2 border-[#0F172A] flex items-center justify-center shadow-lg">
-                            <Check size={14} className="text-white font-bold" />
+                                    <div className="absolute -bottom-2 -right-2 size-10 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg border-2 border-bg-start">
+                                        <span className="material-symbols-outlined !text-[18px]">edit</span>
+                                    </div>
+                                </div>
+                                <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                            </label>
                         </div>
-                    </div>
-                    <h2 className="mt-4 text-2xl font-bold text-white tracking-tight">{settings.personalData.name || 'Ricardo Oliveira'}</h2>
-                    <p className="text-sm font-medium text-slate-400">Entregador Premium • Nível 4</p>
-                </div>
-            </div>
 
-            <main className="px-6 -mt-10 relative z-10 space-y-8 pb-20">
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 flex flex-col justify-between h-32 shadow-xl">
-                        <Bike size={24} className="text-primary" />
-                        <div>
-                            <p className="text-[22px] font-bold text-white">482</p>
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Entregas/Mês</p>
+                        <h2 className="text-2xl font-black text-white tracking-tight uppercase italic">{settings.personalData.name}</h2>
+                        <div className="flex items-center gap-2 mt-2 px-4 py-1.5 bg-white/5 rounded-full border border-white/5">
+                            <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                            <span className="text-[10px] uppercase font-bold text-white/50 tracking-widest">Status Activo</span>
                         </div>
-                    </div>
-                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 flex flex-col justify-between h-32 shadow-xl">
-                        <Star size={24} className="text-emerald-400" />
-                        <div>
-                            <p className="text-[22px] font-bold text-white">4.98</p>
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Avaliação</p>
-                        </div>
-                    </div>
-                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 flex flex-col justify-between h-32 shadow-xl">
-                        <Clock size={24} className="text-amber-400" />
-                        <div>
-                            <p className="text-[22px] font-bold text-white">124h</p>
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Tempo Online</p>
-                        </div>
-                    </div>
-                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 flex flex-col justify-between h-32 shadow-xl">
-                        <CreditCard size={24} className="text-blue-400" />
-                        <div>
-                            <p className="text-[22px] font-bold text-white">R$ 3.2k</p>
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Ganhos</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Vehicle Section */}
-                <section className="space-y-4">
-                    <h3 className="text-[13px] font-bold uppercase tracking-widest text-slate-400 ml-1">Veículo Principal</h3>
-                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex items-center gap-5 shadow-xl group active:scale-[0.98] transition-all">
-                        <div className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-inner">
-                            <span className="material-symbols-outlined !text-3xl text-primary font-light">two_wheeler</span>
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-white font-bold text-base">{settings.personalData.vehicle || 'Honda CB 500X'}</p>
-                            <p className="text-slate-400 text-sm">Placa: ABC-1234 • Cor: Cinza</p>
-                        </div>
-                        <ChevronRight size={20} className="text-slate-600 group-hover:text-primary transition-colors" />
                     </div>
                 </section>
 
-                {/* Settings Section */}
+                {/* Dashboard Stats */}
+                <section className="grid grid-cols-3 gap-3 mb-10">
+                    <div className="glass-card rounded-[1.5rem] p-4 flex flex-col items-center text-center">
+                        <span className="text-2xl font-black text-white">4.9</span>
+                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Rating</span>
+                    </div>
+                    <div className="glass-card rounded-[1.5rem] p-4 flex flex-col items-center text-center">
+                        <span className="text-2xl font-black text-white">1.2k</span>
+                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Entregas</span>
+                    </div>
+                    <div className="glass-card rounded-[1.5rem] p-4 flex flex-col items-center text-center">
+                        <span className="text-2xl font-black text-white">124h</span>
+                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Tempo</span>
+                    </div>
+                </section>
+
+                {/* Settings Group */}
                 <section className="space-y-4">
-                    <h3 className="text-[13px] font-bold uppercase tracking-widest text-slate-400 ml-1">Configurações</h3>
-                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2.5rem] divide-y divide-white/5 shadow-2xl">
-                        {/* Notifications Toggle */}
-                        <div className="flex items-center justify-between p-6">
+                    <h3 className="text-[11px] font-black tracking-[0.2em] uppercase text-slate-500 ml-1 opacity-60">Configurações Gerais</h3>
+
+                    <div className="glass-card rounded-[2.5rem] p-2 border-white/5 divide-y divide-white/5">
+                        <div className="flex items-center justify-between p-4 px-6">
                             <div className="flex items-center gap-4">
-                                <Bell size={20} className="text-slate-400" />
-                                <span className="text-[15px] font-medium text-white/90">Notificações Push</span>
+                                <div className="size-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                                    <span className="material-symbols-outlined !text-[20px]">notifications</span>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-white/90">Notificações Push</p>
+                                    <p className="text-[10px] text-slate-500 font-medium capitalize">Alertas de novas rotas</p>
+                                </div>
                             </div>
                             <button
                                 onClick={() => toggleSetting('notifications', 'push')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${settings.notifications.push ? 'bg-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/10'}`}
+                                className={`w-12 h-6 rounded-full transition-all relative ${settings.notifications.push ? 'bg-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' : 'bg-white/10'}`}
                             >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${settings.notifications.push ? 'translate-x-6' : 'translate-x-1'}`} />
+                                <div className={`absolute top-1 size-4 rounded-full bg-white transition-all ${settings.notifications.push ? 'left-7' : 'left-1'}`}></div>
                             </button>
                         </div>
 
-                        {/* Invisible Mode (Mapped to a placeholder toggle) */}
-                        <div className="flex items-center justify-between p-6">
+                        <div className="flex items-center justify-between p-4 px-6">
                             <div className="flex items-center gap-4">
-                                <Eye size={20} className="text-slate-400" />
-                                <span className="text-[15px] font-medium text-white/90">Modo Invisível</span>
+                                <div className="size-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                                    <span className="material-symbols-outlined !text-[20px]">dark_mode</span>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-white/90">Tema Escuro IA</p>
+                                    <p className="text-[10px] text-slate-500 font-medium capitalize">Otimização de contraste</p>
+                                </div>
                             </div>
-                            <button
-                                onClick={() => toggleSetting('notifications', 'haptic')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${settings.notifications.haptic ? 'bg-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/10'}`}
-                            >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${settings.notifications.haptic ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
+                            <div className="text-slate-600">
+                                <span className="material-symbols-outlined">check_circle</span>
+                            </div>
                         </div>
 
-                        {/* Dark Mode Toggle */}
-                        <div className="flex items-center justify-between p-6">
+                        <div className="flex items-center justify-between p-4 px-6">
                             <div className="flex items-center gap-4">
-                                <Moon size={20} className="text-slate-400" />
-                                <span className="text-[15px] font-medium text-white/90">Tema Escuro Automático</span>
+                                <div className="size-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                                    <span className="material-symbols-outlined !text-[20px]">map</span>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-white/90">Navegação Integrada</p>
+                                    <p className="text-[10px] text-slate-500 font-medium capitalize">Google Maps vs Waze</p>
+                                </div>
                             </div>
-                            <button
-                                onClick={() => toggleSetting('mapPreferences', 'darkMode')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${settings.mapPreferences.darkMode ? 'bg-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/10'}`}
-                            >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${settings.mapPreferences.darkMode ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
-                        </div>
-
-                        {/* Route Optimization Toggle */}
-                        <div className="flex items-center justify-between p-6">
-                            <div className="flex items-center gap-4">
-                                <Navigation size={20} className="text-slate-400" />
-                                <span className="text-[15px] font-medium text-white/90">Otimização de Rota</span>
-                            </div>
-                            <button
-                                onClick={() => toggleSetting('mapPreferences', 'autoCenter')}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${settings.mapPreferences.autoCenter ? 'bg-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/10'}`}
-                            >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${settings.mapPreferences.autoCenter ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
+                            <span className="material-symbols-outlined text-slate-600">chevron_right</span>
                         </div>
                     </div>
                 </section>
 
-                <button
-                    onClick={handleLogout}
-                    className="w-full py-6 text-red-400 font-bold text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all opacity-80 hover:opacity-100"
-                >
-                    <LogOut size={20} />
-                    Sair da Conta
-                </button>
+                <section className="space-y-4 mt-8">
+                    <h3 className="text-[11px] font-black tracking-[0.2em] uppercase text-slate-500 ml-1 opacity-60">Financeiro & Segurança</h3>
+                    <div className="glass-card rounded-[2.5rem] p-4 px-6 border-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="size-10 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-400">
+                                <span className="material-symbols-outlined !text-[20px]">payments</span>
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-white/90">Minha Carteira</p>
+                                <p className="text-[10px] text-slate-500 font-medium capitalize">Extrato de repasses</p>
+                            </div>
+                        </div>
+                        <span className="text-sm font-black text-white italic">R$ 1.450</span>
+                    </div>
+                </section>
             </main>
+
+            <footer className="fixed bottom-0 left-0 right-0 p-12 text-center pointer-events-none">
+                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.5em]">RouteVision v.2.4.0 • 2024</p>
+            </footer>
         </div>
     );
 };
