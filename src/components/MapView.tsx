@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { Navigation, Trash2, LocateFixed, Route, Loader2, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp } from 'lucide-react';
+import { Navigation, Trash2, LocateFixed, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 // ── Custom Leaflet Icons ──
@@ -64,7 +64,6 @@ const defaultCenter: [number, number] = [-20.143196, -44.2174965];
 export const MapView = () => {
     const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
     const [routeLine, setRouteLine] = useState<[number, number][]>([]);
-    const [isRouting, setIsRouting] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -92,6 +91,30 @@ export const MapView = () => {
     const [editLng, setEditLng] = useState('');
 
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const sheetTouchStartY = useRef<number | null>(null);
+
+    const handleSheetTouchStart = (e: React.TouchEvent) => {
+        sheetTouchStartY.current = e.touches[0].clientY;
+    };
+
+    const handleEditSheetTouchMove = (e: React.TouchEvent) => {
+        if (!sheetTouchStartY.current) return;
+        const deltaY = e.touches[0].clientY - sheetTouchStartY.current;
+        if (deltaY < -50) { setEditExpanded(true); sheetTouchStartY.current = null; }
+        else if (deltaY > 50) { setEditExpanded(false); sheetTouchStartY.current = null; }
+    };
+
+    const handleManifestSheetTouchMove = (e: React.TouchEvent) => {
+        if (!sheetTouchStartY.current) return;
+        const deltaY = e.touches[0].clientY - sheetTouchStartY.current;
+        if (deltaY < -50) { setManifestExpanded(true); sheetTouchStartY.current = null; }
+        else if (deltaY > 50) { setManifestExpanded(false); sheetTouchStartY.current = null; }
+    };
+
+    const handleSheetTouchEnd = () => {
+        sheetTouchStartY.current = null;
+    };
 
     const openEditPanel = (p: RoutePoint) => {
         if (p.id === 'current') return;
@@ -261,58 +284,6 @@ export const MapView = () => {
         }
     };
 
-    const handleRoteirizar = async () => {
-        const allPending = routePoints.filter(p => !p.isDelivered && p.id !== 'current');
-        const validPoints = allPending.filter(p => p.lat !== null && p.lng !== null && p.lat !== 0 && p.lng !== 0);
-        const pendingGeocode = allPending.filter(p => p.lat === null || p.lng === null || p.lat === 0 || p.lng === 0);
-
-        if (allPending.length < 1) return alert("Adicione destinos primeiro.");
-        if (validPoints.length < 1 && pendingGeocode.length > 0) {
-            return alert(`Aguarde... ${pendingGeocode.length} endereço(s) ainda estão sendo localizados no mapa. Tente novamente em alguns segundos.`);
-        }
-        if (validPoints.length < 1) return alert("Nenhum destino com coordenadas válidas encontrado.");
-
-        setIsRouting(true);
-        try {
-            // Build OSRM route request
-            const origin = userLocation || { lat: validPoints[0].lat!, lng: validPoints[0].lng! };
-            const allCoords = [
-                `${origin.lng},${origin.lat}`,
-                ...validPoints.map(p => `${p.lng},${p.lat}`)
-            ].join(';');
-
-            const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${allCoords}?overview=full&geometries=geojson&steps=true`);
-            const data = await res.json();
-
-            if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
-                const coords: [number, number][] = data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
-                setRouteLine(coords);
-
-                // Reorder based on waypoint sequence from legs
-                const baseTime = Date.now();
-                const reorderedPoints = validPoints.map((p, idx) => ({
-                    ...p,
-                    scannedAt: baseTime + (idx * 1000)
-                }));
-
-                const finalRoute = [
-                    ...routePoints.filter(p => p.isDelivered || p.id === 'current'),
-                    ...reorderedPoints
-                ];
-
-                await updateActiveRoute(finalRoute);
-                setRoutePoints(finalRoute);
-                setShowRouteConfirmation(true);
-            } else {
-                alert("Erro na roteirização. Verifique se os endereços possuem coordenadas.");
-            }
-        } catch (err) {
-            console.error("Routing error:", err);
-            alert("Erro na roteirização.");
-        } finally {
-            setIsRouting(false);
-        }
-    };
 
     const handleCompleteStop = async (delivered: boolean) => {
         const dests = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
@@ -520,22 +491,27 @@ export const MapView = () => {
                 <button onClick={() => setIsNavigating(prev => !prev)} className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-white border border-zinc-200 shadow-xl transition-all ${isNavigating ? 'text-blue-600' : 'text-zinc-500'}`}>
                     <Navigation size={24} />
                 </button>
-                <button onClick={handleRoteirizar} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-indigo-600 flex items-center justify-center shadow-xl">
-                    {isRouting ? <Loader2 size={24} className="animate-spin" /> : <Route size={24} />}
-                </button>
                 <button onClick={() => handleLocateMe()} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-emerald-600 flex items-center justify-center shadow-xl">
                     <LocateFixed size={24} />
                 </button>
-                <button onClick={handleClear} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-red-400 flex items-center justify-center shadow-xl">
-                    <Trash2 size={24} />
-                </button>
+                {routePoints.filter(p => p.id !== 'current').length > 0 && (
+                    <button onClick={handleClear} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-red-400 flex items-center justify-center shadow-xl">
+                        <Trash2 size={24} />
+                    </button>
+                )}
             </div>
 
             {/* EDIT PANEL (Standardized Bottom Sheet) */}
             {editingPoint && (
                 <div className="absolute inset-0 z-[1100] flex flex-col justify-end bg-black/40 backdrop-blur-sm pointer-events-none">
                     <div className={`w-full bg-white border-t-2 border-zinc-100 rounded-t-[3.5rem] shadow-2xl transition-all duration-500 pointer-events-auto ${editExpanded ? 'h-[85vh]' : 'h-[500px]'}`}>
-                        <div onClick={() => setEditExpanded(!editExpanded)} className="py-4 flex flex-col items-center gap-1 cursor-pointer">
+                        <div
+                            onClick={() => setEditExpanded(!editExpanded)}
+                            onTouchStart={handleSheetTouchStart}
+                            onTouchMove={handleEditSheetTouchMove}
+                            onTouchEnd={handleSheetTouchEnd}
+                            className="py-4 flex flex-col items-center gap-1 cursor-pointer"
+                        >
                             <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
                             <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${editExpanded ? 'rotate-180' : ''}`} />
                         </div>
@@ -592,7 +568,13 @@ export const MapView = () => {
             {showRouteConfirmation && (
                 <div className="absolute inset-0 z-[1100] flex flex-col justify-end bg-black/20 backdrop-blur-sm pointer-events-none">
                     <div className={`bg-white border-t-2 border-zinc-100 rounded-t-[3.5rem] pointer-events-auto shadow-2xl transition-all duration-500 ${manifestExpanded ? 'h-[85vh]' : 'h-[550px]'}`}>
-                        <div onClick={() => setManifestExpanded(!manifestExpanded)} className="py-4 flex flex-col items-center gap-1 cursor-pointer">
+                        <div
+                            onClick={() => setManifestExpanded(!manifestExpanded)}
+                            onTouchStart={handleSheetTouchStart}
+                            onTouchMove={handleManifestSheetTouchMove}
+                            onTouchEnd={handleSheetTouchEnd}
+                            className="py-4 flex flex-col items-center gap-1 cursor-pointer"
+                        >
                             <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
                             <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${manifestExpanded ? 'rotate-180' : ''}`} />
                         </div>
@@ -736,15 +718,6 @@ export const MapView = () => {
                 </div>
             )}
 
-            {/* Routing overlay */}
-            {isRouting && (
-                <div className="absolute inset-0 z-[2000] bg-black/50 backdrop-blur-sm flex items-center justify-center">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-4">
-                        <Loader2 size={40} className="animate-spin text-blue-600" />
-                        <p className="text-zinc-900 font-black uppercase text-xs tracking-widest">Calculando rota...</p>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

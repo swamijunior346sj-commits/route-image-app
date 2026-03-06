@@ -31,8 +31,8 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
     const [sheetExpandedDetail, setSheetExpandedDetail] = useState(false);
-    const [sheetExpandedEdit, setSheetExpandedEdit] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
+    const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
 
     // AI/Vision Loading states
     const [isExtracting, setIsExtracting] = useState(false);
@@ -558,18 +558,18 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                                 </div>
                             )}
 
-                            {/* Hover Actions */}
+                            {/* Fixed Actions */}
                             {!isSelectionMode && (
-                                <div className="absolute top-4 right-4 z-20 flex gap-2 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                                <div className="absolute top-4 right-4 z-20 flex gap-2">
                                     <button
                                         onClick={(e) => openEdit(record, e)}
-                                        className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-zinc-500 hover:text-white hover:border-blue-500/50 transition-all"
+                                        className="p-2.5 rounded-xl bg-zinc-900 shadow-md border border-white/10 text-zinc-400 hover:text-white hover:border-blue-500/50 transition-all"
                                     >
                                         <Edit2 size={14} />
                                     </button>
                                     <button
                                         onClick={(e) => handleDelete(record.id, e)}
-                                        className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-zinc-500 hover:text-red-500 hover:border-red-500/50 transition-all"
+                                        className="p-2.5 rounded-xl bg-zinc-900 shadow-md border border-white/10 text-zinc-400 hover:text-red-500 hover:border-red-500/50 transition-all"
                                     >
                                         <Trash2 size={14} />
                                     </button>
@@ -591,6 +591,26 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                                 </div>
 
                                 <div className="mt-auto space-y-3">
+                                    {record.notes && (
+                                        <div
+                                            className="bg-zinc-900/50 p-3 rounded-2xl border border-white/5 space-y-2 cursor-pointer hover:bg-zinc-900/80 transition-all"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setExpandedNoteId(expandedNoteId === record.id ? null : record.id);
+                                            }}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <FileText size={12} />
+                                                    Observações
+                                                </span>
+                                                <ChevronDown size={14} className={`text-zinc-500 transition-transform ${expandedNoteId === record.id ? 'rotate-180' : ''}`} />
+                                            </div>
+                                            <p className={`text-xs text-zinc-400 italic transition-all duration-300 ${expandedNoteId === record.id ? 'line-clamp-none border-t border-white/5 pt-2 mt-2 leading-relaxed' : 'line-clamp-1'}`}>
+                                                {record.notes}
+                                            </p>
+                                        </div>
+                                    )}
                                     <div className="flex gap-2">
                                         <div className="bg-white/[0.03] px-2.5 py-1 rounded-xl border border-white/5 flex items-center gap-2">
                                             <span className="text-[7px] font-black text-blue-500/50">LAT</span>
@@ -627,17 +647,12 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                 <Plus size={32} />
             </button>
 
-            {/* EDIT PANEL (Standardized Bottom Sheet) */}
+            {/* EDIT PANEL (Independent Pop-up) */}
             {editingRecord && (
-                <div className="absolute inset-0 z-[100] flex flex-col justify-end bg-black/60 backdrop-blur-md pointer-events-none">
-                    <div className={`w-full bg-[#09090b] border-t border-white/10 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 pointer-events-auto flex flex-col ${sheetExpandedEdit ? 'h-[90vh]' : 'h-[600px]'}`}>
-                        {/* Drag Handle */}
-                        <div onClick={() => setSheetExpandedEdit(!sheetExpandedEdit)} className="py-6 flex flex-col items-center gap-1 cursor-pointer">
-                            <div className="w-12 h-1.5 bg-zinc-800 rounded-full" />
-                            <ChevronUp size={20} className={`text-zinc-600 transition-transform duration-500 ${sheetExpandedEdit ? 'rotate-180' : ''}`} />
-                        </div>
-
-                        <div className="px-8 pb-12 flex-1 overflow-y-auto custom-scrollbar">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setEditingRecord(null)}></div>
+                    <div className="w-full max-w-xl bg-[#09090b] border border-white/10 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.8)] transition-all duration-500 relative z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 fade-in duration-300">
+                        <div className="px-8 pb-10 pt-8 flex-1 overflow-y-auto custom-scrollbar">
                             <div className="flex items-center justify-between mb-8">
                                 <h3 className="text-3xl font-black italic uppercase text-white tracking-tighter">Modificar Registro</h3>
                                 <button onClick={() => setEditingRecord(null)} className="p-3 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-all"><X size={20} /></button>

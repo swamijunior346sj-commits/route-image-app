@@ -163,10 +163,7 @@ export const DailyRouteView = ({ onNavigateToMap }: DailyRouteViewProps) => {
 
             await updateActiveRoute(finalRoute);
 
-            // Remove sent items from daily route
-            const remaining = points.filter(p => !toSend.some(s => s.id === p.id));
-            await updateDailyRoute(remaining);
-            setPoints(remaining);
+            // Os endereços são enviados à tela de rota, não precisam ser excluídos após serem adicionados.
             setSelectedIds(new Set());
             setIsSending(false);
 

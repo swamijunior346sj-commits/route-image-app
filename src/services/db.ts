@@ -65,36 +65,42 @@ const defaultSettings: AppSettings = {
     }
 };
 
-// --- SYNC HELPERS ---
+// --- SYNC HELPERS (OFFLINE FIRST) ---
 
 export const getRecords = async (): Promise<LocationRecord[]> => {
-    try {
-        const { data, error } = await supabase
-            .from('location_records')
-            .select('*')
-            .order('created_at', { ascending: false });
+    const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'locationRecords' });
+    const records: LocationRecord[] = [];
 
-        if (error) throw error;
+    // 1. Sempre carregar local primeiro para tempo de resposta zero e funcionamento offline
+    await store.iterate((val: LocationRecord) => { records.push(val); });
 
-        return (data || []).map(r => ({
-            id: r.id,
-            name: r.name,
-            lat: r.lat,
-            lng: r.lng,
-            imageThumbnail: r.image_thumbnail,
-            featureVector: r.feature_vector,
-            notes: r.notes,
-            neighborhood: r.neighborhood,
-            city: r.city,
-            createdAt: new Date(r.created_at).getTime()
-        }));
-    } catch (err) {
-        console.error('Supabase fetch failed, falling back to local storage', err);
-        const records: LocationRecord[] = [];
-        await localforage.createInstance({ name: 'RouteImageApp', storeName: 'locationRecords' })
-            .iterate((val: LocationRecord) => { records.push(val); });
-        return records.sort((a, b) => b.createdAt - a.createdAt);
+    // 2. Tentar sincronizar do servidor no background e atualizar banco local
+    if (navigator.onLine) {
+        setTimeout(async () => {
+            try {
+                const { data, error } = await supabase.from('location_records').select('*').order('created_at', { ascending: false });
+                if (!error && data) {
+                    for (const r of data) {
+                        const rec = {
+                            id: r.id,
+                            name: r.name,
+                            lat: r.lat,
+                            lng: r.lng,
+                            imageThumbnail: r.image_thumbnail,
+                            featureVector: r.feature_vector,
+                            notes: r.notes,
+                            neighborhood: r.neighborhood,
+                            city: r.city,
+                            createdAt: new Date(r.created_at).getTime()
+                        };
+                        await store.setItem(rec.id, rec);
+                    }
+                }
+            } catch (e) { console.warn('Background sync falhou', e); }
+        }, 100);
     }
+
+    return records.sort((a, b) => b.createdAt - a.createdAt);
 };
 
 export const saveRecord = async (
@@ -106,51 +112,85 @@ export const saveRecord = async (
     optionalFields?: { notes?: string, neighborhood?: string, city?: string }
 ): Promise<LocationRecord> => {
     const id = crypto.randomUUID();
-    const recordData = {
+    const localRecord: LocationRecord = {
         id,
         name,
         lat,
         lng,
-        image_thumbnail: imageThumbnail,
-        feature_vector: featureVector,
-        notes: optionalFields?.notes,
-        neighborhood: optionalFields?.neighborhood,
-        city: optionalFields?.city
-    };
-
-    const { data, error } = await supabase.from('location_records').insert(recordData).select().single();
-    if (error) {
-        console.warn('Supabase save failed, saving locally', error);
-        const localRecord = { ...recordData, imageThumbnail, featureVector, createdAt: Date.now() };
-        await localforage.createInstance({ name: 'RouteImageApp', storeName: 'locationRecords' }).setItem(id, localRecord);
-        return localRecord as any;
-    }
-
-    return {
-        ...recordData,
         imageThumbnail,
         featureVector,
-        createdAt: new Date(data.created_at).getTime()
-    } as LocationRecord;
+        notes: optionalFields?.notes,
+        neighborhood: optionalFields?.neighborhood,
+        city: optionalFields?.city,
+        createdAt: Date.now()
+    };
+
+    // Salvar localmente instantaneamente (Garante backup local no aparelho)
+    const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'locationRecords' });
+    await store.setItem(id, localRecord);
+
+    // Backup remoto quando houver internet
+    setTimeout(async () => {
+        if (navigator.onLine) {
+            try {
+                await supabase.from('location_records').insert({
+                    id,
+                    name,
+                    lat,
+                    lng,
+                    image_thumbnail: imageThumbnail,
+                    feature_vector: featureVector,
+                    notes: optionalFields?.notes,
+                    neighborhood: optionalFields?.neighborhood,
+                    city: optionalFields?.city
+                });
+            } catch (e) {
+                console.warn('Falha no backup remoto', e);
+            }
+        }
+    }, 100);
+
+    return localRecord;
 };
 
 export const deleteRecord = async (id: string): Promise<void> => {
-    await supabase.from('location_records').delete().eq('id', id);
-    await localforage.createInstance({ name: 'RouteImageApp', storeName: 'locationRecords' }).removeItem(id);
+    const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'locationRecords' });
+    await store.removeItem(id);
+
+    setTimeout(async () => {
+        if (navigator.onLine) {
+            try {
+                await supabase.from('location_records').delete().eq('id', id);
+            } catch (e) { }
+        }
+    }, 100);
 };
 
 export const updateRecord = async (id: string, updates: Partial<LocationRecord>): Promise<LocationRecord | null> => {
-    const sbUpdates: any = {};
-    if (updates.name) sbUpdates.name = updates.name;
-    if (updates.lat !== undefined) sbUpdates.lat = updates.lat;
-    if (updates.lng !== undefined) sbUpdates.lng = updates.lng;
-    if (updates.notes !== undefined) sbUpdates.notes = updates.notes;
-    if (updates.neighborhood !== undefined) sbUpdates.neighborhood = updates.neighborhood;
-    if (updates.city !== undefined) sbUpdates.city = updates.city;
+    const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'locationRecords' });
+    const current = await store.getItem<LocationRecord>(id);
+    if (!current) return null;
 
-    const { data, error } = await supabase.from('location_records').update(sbUpdates).eq('id', id).select().single();
-    if (error) return null;
-    return data as any;
+    const updated = { ...current, ...updates };
+    await store.setItem(id, updated);
+
+    setTimeout(async () => {
+        if (navigator.onLine) {
+            const sbUpdates: any = {};
+            if (updates.name !== undefined) sbUpdates.name = updates.name;
+            if (updates.lat !== undefined) sbUpdates.lat = updates.lat;
+            if (updates.lng !== undefined) sbUpdates.lng = updates.lng;
+            if (updates.notes !== undefined) sbUpdates.notes = updates.notes;
+            if (updates.neighborhood !== undefined) sbUpdates.neighborhood = updates.neighborhood;
+            if (updates.city !== undefined) sbUpdates.city = updates.city;
+
+            try {
+                await supabase.from('location_records').update(sbUpdates).eq('id', id);
+            } catch (e) { }
+        }
+    }, 100);
+
+    return updated;
 };
 
 // --- ROUTE SESSION ---
