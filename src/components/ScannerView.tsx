@@ -40,6 +40,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [isCockpitOpen, setIsCockpitOpen] = useState(false);
     const [torch, setTorch] = useState(false);
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+    const [isScannerReady, setIsScannerReady] = useState(false);
 
     // Registering/Confirmation State
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -143,18 +144,20 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
         if (video && video.srcObject instanceof MediaStream) {
             const track = video.srcObject.getVideoTracks()[0];
             videoTrackRef.current = track;
+            setIsScannerReady(true);
 
-            // Initial aggressive focus
+            // High resolution & Focus constraints
             if (track.applyConstraints) {
                 track.applyConstraints({
                     advanced: [
                         { torch },
                         { focusMode: 'continuous' },
-                        { pointsOfInterest: [{ x: 0.5, y: 0.5 }] },
+                        { exposureMode: 'continuous' },
                         { whiteBalanceMode: 'continuous' },
-                        { exposureMode: 'continuous' }
+                        { width: { min: 1280, ideal: 3840, max: 7680 } },
+                        { height: { min: 720, ideal: 2160, max: 4320 } }
                     ] as any
-                }).catch(e => console.warn('Initial focus failed', e));
+                }).catch(e => console.warn('Constraints failed', e));
             }
         }
     }, [torch]);
@@ -375,20 +378,21 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                         screenshotFormat="image/jpeg"
                         onUserMedia={handleCameraLoad}
                         videoConstraints={{
-                            facingMode,
-                            width: { ideal: 4096 },
-                            height: { ideal: 2160 },
+                            facingMode: { exact: "environment" },
+                            width: { min: 1280, ideal: 3840, max: 7680 },
+                            height: { min: 720, ideal: 2160, max: 4320 },
+                            aspectRatio: 1.777777778,
                             // @ts-ignore
                             advanced: [
                                 { torch },
                                 { focusMode: 'continuous' },
-                                { whiteBalanceMode: 'continuous' },
-                                { exposureMode: 'continuous' }
+                                { sharpMode: 'on' },
+                                { iso: 100 }
                             ] as any
                         }}
                         className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 camera-grid" />
+                    <div className="absolute inset-0 camera-grid opacity-30" />
 
                     {/* Viewfinder Overlay */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -404,28 +408,10 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
 
                 {/* Minimalist Reader View */}
                 <div
-                    className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-auto cursor-pointer"
-                    onClick={async (e) => {
-                        // Only capture if we didn't click a button
-                        if ((e.target as HTMLElement).tagName !== 'BUTTON' && !(e.target as HTMLElement).closest('button')) {
-                            // Visual feedback for focus
-                            if (navigator.vibrate) navigator.vibrate(20);
-
-                            // Re-trigger hardware focus on tap before capturing
-                            if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
-                                try {
-                                    await videoTrackRef.current.applyConstraints({
-                                        advanced: [{ focusMode: 'continuous' }] as any
-                                    });
-                                } catch (e) { /* ignore */ }
-                            }
-
-                            handleCapture();
-                        }
-                    }}
+                    className="absolute inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none"
                 >
                     {/* Viewfinder Only */}
-                    <div className="w-80 h-56 border border-white/10 rounded-[3rem] scan-focus relative overflow-hidden backdrop-blur-[2px] pointer-events-none">
+                    <div className="w-80 h-56 border border-white/10 rounded-[3rem] scan-focus relative overflow-hidden backdrop-blur-[2px]">
                         <div className="scanning-line" />
                         <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-primary rounded-tl-xl" />
                         <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-primary rounded-tr-xl" />
@@ -433,10 +419,29 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                         <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-primary rounded-br-xl" />
                     </div>
 
+                    {/* Interactive Area for Scan Mode */}
+                    {cameraMode === 'scan' && (
+                        <div 
+                            className="absolute inset-0 pointer-events-auto cursor-crosshair"
+                            onClick={async () => {
+                                if (navigator.vibrate) navigator.vibrate(20);
+                                
+                                if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
+                                    try {
+                                        await videoTrackRef.current.applyConstraints({
+                                            advanced: [{ focusMode: 'continuous' }] as any
+                                        });
+                                    } catch (e) { /* ignore */ }
+                                }
+                                handleCapture();
+                            }}
+                        />
+                    )}
+
                     {/* Minimal Close Button */}
                     <button
                         onClick={(e) => { e.stopPropagation(); setViewMode('dashboard'); }}
-                        className="absolute top-14 left-6 size-12 rounded-full glass-ui flex items-center justify-center text-white/40 active:scale-90 transition-all z-[110]"
+                        className="absolute top-14 left-6 size-12 rounded-full glass-ui flex items-center justify-center text-white/40 active:scale-90 transition-all z-[110] pointer-events-auto"
                     >
                         <span className="material-symbols-outlined">close</span>
                     </button>
@@ -444,16 +449,42 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                     {/* Flash Toggle */}
                     <button
                         onClick={(e) => { e.stopPropagation(); setTorch(!torch); }}
-                        className={`absolute top-14 right-6 size-12 rounded-full glass-ui flex items-center justify-center active:scale-90 transition-all z-[110] ${torch ? 'text-yellow-400' : 'text-white/40'}`}
+                        className={`absolute top-14 right-6 size-12 rounded-full glass-ui flex items-center justify-center active:scale-90 transition-all z-[110] pointer-events-auto ${torch ? 'text-yellow-400' : 'text-white/40'}`}
                     >
                         <span className="material-symbols-outlined">{torch ? 'flash_on' : 'flash_off'}</span>
                     </button>
 
-                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 text-center pointer-events-none">
+                    {/* Shutter Button for Register Mode */}
+                    {cameraMode === 'register' && (
+                        <div className="absolute bottom-10 inset-x-0 flex flex-col items-center gap-6 pointer-events-auto">
+                            <button
+                                onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (navigator.vibrate) navigator.vibrate([30, 10, 30]);
+                                    
+                                    if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
+                                        try {
+                                            await videoTrackRef.current.applyConstraints({
+                                                advanced: [{ focusMode: 'continuous' }] as any
+                                            });
+                                        } catch (e) { /* ignore */ }
+                                    }
+                                    handleCapture();
+                                }}
+                                className="size-20 rounded-full border-4 border-white/20 p-1 flex items-center justify-center active:scale-95 transition-all shadow-premium"
+                            >
+                                <div className="size-full rounded-full bg-white shadow-[0_0_25px_rgba(255,255,255,0.4)]"></div>
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="absolute bottom-32 left-1/2 -translate-x-1/2 text-center">
                         <p className="text-[10px] font-black uppercase tracking-[0.5em] text-primary mb-2 animate-pulse">
                             {cameraMode === 'register' ? 'Novo Registro' : 'Escanear Endereço'}
                         </p>
-                        <p className="text-[14px] font-bold text-white/40">Toque na tela para capturar</p>
+                        <p className="text-[14px] font-bold text-white/40">
+                            {cameraMode === 'register' ? 'Pressione o botão para registrar' : 'Toque na tela para ler agora'}
+                        </p>
                     </div>
                 </div>
             </div>
