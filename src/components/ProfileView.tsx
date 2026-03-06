@@ -6,9 +6,10 @@ import { LoadingOverlay } from './LoadingOverlay';
 
 interface ProfileViewProps {
     onLogout: () => void;
+    onBack?: () => void;
 }
 
-export const ProfileView = ({ onLogout }: ProfileViewProps) => {
+export const ProfileView = ({ onLogout, onBack }: ProfileViewProps) => {
     const [subview, setSubview] = useState<'main' | 'personal' | 'privacy' | 'notifications' | 'map'>('main');
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const [loading, setLoading] = useState(true);
@@ -255,14 +256,25 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
             <div className="absolute bottom-[20%] left-[-10%] w-[300px] h-[300px] bg-purple-600/5 rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ animationDelay: '2s' }}></div>
 
             {/* Profile HUD Header */}
-            <div className="sticky top-0 z-20 w-full p-8 bg-black/40 backdrop-blur-2xl border-b border-white/5 animate-fade-in">
-                <div className="flex justify-between items-start mb-10">
-                    <div className="space-y-1">
-                        <h1 className="text-3xl font-black italic tracking-tighter text-white uppercase italic"><span className="text-blue-500">Contas</span></h1>
-                    </div>
+            <header className="sticky top-0 z-50 px-6 pt-14 pb-8 flex items-center justify-between bg-black/40 backdrop-blur-2xl border-b border-white/5">
+                <button
+                    onClick={onBack}
+                    className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 active:scale-95 transition-all text-white/90"
+                >
+                    <ChevronLeft size={24} />
+                </button>
+                <div className="text-center">
+                    <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-0.5">SISTEMA</h1>
+                    <p className="text-lg font-bold tracking-tight text-white/90">Meu Perfil</p>
                 </div>
+                <button onClick={handleLogout} className="flex items-center justify-center size-10 rounded-full bg-red-500/10 border border-red-500/10 active:scale-95 transition-all text-red-500">
+                    <LogOut size={20} />
+                </button>
+            </header>
 
-                <div className="flex items-center gap-8 px-2">
+            <div className="px-8 pb-32 flex flex-col gap-10 animate-[slideUp_0.6s_ease-out] pt-8">
+                {/* Profile Detail HUD */}
+                <div className="flex items-center gap-8 px-2 mb-4">
                     <div className="relative group cursor-pointer">
                         <label className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-[2.5rem] cursor-pointer">
                             <User size={24} className="text-white mb-1" />
@@ -292,9 +304,7 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="p-8 flex flex-col gap-10 animate-[slideUp_0.6s_ease-out]">
                 {/* Section 1: Command Settings */}
                 <div className="space-y-4">
                     <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.4em] ml-4 italic">Protocolos de Identidade</h3>
@@ -352,7 +362,7 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
                 </div>
 
                 {/* Logout Zone */}
-                <div className="mt-12 mb-10 space-y-8 flex flex-col items-center">
+                <div className="mt-4 mb-10 space-y-8 flex flex-col items-center">
                     <button
                         onClick={handleLogout}
                         className="group w-full relative h-20 rounded-[2.5rem] overflow-hidden transition-all active:scale-95"

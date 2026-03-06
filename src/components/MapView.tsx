@@ -1,129 +1,72 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { GoogleMap, useJsApiLoader, DirectionsRenderer, Circle, OverlayView } from '@react-google-maps/api';
-import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
+import { useEffect, useState, useCallback } from 'react';
+import { GoogleMap, useJsApiLoader, DirectionsRenderer, Circle, OverlayView, TrafficLayer } from '@react-google-maps/api';
+import { getActiveRoute, updateActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { LocateFixed, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp, Loader2 } from 'lucide-react';
+import {
+    X,
+    CheckCircle2,
+    Plus,
+    Loader2,
+    Navigation,
+    LocateFixed,
+    PackageSearch,
+    Settings
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const libraries: ("places" | "geometry")[] = ['places', 'geometry'];
-
-const defaultCenter = { lat: -20.143196, lng: -44.2174965 };
-
+const defaultCenter = { lat: -23.5505, lng: -46.6333 };
 const mapContainerStyle = { width: '100%', height: '100%' };
 
-// Custom HTML Marker components (replacing Leaflet DivIcons)
+// Premium Custom Markers
 const NumberedMarker = ({ number, color }: { number: number, color: string }) => (
-    <div style={{
-        position: 'absolute',
-        transform: 'translate(-50%, -100%)',
-        width: '28px', height: '28px',
-        background: color,
-        border: '2px solid white',
-        borderRadius: '50% 50% 50% 0',
-        rotate: '-45deg',
-        boxShadow: '2px 2px 10px rgba(0,0,0,0.4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        zIndex: 100
-    }}>
-        <div style={{ transform: 'rotate(45deg)', fontWeight: 900, fontSize: '13px', color: 'white' }}>{number}</div>
+    <div className="relative group" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
+        <div
+            className="size-9 rounded-full border-4 border-white shadow-xl flex items-center justify-center relative z-10 active:scale-95 transition-transform"
+            style={{ backgroundColor: color }}
+        >
+            <span className="text-white font-black text-sm italic">{number}</span>
+        </div>
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 size-4 rotate-45 z-0" style={{ backgroundColor: color }}></div>
     </div>
 );
 
 const DeliveredMarker = () => (
-    <div style={{
-        position: 'absolute',
-        transform: 'translate(-50%, -100%)',
-        width: '32px', height: '32px',
-        background: '#22c55e',
-        border: '2px solid white',
-        borderRadius: '50% 50% 50% 0',
-        rotate: '-45deg',
-        boxShadow: '2px 2px 10px rgba(0,0,0,0.4)',
-        cursor: 'pointer',
-        zIndex: 90
-    }}>
-        <div style={{
-            position: 'absolute',
-            top: '50%', left: '50%',
-            width: '12px', height: '12px',
-            background: 'white',
-            borderRadius: '50%',
-            transform: 'translate(-50%, -50%)',
-            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
-        }}></div>
+    <div className="relative" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
+        <div className="size-9 rounded-full bg-emerald-500 border-4 border-white shadow-xl flex items-center justify-center relative z-10 transition-all scale-90 opacity-60">
+            <CheckCircle2 size={18} className="text-white" />
+        </div>
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 size-4 rotate-45 bg-emerald-500 z-0"></div>
     </div>
 );
 
 const CurrentMarker = () => (
-    <div style={{
-        position: 'absolute',
-        transform: 'translate(-50%, -50%)',
-        width: '22px', height: '22px',
-        background: '#137fec',
-        border: '3px solid white',
-        borderRadius: '50%',
-        boxShadow: '0 0 15px rgba(19,127,236,0.9), inset 0 2px 5px rgba(0,0,0,0.3)',
-        zIndex: 110
-    }}></div>
+    <div style={{ position: 'absolute', transform: 'translate(-50%, -50%)' }}>
+        <div className="relative">
+            <div className="absolute inset-0 bg-primary/30 rounded-full animate-ping scale-150"></div>
+            <div className="size-8 bg-primary rounded-full border-4 border-white shadow-lg flex items-center justify-center">
+                <Navigation size={16} className="text-white transform -rotate-45" />
+            </div>
+        </div>
+    </div>
 );
 
-// Map Styles: Professional Dark
 const darkMapStyles = [
-    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-    {
-        featureType: "administrative.locality",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#d59563" }],
-    },
-    {
-        featureType: "poi",
-        elementType: "labels",
-        stylers: [{ visibility: "off" }],
-    },
-    {
-        featureType: "road",
-        elementType: "geometry",
-        stylers: [{ color: "#38414e" }],
-    },
-    {
-        featureType: "road",
-        elementType: "geometry.stroke",
-        stylers: [{ color: "#212a37" }],
-    },
-    {
-        featureType: "road",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#9ca5b3" }],
-    },
-    {
-        featureType: "road.highway",
-        elementType: "geometry",
-        stylers: [{ color: "#746855" }],
-    },
-    {
-        featureType: "water",
-        elementType: "geometry",
-        stylers: [{ color: "#17263c" }],
-    },
-    {
-        featureType: "water",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#515c6d" }],
-    },
-    {
-        featureType: "water",
-        elementType: "labels.text.stroke",
-        stylers: [{ color: "#17263c" }],
-    },
+    { elementType: "geometry", stylers: [{ color: "#0F172A" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#0F172A" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#94A3B8" }] },
+    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#60A5FA" }] },
+    { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+    { featureType: "road", elementType: "geometry", stylers: [{ color: "#1E293B" }] },
+    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#334155" }] },
+    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#64748B" }] },
+    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#334155" }] },
+    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#475569" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#020617" }] },
+    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#334155" }] },
 ];
 
-export const MapView = () => {
-    // Carregamento da API do Google
+export const MapView = ({ onBack }: { onBack?: () => void }) => {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
         googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
@@ -132,149 +75,15 @@ export const MapView = () => {
 
     const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
     const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
-
     const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
-
     const [isNavigating, setIsNavigating] = useState(false);
     const [navigationIndex, setNavigationIndex] = useState(0);
-    const [showCelebration, setShowCelebration] = useState(false);
     const [accuracy, setAccuracy] = useState<number | null>(null);
     const [showCheckAnimation, setShowCheckAnimation] = useState(false);
-    const [showRouteConfirmation, setShowRouteConfirmation] = useState(false);
-    const [manifestExpanded, setManifestExpanded] = useState(false);
-    const [sheetExpanded, setSheetExpanded] = useState(false);
-    const [undoTimeout, setUndoTimeout] = useState<any>(null);
-    const [lastActionPointId, setLastActionPointId] = useState<string | null>(null);
-
-    // Edit Panel State
-    const [editingPoint, setEditingPoint] = useState<RoutePoint | null>(null);
-    const [editName, setEditName] = useState('');
-    const [editNeighborhood, setEditNeighborhood] = useState('');
-    const [editNotes, setEditNotes] = useState('');
-    const [editLat, setEditLat] = useState('');
-    const [editLng, setEditLng] = useState('');
-
-    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const sheetTouchStartY = useRef<number | null>(null);
-
-    // Auto Pan / Zoom na Navegação Profissional
-    useEffect(() => {
-        if (!mapRef) return;
-        if (isNavigating && userLocation) {
-            mapRef.panTo(userLocation);
-            mapRef.setZoom(18); // Zoom máximo 
-            mapRef.setHeading(mapRef.getHeading() || 0);
-        } else if (!isNavigating && routePoints.length > 0) {
-            const bounds = new window.google.maps.LatLngBounds();
-            routePoints.forEach(p => {
-                if (p.lat !== null && p.lng !== null) bounds.extend({ lat: p.lat, lng: p.lng });
-            });
-            if (userLocation) bounds.extend(userLocation);
-            mapRef.fitBounds(bounds, { bottom: 300 }); // Padding botom pra gaveta
-        }
-    }, [isNavigating, userLocation, mapRef, routePoints.length]);
-
-    // Calcular Directions do Google Maps
-    useEffect(() => {
-        if (!isLoaded || !window.google) return;
-        const waypoints: google.maps.LatLngLiteral[] = [];
-        if (userLocation) {
-            waypoints.push(userLocation);
-        }
-        routePoints.forEach(p => {
-            if (p.id !== 'current' && !p.isDelivered && p.lat !== null && p.lng !== null) {
-                waypoints.push({ lat: p.lat, lng: p.lng });
-            }
-        });
-
-        if (waypoints.length < 2) {
-            setDirectionsResponse(null);
-            return;
-        }
-
-        const directionsService = new window.google.maps.DirectionsService();
-        const origin = waypoints[0];
-        const destination = waypoints[waypoints.length - 1];
-        const waypts = waypoints.slice(1, -1).map(wp => ({ location: wp, stopover: true }));
-
-        directionsService.route(
-            {
-                origin,
-                destination,
-                waypoints: waypts,
-                travelMode: window.google.maps.TravelMode.DRIVING,
-                optimizeWaypoints: false, // Mantem ordem desejada do app
-            },
-            (result, status) => {
-                if (status === window.google.maps.DirectionsStatus.OK && result) {
-                    setDirectionsResponse(result);
-                } else {
-                    console.warn(`Trajeto não encontrado, status: ${status}`);
-                }
-            }
-        );
-    }, [routePoints, userLocation, isLoaded]);
-
-    const handleSheetTouchStart = (e: React.TouchEvent) => {
-        sheetTouchStartY.current = e.touches[0].clientY;
-    };
-
-    const handleManifestSheetTouchMove = (e: React.TouchEvent) => {
-        if (!sheetTouchStartY.current) return;
-        const deltaY = e.touches[0].clientY - sheetTouchStartY.current;
-        if (deltaY < -50) { setManifestExpanded(true); sheetTouchStartY.current = null; }
-        else if (deltaY > 50) { setManifestExpanded(false); sheetTouchStartY.current = null; }
-    };
-
-    const handleNavSheetTouchMove = (e: React.TouchEvent) => {
-        if (!sheetTouchStartY.current) return;
-        const deltaY = e.touches[0].clientY - sheetTouchStartY.current;
-        if (deltaY < -50) { setSheetExpanded(true); sheetTouchStartY.current = null; }
-        else if (deltaY > 50) { setSheetExpanded(false); sheetTouchStartY.current = null; }
-    };
-
-    const handleSheetTouchEnd = () => { sheetTouchStartY.current = null; };
-
-    const openEditPanel = (p: RoutePoint) => {
-        if (p.id === 'current') return;
-        setEditingPoint(p);
-        setEditName(p.name);
-        setEditNeighborhood(p.neighborhood || '');
-        setEditNotes(p.notes || '');
-        setEditLat(p.lat ? String(p.lat) : '');
-        setEditLng(p.lng ? String(p.lng) : '');
-    };
-
-    const handleSavePointEdit = async () => {
-        if (!editingPoint) return;
-        try {
-            const lat = parseFloat(editLat);
-            const lng = parseFloat(editLng);
-            const updated = routePoints.map(p =>
-                p.id === editingPoint.id ? { ...p, name: editName, neighborhood: editNeighborhood, notes: editNotes, lat: isNaN(lat) ? p.lat : lat, lng: isNaN(lng) ? p.lng : lng } : p
-            );
-            await updateActiveRoute(updated);
-            setRoutePoints(updated);
-        } catch (err) { console.error(err); }
-    };
-
-    const handleCloseEdit = () => {
-        handleSavePointEdit();
-        setEditingPoint(null);
-    };
-
-    const handleDeletePoint = async (id: string) => {
-        if (!confirm("Remover este ponto da rota?")) return;
-        const updated = routePoints.filter(p => p.id !== id);
-        await updateActiveRoute(updated);
-        setRoutePoints(updated);
-    };
 
     useEffect(() => {
+        loadData();
         let watchId: number | null = null;
         if ('geolocation' in navigator) {
             watchId = navigator.geolocation.watchPosition(
@@ -282,532 +91,228 @@ export const MapView = () => {
                     const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                     setUserLocation(coords);
                     setAccuracy(pos.coords.accuracy);
-
-                    setRoutePoints(prev => {
-                        const others = prev.filter(p => p.id !== 'current');
-                        return [...others, { id: 'current', name: 'Você está aqui', ...coords, scannedAt: Date.now() }];
-                    });
                 },
-                (err) => console.log('Continuous GPS error:', err),
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                (err) => console.log('GPS error:', err),
+                { enableHighAccuracy: true, timeout: 10000 }
             );
         }
-
-        loadRoute();
         return () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
     }, []);
 
-    const loadRoute = async () => {
+    const loadData = async () => {
         const points = await getActiveRoute();
         setRoutePoints(points);
-        if (points.length === 0) handleLocateMe(true);
     };
 
-    const handleLocateMe = (silent = false) => {
-        if ('geolocation' in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                    setUserLocation(coords);
-                    setAccuracy(pos.coords.accuracy);
-                    if (mapRef) { mapRef.panTo(coords); mapRef.setZoom(17); }
-                },
-                () => { if (!silent) alert('GPS indisponível.'); },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
+    const handleLocateMe = () => {
+        if (userLocation && mapRef) {
+            mapRef.panTo(userLocation);
+            mapRef.setZoom(17);
         }
     };
 
-    const handleClear = async () => {
-        if (confirm("Limpar rota ativa?")) {
-            await clearActiveRoute();
-            setRoutePoints([]);
+    useEffect(() => {
+        if (!isLoaded || !userLocation || routePoints.length === 0) return;
+        const pending = routePoints.filter(p => !p.isDelivered && p.lat && p.lng);
+        if (pending.length === 0) {
+            setDirectionsResponse(null);
+            return;
         }
-    };
+        const directionsService = new window.google.maps.DirectionsService();
+        const waypoints = pending.map(p => ({
+            location: { lat: p.lat!, lng: p.lng! },
+            stopover: true
+        }));
+        directionsService.route(
+            {
+                origin: userLocation,
+                destination: waypoints[waypoints.length - 1].location,
+                waypoints: waypoints.slice(0, -1),
+                travelMode: window.google.maps.TravelMode.DRIVING,
+                optimizeWaypoints: false,
+            },
+            (result, status) => {
+                if (status === 'OK' && result) setDirectionsResponse(result);
+            }
+        );
+    }, [userLocation, routePoints, isLoaded]);
 
     const handleCompleteStop = async (delivered: boolean) => {
-        const dests = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
-        const point = dests[navigationIndex];
+        const pending = routePoints.filter(p => !p.isDelivered);
+        const point = pending[navigationIndex];
         if (!point) return;
-
-        if (undoTimeout) clearTimeout(undoTimeout);
-        setLastActionPointId(point.id);
-
         setShowCheckAnimation(true);
-        setTimeout(() => setShowCheckAnimation(false), 800);
-
+        setTimeout(() => setShowCheckAnimation(false), 1000);
         const updated = routePoints.map(p => p.id === point.id ? { ...p, isDelivered: delivered } : p);
         setRoutePoints(updated);
-
-        const timeout = setTimeout(async () => {
-            await updateActiveRoute(updated);
-            setLastActionPointId(null);
-
-            if (navigationIndex < dests.length - 1) {
-                setNavigationIndex(prev => prev + 1);
-            } else {
-                setIsNavigating(false);
-                setShowCelebration(true);
-                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-                setTimeout(() => setShowCelebration(false), 5000);
-            }
-        }, 3000);
-        setUndoTimeout(timeout);
-    };
-
-    const handleUndoAction = () => {
-        if (undoTimeout) {
-            clearTimeout(undoTimeout);
-            setUndoTimeout(null);
-            if (lastActionPointId) {
-                setRoutePoints(prev => prev.map(p => p.id === lastActionPointId ? { ...p, isDelivered: false } : p));
-            }
-            setLastActionPointId(null);
-        }
-    };
-
-    // Google Places Autocomplete Service Search
-    useEffect(() => {
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-        if (searchQuery.trim().length > 2 && isLoaded && window.google) {
-            searchTimeoutRef.current = setTimeout(() => {
-                setIsSearching(true);
-                const service = new window.google.maps.places.AutocompleteService();
-                service.getPlacePredictions({ input: searchQuery, componentRestrictions: { country: 'br' } }, (predictions, status) => {
-                    setIsSearching(false);
-                    if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-                        setSearchResults(predictions);
-                    } else {
-                        setSearchResults([]);
-                    }
-                });
-            }, 500);
+        await updateActiveRoute(updated);
+        if (navigationIndex < pending.length - 1) {
+            setNavigationIndex(prev => prev + 1);
         } else {
-            setSearchResults([]);
+            setIsNavigating(false);
+            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         }
-        return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
-    }, [searchQuery, isLoaded]);
-
-    const selectSearchResult = async (prediction: google.maps.places.AutocompletePrediction) => {
-        if (!window.google || !mapRef) return;
-        const placesService = new window.google.maps.places.PlacesService(mapRef);
-        placesService.getDetails({ placeId: prediction.place_id }, async (place, status) => {
-            if (status === window.google.maps.places.PlacesServiceStatus.OK && place && place.geometry && place.geometry.location) {
-                const lat = place.geometry.location.lat();
-                const lng = place.geometry.location.lng();
-                const newPoint: RoutePoint = {
-                    id: Date.now().toString(),
-                    name: place.name || prediction.structured_formatting.main_text || 'Endereço',
-                    lat, lng, scannedAt: Date.now(),
-                    neighborhood: prediction.structured_formatting.secondary_text || '',
-                };
-                const updated = [...routePoints.filter(p => p.id !== 'current'), newPoint];
-                await updateActiveRoute(updated);
-                setRoutePoints([...updated, ...(userLocation ? [{ id: 'current', name: 'Você está aqui', ...userLocation, scannedAt: Date.now() }] : [])]);
-                setSearchQuery('');
-                setSearchResults([]);
-                mapRef.panTo({ lat, lng });
-                mapRef.setZoom(16);
-            } else {
-                alert("Não foi possível buscar as coordenadas deste endereço.");
-            }
-        });
     };
 
     const onLoadMap = useCallback((map: google.maps.Map) => {
         setMapRef(map);
     }, []);
 
-    const onUnmountMap = useCallback(() => {
-        setMapRef(null);
-    }, []);
-
-    // Extract navigation metrics from the current leg
     const currentLeg = directionsResponse?.routes[0].legs[navigationIndex];
-    const durationText = currentLeg?.duration?.text || '--';
-    const distanceText = currentLeg?.distance?.text || '--';
-    const arrivalTime = currentLeg && userLocation ? new Date(Date.now() + currentLeg.duration!.value * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+    const destinationStop = routePoints.filter(p => !p.isDelivered)[navigationIndex];
 
-    const pendingStops = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
-    const destinationStop = pendingStops[navigationIndex];
+    if (!isLoaded) return <div className="h-full bg-bg-deep flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>;
 
     return (
-        <div className="relative w-full h-full bg-background-dark overflow-hidden flex flex-col font-display antialiased">
-            {/* SEARCH HUD - Only show when NOT navigating or when expanded */}
-            {!isNavigating && (
-                <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-lg px-6 transition-all duration-700">
-                    <div className="relative group">
-                        <form onSubmit={e => e.preventDefault()} className="relative bg-slate-900/90 backdrop-blur-md border border-white/10 rounded-[2rem] p-4 flex items-center gap-4 shadow-[0_20px_40px_rgba(0,0,0,0.4)] focus-within:border-primary transition-all">
-                            <span className="material-symbols-outlined text-slate-400 ml-2">search</span>
-                            <input
-                                placeholder="Pesquisar ponto..."
-                                className="bg-transparent flex-1 outline-none text-white text-sm font-bold placeholder:text-slate-500"
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                            />
-                            {isSearching && <Loader2 size={18} className="animate-spin text-primary" />}
-                            {searchQuery && (
-                                <button type="button" onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="p-2 hover:bg-slate-800 rounded-full text-zinc-500 transition-all">
-                                    <X size={16} />
-                                </button>
-                            )}
-                        </form>
-                    </div>
-                    {searchResults.length > 0 && (
-                        <div className="mt-4 bg-slate-900 border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl p-3 flex flex-col gap-1 max-h-[60vh] overflow-y-auto no-scrollbar">
-                            {searchResults.map((res: google.maps.places.AutocompletePrediction) => (
-                                <div key={res.place_id} className="flex gap-2">
-                                    <button
-                                        onClick={() => selectSearchResult(res)}
-                                        className="flex-1 flex items-center gap-4 p-5 hover:bg-slate-800 rounded-[1.8rem] transition-all text-left"
-                                    >
-                                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                                            <span className="material-symbols-outlined filled-icon text-[20px]">map_pin</span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[12px] font-black text-white truncate">{res.structured_formatting.main_text}</p>
-                                            <p className="text-[9px] text-slate-400 truncate mt-1">{res.structured_formatting.secondary_text}</p>
-                                        </div>
-                                    </button>
-                                    <button
-                                        onClick={() => selectSearchResult(res)}
-                                        className="w-14 h-14 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-transform"
-                                    >
-                                        <Plus size={24} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* NAVIGATION HEADER - Inspired by the new design */}
-            {isNavigating && (
-                <div className="relative z-30 mx-4 mt-12 flex items-center gap-3 animate-in fade-in slide-in-from-top-10 duration-700">
-                    <button
-                        onClick={() => setIsNavigating(false)}
-                        className="flex size-11 flex-shrink-0 items-center justify-center rounded-full bg-slate-900/90 backdrop-blur-md shadow-lg text-white border border-white/10 active:scale-90 transition-transform"
-                    >
-                        <span className="material-symbols-outlined text-[24px]">arrow_back</span>
-                    </button>
-                    <div className="flex-1 bg-danger px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-xl">
-                        <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined filled-icon text-white animate-bounce">traffic</span>
-                            <span className="text-white text-sm font-bold tracking-tight uppercase">Jornada Ativa</span>
-                        </div>
-                        <div className="bg-black/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                            <span className="text-white text-xs font-black">{navigationIndex + 1}/{pendingStops.length}</span>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* GOOGLE MAPS INSTANCE */}
+        <div className="relative w-full h-full bg-bg-deep overflow-hidden font-sans antialiased">
             <div className="absolute inset-0 z-0">
-                {!isLoaded ? (
-                    <div className="w-full h-full flex items-center justify-center bg-background-dark">
-                        <Loader2 className="animate-spin text-primary w-10 h-10" />
-                    </div>
-                ) : (
-                    <GoogleMap
-                        mapContainerStyle={mapContainerStyle}
-                        center={defaultCenter}
-                        zoom={14}
-                        onLoad={onLoadMap}
-                        onUnmount={onUnmountMap}
-                        options={{
-                            disableDefaultUI: true,
-                            gestureHandling: 'greedy',
-                            tilt: isNavigating ? 45 : 0,
-                            mapId: import.meta.env.VITE_GOOGLE_MAPS_ID || undefined,
-                            styles: darkMapStyles
+                <GoogleMap
+                    mapContainerStyle={mapContainerStyle}
+                    center={userLocation || defaultCenter}
+                    zoom={15}
+                    onLoad={onLoadMap}
+                    options={{
+                        disableDefaultUI: true,
+                        styles: darkMapStyles,
+                        gestureHandling: 'greedy'
+                    }}
+                >
+                    <TrafficLayer />
+                    {directionsResponse && (
+                        <DirectionsRenderer
+                            options={{
+                                directions: directionsResponse,
+                                suppressMarkers: true,
+                                polylineOptions: { strokeColor: '#3B82F6', strokeWeight: 6, strokeOpacity: 0.8 }
+                            }}
+                        />
+                    )}
+                    {userLocation && (
+                        <OverlayView position={userLocation} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                            <CurrentMarker />
+                        </OverlayView>
+                    )}
+                    {routePoints.map((p, i) => (
+                        p.lat && p.lng && (
+                            <OverlayView key={p.id} position={{ lat: p.lat, lng: p.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+                                <div>
+                                    {p.isDelivered ? <DeliveredMarker /> : <NumberedMarker number={i + 1} color="#3B82F6" />}
+                                </div>
+                            </OverlayView>
+                        )
+                    ))}
+                    {userLocation && accuracy && (
+                        <Circle center={userLocation} radius={accuracy} options={{ fillColor: '#3B82F6', fillOpacity: 0.05, strokeWeight: 0 }} />
+                    )}
+                </GoogleMap>
+            </div>
+
+            <header className="absolute top-0 left-0 right-0 z-20 p-6 flex items-center justify-between pointer-events-none">
+                <button onClick={onBack} className="map-control pointer-events-auto shadow-2xl">
+                    <X size={24} />
+                </button>
+                <div className="glass-morphism px-5 py-3 rounded-2xl flex items-center gap-3 pointer-events-auto shadow-2xl text-white">
+                    <div className="size-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span className="text-sm font-bold tracking-tight">Trânsito em tempo real</span>
+                </div>
+                <button className="map-control pointer-events-auto shadow-2xl">
+                    <Settings size={22} className="text-white/60" />
+                </button>
+            </header>
+
+            <div className="absolute right-6 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-3">
+                <button onClick={() => mapRef?.setZoom((mapRef?.getZoom() || 15) + 1)} className="map-control shadow-xl">
+                    <Plus size={24} />
+                </button>
+                <button onClick={() => mapRef?.setZoom((mapRef?.getZoom() || 15) - 1)} className="map-control shadow-xl">
+                    <div className="w-5 h-1 bg-white/80 rounded-full" />
+                </button>
+                <button onClick={handleLocateMe} className="map-control shadow-xl mt-4">
+                    <LocateFixed size={22} className="text-primary" />
+                </button>
+                {!isNavigating && routePoints.filter(p => !p.isDelivered).length > 0 && (
+                    <button
+                        onClick={() => {
+                            if (navigator.vibrate) navigator.vibrate(100);
+                            setIsNavigating(true);
                         }}
+                        className="size-14 rounded-2xl bg-primary shadow-lg text-white flex items-center justify-center active:scale-95 transition-all mt-4 animate-in zoom-in duration-500 border border-white/20"
                     >
-                        {/* Rendering Trajetories as Real Routes */}
-                        {directionsResponse && (
-                            <DirectionsRenderer
-                                options={{
-                                    directions: directionsResponse,
-                                    suppressMarkers: true,
-                                    polylineOptions: {
-                                        strokeColor: '#137fec',
-                                        strokeWeight: 6,
-                                        strokeOpacity: 0.9,
-                                        zIndex: 50
-                                    }
-                                }}
-                            />
-                        )}
-
-                        {/* Rendering Custom HTML Markers via OverlayView */}
-                        {routePoints.map((p, i) => {
-                            if (p.lat === null || p.lng === null) return null;
-                            const isCurrent = p.id === 'current';
-
-                            const pendingList = routePoints.filter(rp => rp.id !== 'current' && !rp.isDelivered);
-                            const stopIndex = pendingList.findIndex(rp => rp.id === p.id);
-
-                            return (
-                                <OverlayView
-                                    key={`${p.id}-${i}`}
-                                    position={{ lat: p.lat, lng: p.lng }}
-                                    mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                                >
-                                    <div onClick={() => openEditPanel(p)} style={{ cursor: 'pointer' }}>
-                                        {isCurrent ? <CurrentMarker /> : p.isDelivered ? <DeliveredMarker /> : <NumberedMarker number={stopIndex + 1} color="#137fec" />}
-                                    </div>
-                                </OverlayView>
-                            );
-                        })}
-
-                        {/* Rendering GPS Accuracy Circle */}
-                        {userLocation && accuracy && (
-                            <Circle
-                                center={userLocation}
-                                radius={accuracy}
-                                options={{
-                                    fillColor: '#137fec',
-                                    fillOpacity: 0.05,
-                                    strokeColor: '#137fec',
-                                    strokeWeight: 1,
-                                    strokeOpacity: 0.2,
-                                }}
-                            />
-                        )}
-                    </GoogleMap>
-                )}
-            </div>
-
-            {/* Float Actions - Repositioned to Right Middle as per new design */}
-            <div className="absolute right-4 top-1/2 -translate-y-12 flex flex-col gap-3 z-10 transition-all duration-500">
-                <button
-                    onClick={() => { if (mapRef) mapRef.setMapTypeId(mapRef.getMapTypeId() === 'roadmap' ? 'hybrid' : 'roadmap') }}
-                    className="flex size-11 items-center justify-center rounded-2xl bg-slate-900/90 backdrop-blur-md shadow-lg text-slate-100 border border-white/10 active:scale-95 translate-x-0"
-                >
-                    <span className="material-symbols-outlined text-[20px]">layers</span>
-                </button>
-                <button
-                    onClick={() => handleLocateMe(false)}
-                    className="flex size-11 items-center justify-center rounded-2xl bg-slate-900/90 backdrop-blur-md shadow-lg text-primary border border-white/10 active:scale-95"
-                >
-                    <span className="material-symbols-outlined filled-icon text-[20px]">my_location</span>
-                </button>
-                {!isNavigating && routePoints.filter(p => p.id !== 'current').length > 0 && (
-                    <button
-                        onClick={handleClear}
-                        className="flex size-11 items-center justify-center rounded-2xl bg-slate-900/90 backdrop-blur-md shadow-lg text-danger border border-white/10 active:scale-95"
-                    >
-                        <span className="material-symbols-outlined text-[20px]">delete</span>
-                    </button>
-                )}
-                {!isNavigating && routePoints.filter(p => p.id !== 'current').length > 0 && (
-                    <button
-                        onClick={() => setShowRouteConfirmation(true)}
-                        className="flex size-11 items-center justify-center rounded-2xl bg-primary shadow-lg text-white border border-white/10 active:scale-95"
-                    >
-                        <span className="material-symbols-outlined filled-icon text-[20px]">checklist</span>
+                        <Navigation size={28} className="fill-white" />
                     </button>
                 )}
             </div>
 
-            {/* BOTTOM NAV / NAVIGATION UI - The core of the new design */}
-            <div className="mt-auto relative z-20 transition-all duration-500">
-                {isNavigating && destinationStop ? (
-                    <div className="bg-slate-900 rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] border-t border-white/5 flex flex-col pb-safe animate-in slide-in-from-bottom-20 duration-500">
-                        <div className="flex justify-center p-3 cursor-pointer" onClick={() => setSheetExpanded(!sheetExpanded)}>
-                            <div className="w-12 h-1.5 bg-slate-700 rounded-full"></div>
+            <div
+                className={`absolute bottom-10 left-6 right-6 z-30 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] transform ${isNavigating && destinationStop
+                        ? 'translate-y-0 opacity-100 scale-100'
+                        : 'translate-y-[120%] opacity-0 scale-95 pointer-events-none'
+                    }`}
+            >
+                {destinationStop && (
+                    <div className="glass-morphism rounded-[2.5rem] p-6 shadow-2xl border border-white/20 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-primary/20">
+                            <div className="h-full bg-primary animate-pulse" style={{ width: '30%' }}></div>
                         </div>
-
-                        <div className="px-6 pb-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="min-w-0 pr-4">
-                                    <span className="text-primary text-[10px] font-black uppercase tracking-widest mb-1 block">PRÓXIMA PARADA</span>
-                                    <h3 className="text-white text-xl font-extrabold leading-tight truncate">{destinationStop.name}</h3>
-                                </div>
-                                <div className="flex flex-col items-end shrink-0">
-                                    <span className="text-slate-400 text-[10px] font-bold uppercase mb-1">CHEGADA</span>
-                                    <span className="text-white font-black text-lg">{arrivalTime}</span>
-                                </div>
+                        <div className="flex items-start justify-between mb-6">
+                            <div className="space-y-1">
+                                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-primary">Navegação Ativa</p>
+                                <h2 className="text-xl font-extrabold text-white leading-tight italic">{destinationStop.name}</h2>
+                                <p className="text-sm text-slate-400 font-medium opacity-80">{destinationStop.neighborhood || 'Bairro ñ identificado'}</p>
                             </div>
-
-                            <div className="grid grid-cols-2 gap-3 mb-6">
-                                <div className="bg-slate-800/50 border border-white/5 rounded-2xl p-3 flex items-center gap-3">
-                                    <div className="size-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                                        <span className="material-symbols-outlined text-green-500 text-[20px]">schedule</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter">Tempo</p>
-                                        <p className="text-white font-bold text-sm tracking-tight">{durationText}</p>
-                                    </div>
+                            <div className="text-right">
+                                <div className="text-2xl font-black text-primary italic">
+                                    {currentLeg?.duration?.text?.split(' ')[0] || '--'}
+                                    <span className="text-sm font-bold ml-1 uppercase">{currentLeg?.duration?.text?.split(' ')[1] || 'min'}</span>
                                 </div>
-                                <div className="bg-slate-800/50 border border-white/5 rounded-2xl p-3 flex items-center gap-3">
-                                    <div className="size-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                                        <span className="material-symbols-outlined text-blue-500 text-[20px]">distance</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter">Distância</p>
-                                        <p className="text-white font-bold text-sm tracking-tight">{distanceText}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Additional controls inside expanded sheet */}
-                            <div className={`transition-all duration-500 overflow-hidden ${sheetExpanded ? 'max-h-[300px] mb-6 opacity-100' : 'max-h-0 opacity-0'}`}>
-                                <div className="bg-slate-800/30 rounded-[2rem] p-4 border border-white/5 mb-4">
-                                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-[12px]">description</span> Notas do Endereço
-                                    </p>
-                                    <p className="text-slate-200 text-xs font-medium italic">{destinationStop.notes || 'Sem observações cadastradas para este local.'}</p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationStop.lat},${destinationStop.lng}`, '_blank')} className="py-3 bg-slate-800 rounded-xl text-primary text-[10px] font-black uppercase flex items-center justify-center gap-2 border border-white/5 transition-all">
-                                        <span className="material-symbols-outlined text-[16px]">directions</span> Rota Externa
-                                    </button>
-                                    <button onClick={() => openEditPanel(destinationStop)} className="py-3 bg-slate-800 rounded-xl text-slate-300 text-[10px] font-black uppercase flex items-center justify-center gap-2 border border-white/5 transition-all">
-                                        <span className="material-symbols-outlined text-[16px]">edit</span> Editar Ponto
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => handleCompleteStop(true)}
-                                    className="flex-1 flex items-center justify-center rounded-2xl h-14 bg-primary text-white gap-2 text-sm font-black shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all"
-                                >
-                                    <span className="material-symbols-outlined filled-icon">check_circle</span>
-                                    <span>CONCLUÍDO</span>
-                                </button>
-                                <button
-                                    onClick={() => handleCompleteStop(false)}
-                                    className="px-6 flex items-center justify-center rounded-2xl h-14 bg-slate-800 text-danger border border-white/5 font-black hover:bg-slate-700 active:scale-90 transition-all shadow-lg"
-                                >
-                                    <span className="material-symbols-outlined">block</span>
-                                </button>
+                                <p className="text-[11px] font-bold text-emerald-400 uppercase">Fluido</p>
                             </div>
                         </div>
-                    </div>
-                ) : (
-                    /* Default state before navigating or after arriving */
-                    <div className="pointer-events-none pb-12">
-                        {/* This space can be used for other alerts if needed */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                onClick={() => handleCompleteStop(true)}
+                                className="nav-gradient h-14 rounded-2xl flex items-center justify-center gap-2 shadow-[0_10px_20px_-5px_rgba(59,130,246,0.5)] active:scale-[0.97] transition-all"
+                            >
+                                <CheckCircle2 size={20} className="text-white" />
+                                <span className="text-white font-extrabold text-sm tracking-wide uppercase">Entregue</span>
+                            </button>
+                            <button
+                                onClick={() => setIsNavigating(false)}
+                                className="bg-white/5 border border-white/10 h-14 rounded-2xl flex items-center justify-center gap-2 active:bg-white/10 transition-all"
+                            >
+                                <X size={20} className="text-slate-300" />
+                                <span className="text-slate-300 font-extrabold text-sm tracking-wide uppercase">Parar</span>
+                            </button>
+                        </div>
+                        <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="size-8 rounded-full bg-slate-800 flex items-center justify-center border border-white/10">
+                                    <PackageSearch size={16} className="text-slate-400" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase">Restante</p>
+                                    <p className="text-xs font-bold text-slate-300">{(routePoints.length - routePoints.filter(p => p.isDelivered).length).toString().padStart(2, '0')} paradas</p>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationStop.lat},${destinationStop.lng}`, '_blank')}
+                                className="p-2 px-4 rounded-xl glass-morphism text-[10px] font-bold text-white/60 uppercase hover:text-white transition-colors"
+                            >
+                                GPS Externo
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
 
-            {/* EDIT PANEL (Independent Pop-up) */}
-            {editingPoint && (
-                <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" onClick={handleCloseEdit}></div>
-                    <div className="w-full max-w-xl bg-slate-900 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.8)] border border-white/10 transition-all duration-500 relative z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 fade-in duration-300">
-                        <div className="px-8 pb-10 pt-8 h-full overflow-y-auto no-scrollbar">
-                            <div className="flex items-center justify-between mb-8">
-                                <h3 className="text-2xl font-black italic uppercase text-white tracking-tight">Modificar Ponto</h3>
-                                <button onClick={handleCloseEdit} className="p-3 bg-slate-800 rounded-full text-zinc-400 hover:text-white transition-all"><X size={20} /></button>
-                            </div>
-
-                            <div className="space-y-5 mb-8">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Identificação</label>
-                                    <input value={editName} onChange={e => setEditName(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-slate-800 border border-white/5 rounded-3xl p-5 text-white font-bold focus:border-primary outline-none transition-all" placeholder="Nome..." />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Bairro</label>
-                                    <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-slate-800 border border-white/5 rounded-3xl p-5 text-white focus:border-primary outline-none transition-all" placeholder="Bairro..." />
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        if ('geolocation' in navigator) {
-                                            navigator.geolocation.getCurrentPosition(pos => {
-                                                setEditLat(String(pos.coords.latitude));
-                                                setEditLng(String(pos.coords.longitude));
-                                            });
-                                        }
-                                    }}
-                                    className="w-full bg-primary/10 text-primary py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-primary/20 active:scale-95 transition-all shadow-sm border border-primary/20"
-                                >
-                                    <span className="material-symbols-outlined text-[16px] filled-icon">my_location</span> Sincronizar Coodenadas pelo GPS
-                                </button>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Observações Adicionais</label>
-                                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-slate-800 border border-white/5 rounded-3xl p-5 text-white h-28 text-sm outline-none focus:border-primary transition-all" placeholder="Informações extras..." />
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-3">
-                                <button onClick={handleCloseEdit} className="w-full bg-primary py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-2xl shadow-primary/30 active:scale-95 transition-all">Salvar Alterações</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ROUTE CONFIRMATION (Standardized Bottom Sheet) */}
-            {showRouteConfirmation && (
-                <div className="absolute inset-0 z-[1100] flex flex-col justify-end bg-black/60 backdrop-blur-sm pointer-events-auto animate-in fade-in duration-300">
-                    <div className="absolute inset-0" onClick={() => setShowRouteConfirmation(false)} />
-                    <div className={`relative bg-slate-900 border-t border-white/10 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 ${manifestExpanded ? 'h-[85vh]' : 'h-[550px]'}`}>
-                        <div
-                            onClick={() => setManifestExpanded(!manifestExpanded)}
-                            onTouchStart={handleSheetTouchStart}
-                            className="py-6 flex flex-col items-center gap-1 cursor-pointer"
-                        >
-                            <div className="w-12 h-1.5 bg-slate-700 rounded-full" />
-                            <ChevronUp size={20} className={`text-slate-500 transition-transform duration-500 ${manifestExpanded ? 'rotate-180' : ''}`} />
-                        </div>
-
-                        <div className="px-8 pb-12 flex flex-col h-full overflow-hidden">
-                            <h2 className="text-2xl font-black italic text-white uppercase mb-8 tracking-tight">Manifesto de Rota</h2>
-                            <div className="flex-1 overflow-y-auto space-y-3 mb-8 no-scrollbar bg-slate-800/20 p-2 rounded-[2.5rem] border border-white/5">
-                                {routePoints.filter(p => !p.isDelivered && p.id !== 'current').map((p, idx) => (
-                                    <div key={p.id} className="bg-slate-800/40 border border-white/5 p-5 rounded-3xl flex items-center gap-4 group/item relative shadow-lg">
-                                        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-black italic shrink-0">#{idx + 1}</div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-white font-black uppercase text-[11px] truncate tracking-wide">{p.name}</p>
-                                            <p className="text-slate-500 text-[9px] uppercase tracking-widest truncate mt-0.5">{p.neighborhood}</p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {(!p.lat || !p.lng) && <div className="text-[7px] bg-danger/10 text-danger px-2 py-1 rounded-full font-black uppercase whitespace-nowrap border border-danger/20">Sem GPS</div>}
-                                            <button onClick={() => openEditPanel(p)} className="p-3 rounded-xl bg-slate-700/50 border border-white/5 text-slate-400 hover:text-primary transition-all active:scale-90">
-                                                <Pencil size={14} />
-                                            </button>
-                                            <button onClick={() => handleDeletePoint(p.id)} className="p-3 rounded-xl bg-slate-700/50 border border-white/5 text-slate-400 hover:text-danger transition-all active:scale-90">
-                                                <Trash size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="flex flex-col gap-3">
-                                <button onClick={() => { setShowRouteConfirmation(false); setIsNavigating(true); setNavigationIndex(0); setManifestExpanded(false); }} className="w-full bg-primary py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-[0_15px_30px_rgba(19,127,236,0.4)] active:scale-95 transition-all">Iniciar Jornada Ativa</button>
-                                <button onClick={() => { setShowRouteConfirmation(false); setManifestExpanded(false); }} className="w-full py-4 text-slate-500 font-extrabold uppercase text-[10px] tracking-[0.3em] hover:text-slate-300 transition-all">Cancelar</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* CHECK ANIMATION */}
             {showCheckAnimation && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none">
-                    <div className="bg-primary w-32 h-32 rounded-full flex items-center justify-center animate-ping text-white">
-                        <CheckCircle2 size={64} />
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none bg-emerald-500/10 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-emerald-500 size-32 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.5)] animate-bounce">
+                        <CheckCircle2 size={64} className="text-white" />
                     </div>
                 </div>
             )}
-
-            {/* CELEBRATION OVERLAY */}
-            {showCelebration && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none bg-background-dark/80 backdrop-blur-md animate-in fade-in duration-500">
-                    <div className="bg-slate-900 p-12 rounded-[3.5rem] shadow-2xl text-center border border-white/10 animate-in zoom-in-90 duration-500">
-                        <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <span className="material-symbols-outlined text-green-500 text-[48px] filled-icon">verified</span>
-                        </div>
-                        <h2 className="text-3xl font-black italic uppercase text-white mb-2 tracking-tight">Rota Concluída!</h2>
-                        <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em]">Excelente trabalho operacional.</p>
-                    </div>
-                </div>
-            )}
-
         </div>
     );
 };

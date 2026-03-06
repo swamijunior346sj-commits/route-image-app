@@ -1,41 +1,58 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
-import { Download, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, FileText, FileSpreadsheet, FileJson, ChevronDown } from 'lucide-react';
-import { exportAsCSV, exportAsJSON, exportAsXLS, exportAsPDF } from '../services/importExport';
-import { extractFeatures } from '../services/imageProcessing';
+import {
+    X,
+    Search,
+    Plus,
+    MoreVertical,
+    ChevronLeft,
+    MapPin,
+    Navigation,
+    Trash2,
+    Edit2,
+    LocateFixed,
+    ClipboardList,
+    CheckCircle2,
+    Database,
+    Loader2,
+    FileText,
+    Image as ImageIcon,
+    Camera
+} from 'lucide-react';
 import { analyzeAddressImage } from '../services/geminiService';
+import { extractFeatures } from '../services/imageProcessing';
+import { DeliveryDetailView } from './DeliveryDetailView';
 
 interface RecordsViewProps {
     onNavigateToMap?: () => void;
+    onBack?: () => void;
 }
 
-export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
+export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
     const [records, setRecords] = useState<LocationRecord[]>([]);
-
+    const [searchQuery, setSearchQuery] = useState('');
     const [editingRecord, setEditingRecord] = useState<LocationRecord | null>(null);
+    const [selectedDetail, setSelectedDetail] = useState<LocationRecord | null>(null);
+    const [isExtracting, setIsExtracting] = useState(false);
+
+    // Edit States
     const [editName, setEditName] = useState('');
     const [editLat, setEditLat] = useState('');
     const [editLng, setEditLng] = useState('');
-    const [editMainImage, setEditMainImage] = useState<string | null>(null);
-    const [editMainFeatures, setEditMainFeatures] = useState<number[] | null>(null);
-    const [editAdditionalImages, setEditAdditionalImages] = useState<{ id: string, image: string, features: number[] }[]>([]);
     const [editNotes, setEditNotes] = useState('');
     const [editNeighborhood, setEditNeighborhood] = useState('');
     const [editCity, setEditCity] = useState('');
+    const [editMainImage, setEditMainImage] = useState<string | null>(null);
+    const [editAdditionalImages, setEditAdditionalImages] = useState<{ id: string, image: string, features: number[] }[]>([]);
+    const [editMainFeatures, setEditMainFeatures] = useState<number[] | null>(null);
     const [photoActionTarget, setPhotoActionTarget] = useState<'main' | 'extra' | null>(null);
 
-    // Multi-selection and Search
-    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showExportMenu, setShowExportMenu] = useState(false);
-
-    // AI/Vision Loading states
-    const [isExtracting, setIsExtracting] = useState(false);
-
-    const displayRecords = searchQuery.length >= 3
-        ? records.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    const displayRecords = searchQuery.length >= 2
+        ? records.filter(r =>
+            r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (r.neighborhood && r.neighborhood.toLowerCase().includes(searchQuery.toLowerCase()))
+        )
         : records;
 
     const loadRecords = async () => {
@@ -49,108 +66,51 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
 
     const handleDelete = async (id: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
-        if (confirm('Tem certeza que deseja excluir este registro?')) {
+        if (confirm('Tem certeza que deseja excluir este endereço?')) {
             await deleteRecord(id);
             loadRecords();
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-            });
         }
     };
 
-    const handleSyncLocation = async (id: string, e: React.MouseEvent) => {
+    const handleSendToMap = async (record: LocationRecord, e: React.MouseEvent) => {
         e.stopPropagation();
-        if ('geolocation' in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                async (pos) => {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
-                    await updateRecord(id, { lat, lng });
-                    loadRecords();
-                },
-                (err) => alert('Erro ao obter GPS: ' + err.message),
-                { enableHighAccuracy: true }
-            );
-        } else {
-            alert('Geolocalização não suportada no seu dispositivo.');
+        const currentRoute = await getActiveRoute();
+        const newPoint = {
+            id: record.id,
+            name: record.name,
+            lat: record.lat,
+            lng: record.lng,
+            scannedAt: Date.now(),
+            notes: record.notes,
+            neighborhood: record.neighborhood,
+            city: record.city
+        };
+
+        const finalRoute = [...currentRoute.filter(p => p.id !== record.id), newPoint];
+        try {
+            await updateActiveRoute(finalRoute);
+            if (onNavigateToMap) onNavigateToMap();
+        } catch (err) {
+            console.error("Erro ao enviar rota:", err);
+            alert("Houve um problema ao sincronizar. Verifique sua conexão.");
         }
-    };
-
-    const handleQuickNotesSave = async (id: string, newNotes: string) => {
-        await updateRecord(id, { notes: newNotes });
-        loadRecords();
-    };
-
-    const handleBulkDelete = async () => {
-        if (selectedIds.size === 0) return;
-        if (confirm(`Tem certeza que deseja excluir ${selectedIds.size} registros selecionados?`)) {
-            for (const id of Array.from(selectedIds)) {
-                await deleteRecord(id);
-            }
-            setSelectedIds(new Set());
-            loadRecords();
-        }
-    };
-
-    const toggleSelection = (id: string) => {
-        setSelectedIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
-
-    const toggleSelectAll = () => {
-        if (selectedIds.size === displayRecords.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(displayRecords.map(r => r.id)));
-        }
-    };
-
-    const handlePressStart = (id: string) => {
-        if (selectedIds.size > 0) return; // Se já está em modo de seleção, o clique normal resolve
-        timerRef.current = setTimeout(() => {
-            toggleSelection(id);
-            if (navigator.vibrate) navigator.vibrate(50);
-        }, 500); // 500ms long press
-    };
-
-    const handlePressEnd = () => {
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-            timerRef.current = null;
-        }
-    };
-
-    const [selectedDetail, setSelectedDetail] = useState<LocationRecord | null>(null);
-
-
-
-    const openDetail = (record: LocationRecord) => {
-        setSelectedDetail(record);
     };
 
     const openEdit = (record: LocationRecord, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
-        // setIsEditModalOpen(true); // No longer needed
         setEditingRecord(record);
         setEditName(record.name);
         setEditLat(record.lat ? String(record.lat) : '');
         setEditLng(record.lng ? String(record.lng) : '');
-        setEditMainImage(record.imageThumbnail);
-        setEditMainFeatures(record.featureVector);
-        setEditAdditionalImages(record.additionalImages || []);
         setEditNotes(record.notes || '');
         setEditNeighborhood(record.neighborhood || '');
         setEditCity(record.city || '');
+        setEditMainImage(record.imageThumbnail);
+        setEditAdditionalImages(record.additionalImages || []);
+        setEditMainFeatures(record.featureVector);
     };
 
     const openCreate = () => {
-        // setIsEditModalOpen(true); // No longer needed
         setEditingRecord({
             id: 'new',
             name: '',
@@ -167,36 +127,33 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
         setEditName('');
         setEditLat('');
         setEditLng('');
-        setEditMainImage(null);
-        setEditMainFeatures(null);
-        setEditAdditionalImages([]);
         setEditNotes('');
         setEditNeighborhood('');
         setEditCity('');
+        setEditMainImage(null);
+        setEditAdditionalImages([]);
+        setEditMainFeatures(null);
     };
 
     const handleSaveEdit = async () => {
         const lat = parseFloat(editLat);
         const lng = parseFloat(editLng);
 
-        if (editingRecord && editingRecord.id !== 'new') { // Existing record
+        if (editingRecord && editingRecord.id !== 'new') {
             await updateRecord(editingRecord.id, {
                 name: editName,
                 lat: isNaN(lat) ? null : lat,
                 lng: isNaN(lng) ? null : lng,
-                additionalImages: editAdditionalImages,
-                imageThumbnail: editMainImage || editingRecord.imageThumbnail,
-                featureVector: editMainFeatures || editingRecord.featureVector,
                 notes: editNotes.trim(),
                 neighborhood: editNeighborhood.trim(),
-                city: editCity.trim()
+                city: editCity.trim(),
+                imageThumbnail: editMainImage || editingRecord.imageThumbnail,
+                additionalImages: editAdditionalImages,
+                featureVector: editMainFeatures || editingRecord.featureVector
             });
-        } else { // New record
-            if (!editName.trim()) {
-                alert('Por favor, informe um nome para o registro.');
-                return;
-            }
-            const newRec = await saveRecord(
+        } else {
+            if (!editName.trim()) return alert('Nome é obrigatório.');
+            await saveRecord(
                 editName,
                 isNaN(lat) ? null : lat,
                 isNaN(lng) ? null : lng,
@@ -208,67 +165,9 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                     city: editCity.trim()
                 }
             );
-            if (editAdditionalImages.length > 0) {
-                await updateRecord(newRec.id, { additionalImages: editAdditionalImages });
-            }
         }
-
-        // setIsEditModalOpen(false); // No longer needed
         setEditingRecord(null);
-        setEditNotes('');
-        setEditNeighborhood('');
-        setEditCity('');
         loadRecords();
-    };
-
-    const handleUseCurrentLocationForEdit = () => {
-        if ('geolocation' in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    setEditLat(String(pos.coords.latitude));
-                    setEditLng(String(pos.coords.longitude));
-                },
-                (err) => {
-                    console.error(err);
-                    alert('Não foi possível obter sua localização. Verifique as permissões de GPS.');
-                },
-                { enableHighAccuracy: true, timeout: 5000 }
-            );
-        } else {
-            alert('Geolocalização não suportada no seu navegador.');
-        }
-    };
-
-    const handleAddImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPhotoActionTarget(null);
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setIsExtracting(true);
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            const imageSrc = event.target?.result as string;
-            if (!imageSrc) { setIsExtracting(false); return; }
-            try {
-                const img = new Image();
-                img.src = imageSrc;
-                await new Promise(r => { img.onload = r; });
-                const features = await extractFeatures(img);
-
-                setEditAdditionalImages(prev => [...prev, {
-                    id: crypto.randomUUID(),
-                    image: imageSrc,
-                    features
-                }]);
-            } catch (err) {
-                console.error(err);
-                alert('Erro ao processar imagem para reconhecimento');
-            } finally {
-                setIsExtracting(false);
-            }
-        };
-        reader.readAsDataURL(file);
-        // Reset input
-        e.target.value = '';
     };
 
     const handleReplaceMainImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,377 +186,179 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                 const features = await extractFeatures(img);
                 setEditMainImage(imageSrc);
                 setEditMainFeatures(features);
-
-                try {
-                    const aiReading = await analyzeAddressImage(imageSrc);
-                    if (aiReading) {
-                        if (aiReading.address) setEditName(aiReading.address);
-                        if (aiReading.neighborhood) setEditNeighborhood(aiReading.neighborhood);
-                        if (aiReading.city) setEditCity(aiReading.city);
-                        if (aiReading.notes) setEditNotes(aiReading.notes);
-                    }
-                } catch (aiErr) {
-                    console.warn('AI auto-analysis failed:', aiErr);
+                const aiReading = await analyzeAddressImage(imageSrc);
+                if (aiReading) {
+                    if (aiReading.address) setEditName(aiReading.address);
+                    if (aiReading.neighborhood) setEditNeighborhood(aiReading.neighborhood);
+                    if (aiReading.city) setEditCity(aiReading.city);
+                    if (aiReading.notes) setEditNotes(aiReading.notes);
                 }
             } catch (err) {
                 console.error(err);
-                alert('Erro ao processar a nova foto principal.');
             } finally {
                 setIsExtracting(false);
             }
         };
         reader.readAsDataURL(file);
-        e.target.value = '';
     };
 
-
-
-    const handleRemoveAdditionalImage = (idx: string) => {
-        setEditAdditionalImages(prev => prev.filter(img => img.id !== idx));
-    };
-
-    const handleSendToMap = async () => {
-        if (selectedIds.size === 0) return;
-
-        const selectedRecords = records.filter(r => selectedIds.has(r.id));
-
-        if (selectedRecords.length === 0) {
-            alert("Nenhum local selecionado válido.");
-            return;
-        }
-
-        const currentRoute = await getActiveRoute();
-        const newPoints = selectedRecords.map(r => ({
-            id: r.id,
-            name: r.name,
-            lat: r.lat,
-            lng: r.lng,
-            scannedAt: Date.now(),
-            notes: r.notes,
-            neighborhood: r.neighborhood,
-            city: r.city
-        }));
-
-        const finalRoute = [...currentRoute.filter(p => p.id !== 'current'), ...newPoints];
-
-        try {
-            await updateActiveRoute(finalRoute);
-            setSelectedIds(new Set());
-            if (onNavigateToMap) onNavigateToMap();
-        } catch (err) {
-            console.error("Erro ao enviar rota:", err);
-            alert("Houve um problema ao sincronizar o servidor. Verifique sua conexão.");
-        }
-    };
+    if (!records) return <div className="h-full bg-[#0F172A] flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>;
 
     return (
-        <div className="relative w-full h-full bg-black overflow-y-auto pt-safe pb-32">
-            {/* Header HUD - Gaming style */}
-            <div className="sticky top-0 z-30 w-full p-6 animate-fade-in flex flex-col gap-4 pointer-events-none">
-                <div className="bg-zinc-950/40 backdrop-blur-2xl border-b border-white/5 p-6 -m-6 mb-2 pointer-events-auto">
-                    {selectedIds.size > 0 ? (
-                        <div className="flex justify-between items-center w-full animate-in slide-in-from-top-4 duration-500">
-                            <div className="flex items-center gap-4">
-                                <button onClick={() => setSelectedIds(new Set())} className="text-zinc-500 hover:text-white p-2 bg-white/5 rounded-full transition-all">
-                                    <X size={20} />
-                                </button>
-                                <div className="space-y-0.5">
-                                    <h2 className="text-xl font-black italic tracking-tighter text-white uppercase leading-none">Seleção Ativa</h2>
-                                    <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">{selectedIds.size} ALVOS MARCADOS</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <button onClick={handleSendToMap} className="flex flex-col items-center justify-center gap-1 px-3 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl hover:bg-emerald-500/20 transition-all shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                                    <MapPinned size={20} />
-                                    <span className="text-[8px] font-black uppercase tracking-wider text-center">Enviar<br />ao Mapa</span>
-                                </button>
-                                <button onClick={toggleSelectAll} className="flex flex-col items-center justify-center gap-1 px-3 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-2xl hover:bg-blue-500/20 transition-all">
-                                    {selectedIds.size === displayRecords.length ? <CheckSquare size={20} /> : <Square size={20} />}
-                                    <span className="text-[8px] font-black uppercase tracking-wider">Todos</span>
-                                </button>
-                                <button onClick={handleBulkDelete} className="flex flex-col items-center justify-center gap-1 px-3 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl hover:bg-red-500/20 transition-all">
-                                    <Trash2 size={20} />
-                                    <span className="text-[8px] font-black uppercase tracking-wider">Excluir</span>
-                                </button>
-                            </div>
-
-                        </div>
-                    ) : (
-                        <div className="space-y-5 animate-fade-in">
-                            <div className="flex justify-between items-start">
-                                <div className="space-y-1">
-                                    <h1 className="text-2xl font-black italic tracking-tighter text-white uppercase leading-none">Meus Endereços</h1>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,1)]" />
-                                        <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">{records.length} Entradas</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <form onSubmit={(e) => e.preventDefault()} className="relative flex items-center">
-                                <div className="absolute inset-0 bg-blue-500/5 blur-xl rounded-2xl" />
-                                <input
-                                    type="text"
-                                    placeholder="FILTRAR REGISTROS..."
-                                    className="w-full bg-black/40 backdrop-blur-2xl border border-white/10 rounded-2xl py-4 pl-5 pr-12 text-xs text-white focus:border-blue-500/50 focus:outline-none placeholder:text-zinc-600 font-bold tracking-widest uppercase transition-all shadow-2xl"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                                <div className="absolute right-4 text-zinc-600">
-                                    <Search size={18} />
-                                </div>
-                            </form>
-                        </div>
-                    )}
+        <div className="relative w-full h-full bg-gradient-to-b from-[#0F172A] to-[#1E293B] overflow-hidden">
+            {/* Header HUD */}
+            <header className="fixed top-0 left-0 right-0 z-50 px-6 pt-14 pb-6 flex items-center justify-between bg-[#0F172A]/40 backdrop-blur-md border-b border-white/5">
+                <button
+                    onClick={onBack}
+                    className="flex items-center justify-center size-10 rounded-full glass-effect-premium active:scale-95 transition-all text-white/90"
+                >
+                    <ChevronLeft size={24} />
+                </button>
+                <div className="text-center">
+                    <h1 className="text-[10px] font-black uppercase letter-spacing-premium text-slate-400 mb-0.5">SISTEMA</h1>
+                    <p className="text-lg font-bold tracking-tight text-white/90">Meus Endereços</p>
                 </div>
-            </div>
+                <button className="flex items-center justify-center size-10 rounded-full glass-effect-premium active:scale-95 transition-all text-white/90">
+                    <MoreVertical size={24} />
+                </button>
+            </header>
 
-            {/* Utility Bar */}
-            {!selectedIds.size && (
-                <div className="px-6 my-6 space-y-3">
-                    {/* EXPORT MENU */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setShowExportMenu(prev => !prev)}
-                            className="w-full bg-zinc-950/40 backdrop-blur-xl border border-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/[0.03] transition-all group"
-                        >
-                            <Download size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                            <span className="text-[10px] font-black italic uppercase tracking-widest text-zinc-400 group-hover:text-white">Exportar Endereços</span>
-                            <ChevronDown size={14} className={`text-zinc-600 transition-transform duration-300 ${showExportMenu ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {/* Dropdown Options */}
-                        {showExportMenu && (
-                            <div className="mt-2 bg-zinc-950 border border-white/10 rounded-2xl overflow-hidden shadow-2xl animate-in slide-in-from-top-2 duration-200">
-                                <button onClick={async () => { await exportAsCSV(); setShowExportMenu(false); }}
-                                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-all text-left border-b border-white/5">
-                                    <div className="w-9 h-9 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center">
-                                        <FileSpreadsheet size={16} className="text-emerald-400" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] font-black text-white uppercase tracking-wider">CSV</p>
-                                        <p className="text-[9px] text-zinc-500">Compatível com Excel e Google Sheets</p>
-                                    </div>
-                                </button>
-                                <button onClick={async () => { await exportAsXLS(); setShowExportMenu(false); }}
-                                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-all text-left border-b border-white/5">
-                                    <div className="w-9 h-9 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center">
-                                        <FileSpreadsheet size={16} className="text-blue-400" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] font-black text-white uppercase tracking-wider">XLS (Excel)</p>
-                                        <p className="text-[9px] text-zinc-500">Planilha Excel formatada</p>
-                                    </div>
-                                </button>
-                                <button onClick={async () => { await exportAsPDF(); setShowExportMenu(false); }}
-                                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-all text-left border-b border-white/5">
-                                    <div className="w-9 h-9 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-center">
-                                        <FileText size={16} className="text-red-400" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] font-black text-white uppercase tracking-wider">PDF</p>
-                                        <p className="text-[9px] text-zinc-500">Relatório visual para impressão</p>
-                                    </div>
-                                </button>
-                                <button onClick={async () => { await exportAsJSON(); setShowExportMenu(false); }}
-                                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-all text-left">
-                                    <div className="w-9 h-9 bg-violet-500/10 border border-violet-500/20 rounded-xl flex items-center justify-center">
-                                        <FileJson size={16} className="text-violet-400" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] font-black text-white uppercase tracking-wider">JSON (Backup)</p>
-                                        <p className="text-[9px] text-zinc-500">Backup completo para reimportar</p>
-                                    </div>
-                                </button>
-                            </div>
-                        )}
+            {/* Main Content Area */}
+            <main className="h-full overflow-y-auto custom-scrollbar pt-36 pb-32 px-6">
+                {/* Search Bar */}
+                <div className="mb-8">
+                    <div className="glass-effect-premium h-14 rounded-2xl flex items-center px-4 gap-3">
+                        <Search className="text-slate-500" size={20} />
+                        <input
+                            type="text"
+                            placeholder="Buscar por endereço ou nome..."
+                            className="bg-transparent border-none text-sm text-white/90 placeholder:text-slate-500 placeholder:font-light focus:ring-0 w-full outline-none"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
                     </div>
                 </div>
-            )}
 
-            {/* Grid display: 1 Card per line */}
-            <div className="flex flex-col gap-5 px-6 pb-20 mt-4">
-                {displayRecords.map(record => {
-                    const isSelected = selectedIds.has(record.id);
-                    const isSelectionMode = selectedIds.size > 0;
-
-                    return (
+                {/* Listing */}
+                <div className="space-y-4">
+                    {displayRecords.map(record => (
                         <div
                             key={record.id}
-                            className={`relative group overflow-hidden rounded-[2rem] bg-zinc-950 border transition-all duration-500 cursor-pointer select-none flex flex-col p-5 ${isSelected
-                                ? 'border-blue-500 shadow-[0_0_40px_rgba(59,130,246,0.3)] scale-[0.98]'
-                                : 'border-white/5 hover:border-white/10 shadow-lg'
-                                }`}
-                            onTouchStart={() => handlePressStart(record.id)}
-                            onTouchEnd={handlePressEnd}
-                            onTouchMove={handlePressEnd}
-                            onMouseDown={() => handlePressStart(record.id)}
-                            onMouseUp={handlePressEnd}
-                            onMouseLeave={handlePressEnd}
-                            onClick={() => {
-                                if (isSelectionMode) toggleSelection(record.id);
-                                else openDetail(record);
-                            }}
+                            onClick={() => setSelectedDetail(record)}
+                            className="glass-effect-premium rounded-[2.5rem] p-5 active:scale-[0.98] transition-all cursor-pointer group"
                         >
-                            {/* Decorative Elements */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent opacity-50" />
-                            <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 rounded-full blur-[60px] group-hover:bg-blue-500/20 transition-all duration-700" />
-
-                            {/* Selection HUD UI */}
-                            {isSelectionMode && (
-                                <div className="absolute top-4 right-4 z-20 animate-in zoom-in-90 duration-300">
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isSelected
-                                        ? 'bg-blue-500 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,1)]'
-                                        : 'bg-white/5 border-white/10'
-                                        }`}>
-                                        {isSelected && <CheckCircle2 size={14} className="text-white" />}
+                            <div className="flex gap-4 items-start mb-4">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className={`size-2 rounded-full shadow-lg ${record.lat ? 'bg-primary shadow-primary/50' : 'bg-orange-500 shadow-orange-500/50'}`}></span>
+                                        <h3 className="text-base font-bold text-white/90 line-clamp-1 italic">{record.name}</h3>
                                     </div>
+                                    <p className="text-[14px] text-slate-400 leading-snug mb-3">
+                                        {record.neighborhood || 'Setor ñ identificado'}<br />
+                                        {record.city || 'São Paulo'}, SP
+                                    </p>
+                                    <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest font-mono">
+                                        <MapPin size={14} className="text-primary" />
+                                        {record.lat ? `${record.lat.toFixed(4)}, ${record.lng?.toFixed(4)}` : 'Coords Pendentes'}
+                                    </div>
+                                </div>
+                                <div className="w-20 h-20 rounded-2xl overflow-hidden border border-white/10 shrink-0 bg-slate-900 flex items-center justify-center">
+                                    {record.imageThumbnail ? (
+                                        <img src={record.imageThumbnail} alt="Thumbnail" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                    ) : (
+                                        <ImageIcon size={32} className="text-slate-700" />
+                                    )}
+                                </div>
+                            </div>
+
+                            {record.notes && (
+                                <div className="pt-4 border-t border-white/5 flex items-center gap-2">
+                                    <ClipboardList size={16} className="text-slate-500" />
+                                    <p className="text-[12px] text-slate-500 italic truncate">{record.notes}</p>
                                 </div>
                             )}
 
-                            {/* Fixed Actions */}
-                            {!isSelectionMode && (
-                                <div className="absolute top-4 right-4 z-20 flex gap-2">
+                            {/* Hover/Active Actions */}
+                            <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                                <div className="flex gap-2">
                                     <button
                                         onClick={(e) => openEdit(record, e)}
-                                        className="p-2.5 rounded-xl bg-zinc-900 shadow-md border border-white/10 text-zinc-400 hover:text-white hover:border-blue-500/50 transition-all"
+                                        className="size-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 active:bg-white/10"
                                     >
-                                        <Edit2 size={14} />
+                                        <Edit2 size={16} />
                                     </button>
                                     <button
                                         onClick={(e) => handleDelete(record.id, e)}
-                                        className="p-2.5 rounded-xl bg-zinc-900 shadow-md border border-white/10 text-zinc-400 hover:text-red-500 hover:border-red-500/50 transition-all"
+                                        className="size-10 rounded-xl bg-red-500/10 border border-red-500/10 flex items-center justify-center text-red-500 active:bg-red-500/20"
                                     >
-                                        <Trash2 size={14} />
+                                        <Trash2 size={16} />
                                     </button>
                                 </div>
-                            )}
-
-                            {/* Content Layout */}
-                            <div className="relative z-10 flex flex-col h-full">
-                                <div className="mb-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center mb-5 group-hover:scale-110 group-hover:bg-blue-500/10 group-hover:border-blue-500/20 transition-all duration-700">
-                                        <MapPinned size={22} className="text-blue-500/60 group-hover:text-blue-500" />
-                                    </div>
-                                    <h3 className="font-black text-white text-base md:text-lg tracking-tighter line-clamp-2 uppercase italic leading-[0.9] group-hover:text-blue-400 transition-colors">
-                                        {record.name}
-                                    </h3>
-                                    <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-2 opacity-60">
-                                        {record.neighborhood || 'SETOR DESCONHECIDO'}
-                                    </p>
-                                </div>
-
-                                <div className="mt-auto space-y-4">
-                                    {/* Inline Editable Notes */}
-                                    <div
-                                        className="bg-zinc-900/50 p-3 rounded-2xl border border-white/5 space-y-2 relative group-focus-within:border-blue-500/40 transition-all"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                <FileText size={12} />
-                                                Observações Rápidas
-                                            </span>
-                                        </div>
-                                        <textarea
-                                            defaultValue={record.notes || ''}
-                                            onBlur={(e) => {
-                                                if (e.target.value !== record.notes) {
-                                                    handleQuickNotesSave(record.id, e.target.value);
-                                                }
-                                            }}
-                                            className="w-full bg-transparent text-sm text-zinc-300 italic focus:outline-none resize-none placeholder:text-zinc-600 custom-scrollbar mt-1"
-                                            rows={2}
-                                            placeholder="Adicione notas ou referências do endereço aqui..."
-                                        />
-                                    </div>
-
-                                    {/* Full Coordinates & Sync Button */}
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1 bg-white/[0.03] px-4 py-2.5 rounded-xl border border-white/5 flex items-center justify-between gap-2 overflow-hidden shadow-inner">
-                                            <div className="flex flex-col max-w-[45%]">
-                                                <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-widest hidden sm:block">Latitude</span>
-                                                <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-widest sm:hidden">LAT</span>
-                                                <span className="text-[10px] sm:text-xs font-mono font-bold text-zinc-300 truncate transition-colors group-hover:text-white">
-                                                    {record.lat ?? '---'}
-                                                </span>
-                                            </div>
-                                            <div className="w-[1px] h-6 bg-white/10 shrink-0"></div>
-                                            <div className="flex flex-col max-w-[45%]">
-                                                <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-widest hidden sm:block">Longitude</span>
-                                                <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-widest sm:hidden">LNG</span>
-                                                <span className="text-[10px] sm:text-xs font-mono font-bold text-zinc-300 truncate transition-colors group-hover:text-white">
-                                                    {record.lng ?? '---'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={(e) => handleSyncLocation(record.id, e)}
-                                            className="w-12 h-12 shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 hover:bg-blue-500 hover:text-white transition-all shadow-md active:scale-95"
-                                            title="Sincronizar Coordenadas Atuais"
-                                        >
-                                            <LocateFixed size={18} />
-                                        </button>
-                                    </div>
-                                </div>
+                                <button
+                                    onClick={(e) => handleSendToMap(record, e)}
+                                    className="px-4 h-10 rounded-xl bg-primary text-white font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-lg shadow-primary/20"
+                                >
+                                    <Navigation size={14} />
+                                    Enviar
+                                </button>
                             </div>
                         </div>
-                    );
-                })}
+                    ))}
 
-                {displayRecords.length === 0 && (
-                    <div className="col-span-full flex flex-col items-center justify-center py-32 text-zinc-600">
-                        <Database size={64} className="mb-6 opacity-20" />
-                        <h4 className="text-lg font-black italic uppercase tracking-widest opacity-40">Nenhum Registro Localizado</h4>
-                    </div>
-                )}
-            </div>
+                    {displayRecords.length === 0 && (
+                        <div className="py-20 flex flex-col items-center justify-center text-slate-600 opacity-40">
+                            <Database size={64} className="mb-4" />
+                            <p className="font-bold uppercase tracking-widest text-sm">Nenhum registro</p>
+                        </div>
+                    )}
+                </div>
+            </main>
 
             {/* Fab Create */}
             <button
                 onClick={openCreate}
-                className="fixed bottom-[110px] right-8 z-40 w-16 h-16 bg-blue-600 text-white rounded-[1.5rem] shadow-[0_15px_40px_rgba(37,99,235,0.4)] flex items-center justify-center hover:bg-blue-500 hover:scale-110 active:scale-90 transition-all animate-in slide-in-from-bottom-8 duration-500"
+                className="fixed bottom-10 right-6 size-16 fab-premium text-white rounded-2xl flex items-center justify-center active:scale-90 transition-all z-50"
             >
-                <Plus size={32} />
+                <Plus size={36} />
             </button>
 
-            {/* EDIT PANEL (Independent Pop-up) */}
+            {/* Modals - Simplified for the new design flow */}
             {editingRecord && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setEditingRecord(null)}></div>
-                    <div className="w-full max-w-xl bg-[#09090b] border border-white/10 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.8)] transition-all duration-500 relative z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 fade-in duration-300">
-                        <div className="px-8 pb-10 pt-8 flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="w-full max-w-xl bg-[#0F172A] border border-white/10 rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+                        <div className="p-8 overflow-y-auto custom-scrollbar">
                             <div className="flex items-center justify-between mb-8">
-                                <h3 className="text-3xl font-black italic uppercase text-white tracking-tighter">Modificar Registro</h3>
-                                <button onClick={() => setEditingRecord(null)} className="p-3 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-all"><X size={20} /></button>
+                                <h3 className="text-xl font-black italic uppercase text-white tracking-widest">Modificar Registro</h3>
+                                <button onClick={() => setEditingRecord(null)} className="p-2 bg-white/5 rounded-full text-slate-400 hover:text-white"><X size={20} /></button>
                             </div>
 
-                            <div className="space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-2">Identificação Visual</label>
+                            <div className="space-y-4">
+                                <div className="glass-effect-premium p-4 rounded-2xl border border-white/5">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Endereço Principal</label>
                                     <input
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white font-bold focus:border-blue-500 transition-all outline-none"
-                                        placeholder="NOME DO PONTO..."
+                                        className="w-full bg-transparent text-white font-bold outline-none"
+                                        placeholder="Nome do local..."
                                         value={editName}
                                         onChange={(e) => setEditName(e.target.value)}
                                     />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-2">Setor/Bairro</label>
+                                    <div className="glass-effect-premium p-4 rounded-2xl border border-white/5">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Bairro</label>
                                         <input
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white font-bold focus:border-blue-500 transition-all outline-none"
-                                            placeholder="BAIRRO..."
+                                            className="w-full bg-transparent text-white outline-none text-sm"
+                                            placeholder="Bairro..."
                                             value={editNeighborhood}
                                             onChange={(e) => setEditNeighborhood(e.target.value)}
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-2">Cidade</label>
+                                    <div className="glass-effect-premium p-4 rounded-2xl border border-white/5">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Cidade</label>
                                         <input
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white font-bold focus:border-blue-500 transition-all outline-none"
-                                            placeholder="CIDADE..."
+                                            className="w-full bg-transparent text-white outline-none text-sm"
+                                            placeholder="Cidade..."
                                             value={editCity}
                                             onChange={(e) => setEditCity(e.target.value)}
                                         />
@@ -665,88 +366,57 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-blue-600/5 border border-blue-500/10 rounded-3xl p-5 relative cursor-pointer active:scale-95 transition-all" onClick={handleUseCurrentLocationForEdit}>
-                                        <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-2">Latitude GPS</label>
+                                    <div className="glass-effect-premium p-4 rounded-2xl border border-white/5 relative">
+                                        <label className="text-[10px] font-black text-primary uppercase tracking-widest block mb-2">Latitude</label>
                                         <input
-                                            className="w-full bg-transparent text-sm font-mono text-white focus:outline-none"
+                                            className="w-full bg-transparent text-white font-mono text-xs outline-none"
                                             value={editLat}
                                             onChange={(e) => setEditLat(e.target.value)}
                                         />
-                                        <LocateFixed size={14} className="absolute top-5 right-5 text-blue-500 opacity-40" />
+                                        <LocateFixed size={14} className="absolute top-4 right-4 text-primary opacity-40" />
                                     </div>
-                                    <div className="bg-indigo-600/5 border border-indigo-500/10 rounded-3xl p-5 relative cursor-pointer active:scale-95 transition-all" onClick={handleUseCurrentLocationForEdit}>
-                                        <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-2">Longitude GPS</label>
+                                    <div className="glass-effect-premium p-4 rounded-2xl border border-white/5 relative">
+                                        <label className="text-[10px] font-black text-primary uppercase tracking-widest block mb-2">Longitude</label>
                                         <input
-                                            className="w-full bg-transparent text-sm font-mono text-white focus:outline-none"
+                                            className="w-full bg-transparent text-white font-mono text-xs outline-none"
                                             value={editLng}
                                             onChange={(e) => setEditLng(e.target.value)}
                                         />
-                                        <LocateFixed size={14} className="absolute top-5 right-5 text-indigo-500 opacity-40" />
+                                        <LocateFixed size={14} className="absolute top-4 right-4 text-primary opacity-40" />
                                     </div>
                                 </div>
 
-                                <button
-                                    onClick={async () => {
-                                        if (!editLat || !editLng) return alert('Insira as coordenadas primeiro.');
-                                        setIsExtracting(true);
-                                        try {
-                                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${editLat}&lon=${editLng}`);
-                                            const data = await res.json();
-                                            if (data?.address) {
-                                                const addr = data.address;
-                                                setEditName(`${addr.road || addr.pedestrian || ''} ${addr.house_number ? ',' + addr.house_number : ''}`.trim());
-                                                setEditNeighborhood(addr.suburb || addr.neighbourhood || '');
-                                                setEditCity(addr.city || addr.town || '');
-                                            }
-                                        } finally { setIsExtracting(false); }
-                                    }}
-                                    disabled={isExtracting}
-                                    className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-5 rounded-3xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-emerald-500/20 active:scale-95 transition-all"
-                                >
-                                    <LocateFixed size={18} className={isExtracting ? 'animate-spin' : ''} />
-                                    Geocodificação Direta
-                                </button>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Observações Operacionais</label>
-                                    <textarea
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-6 text-sm text-zinc-400 h-28 resize-none focus:border-blue-500 outline-none italic"
-                                        placeholder="PONTOS DE REFERÊNCIA..."
-                                        value={editNotes}
-                                        onChange={(e) => setEditNotes(e.target.value)}
-                                    />
+                                <div className="relative group rounded-3xl overflow-hidden aspect-video border border-white/10 bg-black/20 flex items-center justify-center">
+                                    {editMainImage ? (
+                                        <img src={editMainImage} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="text-center">
+                                            <ImageIcon size={48} className="text-slate-800 mx-auto mb-2" />
+                                            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Sem Imagem</p>
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => setPhotoActionTarget('main')}
+                                        className="absolute bottom-4 right-4 size-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-xl active:scale-90 transition-all"
+                                    >
+                                        <Camera size={20} />
+                                    </button>
                                 </div>
 
-                                <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Reconhecimento Multi-Ângulo</label>
-                                    <div className="flex flex-wrap gap-4 bg-white/5 p-6 rounded-[2.5rem] border border-white/5">
-                                        <button
-                                            type="button"
-                                            onClick={() => setPhotoActionTarget('extra')}
-                                            className="w-16 h-16 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center text-zinc-600 hover:text-blue-500 hover:border-blue-500/50 transition-all active:scale-90"
-                                        >
-                                            <Camera size={24} />
-                                        </button>
-                                        {editAdditionalImages.map((img) => (
-                                            <div key={img.id} className="relative w-16 h-16 rounded-2xl overflow-hidden border border-white/10 group shadow-lg">
-                                                <img src={img.image} className="w-full h-full object-cover grayscale brightness-75 group-hover:grayscale-0 group-hover:brightness-100 transition-all" />
-                                                <button
-                                                    onClick={() => handleRemoveAdditionalImage(img.id)}
-                                                    className="absolute inset-0 bg-red-600/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white scale-110"
-                                                >
-                                                    <Trash size={18} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                <textarea
+                                    className="w-full glass-effect-premium rounded-2xl p-4 text-sm text-slate-300 italic h-24 resize-none outline-none focus:border-primary/50"
+                                    placeholder="Notas adicionais..."
+                                    value={editNotes}
+                                    onChange={(e) => setEditNotes(e.target.value)}
+                                />
 
                                 <button
                                     onClick={handleSaveEdit}
-                                    className="w-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] py-6 rounded-[2.5rem] shadow-xl shadow-blue-600/20 active:scale-95 transition-all text-[11px] mb-4"
                                     disabled={isExtracting}
+                                    className="w-full bg-primary h-14 rounded-2xl text-white font-black uppercase tracking-widest text-[13px] shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                 >
-                                    {editingRecord && editingRecord.id !== 'new' ? 'ATUALIZAR MATRIZ DE DADOS' : 'INICIAR NOVO REGISTRO'}
+                                    {isExtracting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                                    Salvar Registro
                                 </button>
                             </div>
                         </div>
@@ -756,114 +426,38 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
 
             {/* Photo Action Sub-modal */}
             {photoActionTarget && (
-                <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-8 animate-fade-in">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-8 animate-fade-in">
                     <div className="w-full max-w-sm flex flex-col gap-5">
                         <div className="text-center mb-6">
                             <h4 className="text-3xl font-black italic uppercase tracking-tighter text-white">Capturar Mídia</h4>
-                            <p className="text-blue-500/60 font-black uppercase tracking-widest text-[10px] mt-2">Selecione a fonte de entrada</p>
+                            <p className="text-primary/60 font-black uppercase tracking-widest text-[10px] mt-2">Selecione a fonte de entrada</p>
                         </div>
-
-                        <label className="w-full bg-blue-600 text-white py-6 rounded-[2rem] flex items-center justify-center gap-4 cursor-pointer font-black uppercase tracking-widest text-xs shadow-2xl hover:bg-blue-500 transition-all active:scale-95">
+                        <label className="w-full bg-primary text-white py-6 rounded-[2rem] flex items-center justify-center gap-4 cursor-pointer font-black uppercase tracking-widest text-xs shadow-2xl active:scale-95">
                             <Camera size={24} />
-                            <span>Tirar Nova Foto</span>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                className="hidden"
-                                onChange={photoActionTarget === 'main' ? handleReplaceMainImage : handleAddImage}
-                            />
+                            <span>Tirar Foto</span>
+                            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReplaceMainImage} />
                         </label>
-
-                        <label className="w-full bg-zinc-900 border border-white/10 text-white py-6 rounded-[2rem] flex items-center justify-center gap-4 cursor-pointer font-black uppercase tracking-widest text-xs hover:bg-zinc-800 transition-all active:scale-95">
-                            <ImageIcon size={24} className="text-blue-500" />
+                        <label className="w-full bg-slate-900 border border-white/10 text-white py-6 rounded-[2rem] flex items-center justify-center gap-4 cursor-pointer font-black uppercase tracking-widest text-xs active:scale-95">
+                            <ImageIcon size={24} className="text-primary" />
                             <span>Abrir Galeria</span>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={photoActionTarget === 'main' ? handleReplaceMainImage : handleAddImage}
-                            />
+                            <input type="file" accept="image/*" className="hidden" onChange={handleReplaceMainImage} />
                         </label>
-
-                        <button
-                            type="button"
-                            onClick={() => setPhotoActionTarget(null)}
-                            className="w-full py-4 text-zinc-500 font-black uppercase tracking-widest text-[10px] hover:text-white transition-all mt-6"
-                        >
-                            Abortar Operação
-                        </button>
+                        <button onClick={() => setPhotoActionTarget(null)} className="w-full py-4 text-slate-500 font-black uppercase tracking-widest text-[10px]">Cancelar</button>
                     </div>
                 </div>
             )}
 
-            {/* DETAIL PANEL (Independent Pop-up) */}
+            {/* Detail Pop-up */}
             {selectedDetail && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setSelectedDetail(null)}></div>
-                    <div className="w-full max-w-xl bg-[#09090b] border border-white/10 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.8)] transition-all duration-500 relative z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 fade-in duration-300">
-                        <div className="px-8 pb-10 pt-8 flex-1 overflow-y-auto custom-scrollbar">
-                            <div className="flex items-center justify-between mb-8">
-                                <h3 className="text-3xl font-black italic uppercase text-white tracking-tighter">Detalhes do Alvo</h3>
-                                <button onClick={() => setSelectedDetail(null)} className="p-3 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-all"><X size={20} /></button>
-                            </div>
-
-                            <div className="relative mb-10 group rounded-[3rem] overflow-hidden">
-                                <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#09090b] to-transparent z-10" />
-                                <div className="relative w-full aspect-video md:aspect-[4/3] rounded-[3rem] overflow-hidden border border-white/5 shadow-2xl">
-                                    {selectedDetail.imageThumbnail ? (
-                                        <img src={selectedDetail.imageThumbnail} className="w-full h-full object-cover transition-all duration-1000 hover:scale-105" />
-                                    ) : (
-                                        <div className="w-full h-full bg-zinc-950 flex items-center justify-center"><Database size={64} className="text-zinc-900" /></div>
-                                    )}
-                                    <div className="absolute bottom-8 left-8 right-8 z-20">
-                                        <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white leading-[0.9]">{selectedDetail.name}</h2>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-8">
-                                <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2.5rem] space-y-1">
-                                    <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Setor</span>
-                                    <p className="text-sm font-black text-white italic uppercase truncate">{selectedDetail.neighborhood || '---'}</p>
-                                </div>
-                                <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2.5rem] space-y-1">
-                                    <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Cidade</span>
-                                    <p className="text-sm font-black text-white italic uppercase truncate">{selectedDetail.city || '---'}</p>
-                                </div>
-                            </div>
-
-                            {selectedDetail.additionalImages && selectedDetail.additionalImages.length > 0 && (
-                                <div className="space-y-4 mb-10">
-                                    <h4 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest ml-4">Vistas Secundárias</h4>
-                                    <div className="flex gap-4 overflow-x-auto pb-4 px-2 no-scrollbar">
-                                        {selectedDetail.additionalImages.map((img, i) => (
-                                            <div key={i} className="w-24 h-24 rounded-[2rem] border border-white/10 overflow-hidden shrink-0 shadow-lg">
-                                                <img src={img.image} className="w-full h-full object-cover grayscale brightness-50 hover:grayscale-0 hover:brightness-100 transition-all" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-4 mb-10">
-                                <h4 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest ml-4">Diretivas Operacionais</h4>
-                                <div className="bg-white/[0.03] border border-white/5 p-8 rounded-[2.5rem] text-zinc-400 text-sm italic leading-relaxed">
-                                    {selectedDetail.notes || 'Sem observações tácticas registradas para este alvo.'}
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={() => setSelectedDetail(null)}
-                                className="w-full bg-white text-black py-6 rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-[10px] shadow-2xl active:scale-95 transition-all mb-4"
-                            >
-                                Recolher Visão
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <DeliveryDetailView
+                    record={selectedDetail}
+                    onClose={() => setSelectedDetail(null)}
+                    onConfirm={() => {
+                        handleSendToMap(selectedDetail, {} as any);
+                        setSelectedDetail(null);
+                    }}
+                />
             )}
-
         </div>
     );
 };

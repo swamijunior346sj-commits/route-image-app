@@ -1,8 +1,33 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
-import { Camera, MapPin, ScanLine, X, Loader2, SwitchCamera, LocateFixed, Database, Sparkles, ChevronUp } from 'lucide-react';
-import { getRecords, saveRecord, addPointToActiveRoute, addToDailyRoute } from '../services/db';
-import type { LocationRecord } from '../services/db';
+import {
+    Bell,
+    Camera,
+    ChevronUp,
+    Navigation,
+    MapPin,
+    MoreVertical,
+    PlusCircle,
+    Sparkles,
+    X,
+    Loader2,
+    CheckCircle2,
+    ChevronRight,
+    Search,
+    LocateFixed,
+    ScanLine
+} from 'lucide-react';
+import {
+    getRecords,
+    saveRecord,
+    addPointToActiveRoute,
+    addToDailyRoute,
+    getActiveRoute,
+    getSettings,
+    type RoutePoint,
+    type LocationRecord,
+    type AppSettings
+} from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
 import { LoadingOverlay } from './LoadingOverlay';
@@ -14,51 +39,90 @@ interface ScannerProps {
 }
 
 export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateToDailyRoute }: ScannerProps) => {
+    // --- Dashboard State ---
+    const [settings, setSettings] = useState<AppSettings | null>(null);
+    const [stats, setStats] = useState({ deliveries: 0, total: 0, earnings: 0 });
+    const [nextStop, setNextStop] = useState<RoutePoint | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // --- Functional State ---
     const webcamRef = useRef<Webcam>(null);
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
-    const [mode, setMode] = useState<'scan' | 'register'>('scan');
+    const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm'>('dashboard');
+    const [torch, setTorch] = useState(false);
+    const [lastCapturePreview, setLastCapturePreview] = useState<string | null>(null);
 
-    // Registering state
-    const [registerImage, setRegisterImage] = useState<string | null>(null);
-    const [registerFeatures, setRegisterFeatures] = useState<number[] | null>(null);
+    // Registering/Confirmation State
+    const [capturedImage, setCapturedImage] = useState<string | null>(null);
+    const [capturedFeatures, setCapturedFeatures] = useState<number[] | null>(null);
     const [addressInput, setAddressInput] = useState('');
-    const [notesInput, setNotesInput] = useState('');
-    const [cityInput, setCityInput] = useState('');
+    const [locationNameInput, setLocationNameInput] = useState('');
     const [neighborhoodInput, setNeighborhoodInput] = useState('');
+    const [cityInput, setCityInput] = useState('');
+    const [notesInput, setNotesInput] = useState('');
     const [latInput, setLatInput] = useState('');
     const [lngInput, setLngInput] = useState('');
-    const [accuracy, setAccuracy] = useState<number | null>(null);
 
-    const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
-    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
     const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
-    const [aiStatus, setAiStatus] = useState('Analisando matriz...');
-    const [sheetExpanded, setSheetExpanded] = useState(false);
+    const [aiStatus, setAiStatus] = useState('');
+    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
 
-    // Scanned match
-    const [match, setMatch] = useState<LocationRecord | null>(null);
-
+    const VALOR_POR_PACOTE = 2.50;
     const SIMILARITY_THRESHOLD = 0.80;
 
+    // --- Initial Load ---
+    useEffect(() => {
+        loadDashboardData();
+    }, []);
+
+    const loadDashboardData = async () => {
+        setIsRefreshing(true);
+        try {
+            const [appSettings, route] = await Promise.all([
+                getSettings(),
+                getActiveRoute()
+            ]);
+
+            setSettings(appSettings);
+
+            if (route.length > 0) {
+                const pending = route.filter(p => p.id !== 'current' && !p.isDelivered);
+                const delivered = route.filter(p => p.id !== 'current' && p.isDelivered);
+
+                setStats({
+                    deliveries: delivered.length,
+                    total: route.filter(p => p.id !== 'current').length,
+                    earnings: delivered.length * VALOR_POR_PACOTE
+                });
+
+                if (pending.length > 0) {
+                    setNextStop(pending[0]);
+                } else {
+                    setNextStop(null);
+                }
+            } else {
+                setStats({ deliveries: 0, total: 0, earnings: 0 });
+                setNextStop(null);
+            }
+        } catch (err) {
+            console.error('Failed to load dashboard:', err);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    // --- Camera Logic ---
     const captureAndExtract = useCallback(async (): Promise<{ imageSrc: string, features: number[] } | null> => {
         if (!webcamRef.current) return null;
         const video = (webcamRef.current as any).video;
         if (!video || video.readyState !== 4) return null;
 
-        // Extract features directly from video frame for speed
         const features = await extractFeatures(video);
-
-        // Get screenshot only for display/storage if needed (like in register mode)
         const imageSrc = webcamRef.current.getScreenshot() || '';
-
         return { imageSrc, features };
     }, []);
 
-    /**
-     * Runs Gemini AI analysis with a guaranteed 2-second animated overlay.
-     * Fills address fields and returns when both the API call and the timer complete.
-     */
     const runAiWithAnimation = async (imageSrc: string): Promise<void> => {
         setIsAiAnalyzing(true);
         setAiStatus('Iniciando leitura de IA...');
@@ -75,10 +139,9 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
         }, 600);
 
         try {
-            // Run AI and minimum delay in parallel
             const [aiReading] = await Promise.all([
                 analyzeAddressImage(imageSrc),
-                new Promise(r => setTimeout(r, 2000)), // guaranteed 2s minimum
+                new Promise(r => setTimeout(r, 2000)),
             ]);
 
             if (aiReading) {
@@ -86,6 +149,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
                 if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
                 if (aiReading.city) setCityInput(aiReading.city);
                 if (aiReading.notes) setNotesInput(aiReading.notes);
+                if (aiReading.recipientName) setLocationNameInput(aiReading.recipientName);
             }
         } catch (err) {
             console.warn('AI analysis failed:', err);
@@ -96,145 +160,76 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
         }
     };
 
-    // AUTO FOCUS IMPLEMENTATION
-    const applyFocus = useCallback(async () => {
-        if (!webcamRef.current) return;
-        const video = (webcamRef.current as any).video;
-        if (!video || !video.srcObject) return;
+    const handleStartCamera = () => {
+        if (navigator.vibrate) navigator.vibrate(50);
+        setViewMode('camera');
+    };
 
-        const track = video.srcObject.getVideoTracks()[0];
-        if (!track) return;
-
-        const capabilities = track.getCapabilities?.();
-        if (capabilities && (capabilities as any).focusMode) {
-            try {
-                await track.applyConstraints({
-                    advanced: [{ focusMode: 'continuous' } as any]
-                });
-            } catch (err) {
-                console.warn('Foco automático contínuo não suportado ou negado:', err);
-                try {
-                    // Try manual focus if continuous fails
-                    await track.applyConstraints({
-                        advanced: [{ focusMode: 'manual', focusDistance: 0 } as any]
-                    });
-                } catch (e) {
-                    console.warn('Foco manual também não suportado.');
-                }
-            }
-        }
-    }, []);
-
-    // Effect to apply focus when webcam is ready
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            applyFocus();
-        }, 2000); // Give time for stream to stabilize
-        return () => clearTimeout(timer);
-    }, [applyFocus, facingMode]);
-
-    const handleManualScan = async () => {
-        if (loading || mode !== 'scan' || isSendingToRoute || match) return;
+    const handleCapture = async () => {
+        if (loading) return;
         setLoading(true);
-
         try {
             const capture = await captureAndExtract();
             if (!capture) {
-                alert("Falha ao capturar imagem. Verifique a câmera.");
+                alert("Falha na captura.");
                 return;
             }
 
+            // 1. Tentar reconhecimento offline primeiro (Scan funcional)
             const records = await getRecords();
-            if (records.length === 0) {
-                alert("O banco de dados local está vazio. Por favor, adicione usando 'Nova Foto'.");
-                return;
-            }
-
             let bestMatch: LocationRecord | null = null;
-            let highestSimilarity = 0;
+            let highestSim = 0;
 
             for (const rec of records) {
                 const sim = cosineSimilarity(capture.features, rec.featureVector);
-                if (sim > highestSimilarity) {
-                    highestSimilarity = sim;
-                    bestMatch = rec;
-                }
+                if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
                 if (rec.additionalImages) {
                     for (const addView of rec.additionalImages) {
                         const simAdd = cosineSimilarity(capture.features, addView.features);
-                        if (simAdd > highestSimilarity) {
-                            highestSimilarity = simAdd;
-                            bestMatch = rec;
-                        }
+                        if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
                     }
                 }
             }
 
-            if (bestMatch && highestSimilarity > SIMILARITY_THRESHOLD) {
-                if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // Distinct "Success" pattern
-                setMatch(bestMatch);
-
+            if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
+                // Sucesso Scan Offline
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
                 await addPointToActiveRoute({
                     id: bestMatch.id!,
                     name: bestMatch.name,
-                    lat: bestMatch.lat || -20.143196,
-                    lng: bestMatch.lng || -44.2174965,
+                    lat: bestMatch.lat,
+                    lng: bestMatch.lng,
                     scannedAt: Date.now(),
                     notes: bestMatch.notes,
                     neighborhood: bestMatch.neighborhood,
                     city: bestMatch.city
                 });
 
-                // Auto-navigate animation
                 setIsSendingToRoute(true);
                 setTimeout(() => {
                     setIsSendingToRoute(false);
-                    setMatch(null); // Reset match state
                     onNavigateToMap();
                 }, 2000);
             } else {
-                alert("Alvo não encontrado no banco de dados local. Use o botão 'NOVA FOTO' para cadastrá-lo.");
+                // Não reconhecido -> Modo Registro Assistido por IA
+                setCapturedImage(capture.imageSrc);
+                setCapturedFeatures(capture.features);
+                setViewMode('confirm');
+
+                // Get Location
+                if ('geolocation' in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            setLatInput(pos.coords.latitude.toString());
+                            setLngInput(pos.coords.longitude.toString());
+                        },
+                        undefined,
+                        { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                }
+
+                await runAiWithAnimation(capture.imageSrc);
             }
-        } catch (err: any) {
-            console.error('Scan error:', err);
-            alert("Erro durante a leitura offline.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleRegisterStart = async () => {
-        try {
-            setLoading(true);
-            if (navigator.vibrate) navigator.vibrate(50);
-            const capture = await captureAndExtract();
-            if (!capture) throw new Error("Erro de captura.");
-
-            // Clear inputs for new registration
-            setAddressInput('');
-            setNeighborhoodInput('');
-            setCityInput('');
-            setNotesInput('');
-
-            if ('geolocation' in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        setLatInput(pos.coords.latitude.toString());
-                        setLngInput(pos.coords.longitude.toString());
-                        setAccuracy(pos.coords.accuracy);
-                    },
-                    undefined,
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                );
-            }
-
-            // AI ENHANCEMENT: Complement with Gemini analysis
-            setRegisterImage(capture.imageSrc);
-            setRegisterFeatures(capture.features);
-            setMode('register');
-
-            // Start AI animation AFTER modal opens
-            await runAiWithAnimation(capture.imageSrc);
         } catch (err) {
             console.error(err);
         } finally {
@@ -242,15 +237,14 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
         }
     };
 
-    const handleSaveRegistration = async () => {
-        if (!registerImage || !registerFeatures || !addressInput.trim()) return;
+    const handleSaveEntry = async () => {
+        if (!capturedImage || !capturedFeatures || !addressInput.trim()) return;
+        setLoading(true);
         try {
-            setLoading(true);
-            if (navigator.vibrate) navigator.vibrate(50);
-
             let lat = parseFloat(latInput);
             let lng = parseFloat(lngInput);
 
+            // Fallback Geocoding if lat/lng missing
             if (isNaN(lat) || isNaN(lng)) {
                 try {
                     const query = [addressInput, neighborhoodInput, cityInput].filter(Boolean).join(', ');
@@ -263,40 +257,40 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
                 } catch (e) { console.error(e); }
             }
 
-
-            await saveRecord(
-                addressInput.trim(),
+            const record = await saveRecord(
+                locationNameInput.trim() || addressInput.trim(),
                 isNaN(lat) ? null : lat,
                 isNaN(lng) ? null : lng,
-                registerImage,
-                registerFeatures,
-                {
-                    notes: notesInput.trim(),
-                    city: cityInput.trim(),
-                    neighborhood: neighborhoodInput.trim(),
-                }
+                capturedImage,
+                capturedFeatures,
+                { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput }
             );
 
-            // Also add to daily route
+            setLastCapturePreview(capturedImage);
+
             await addToDailyRoute({
-                id: Date.now().toString(),
-                name: addressInput.trim(),
-                lat: isNaN(lat) ? null : lat,
-                lng: isNaN(lng) ? null : lng,
+                id: record.id,
+                name: record.name,
+                lat: record.lat,
+                lng: record.lng,
                 scannedAt: Date.now(),
-                notes: notesInput.trim(),
-                neighborhood: neighborhoodInput.trim(),
-                city: cityInput.trim(),
+                notes: record.notes,
+                neighborhood: record.neighborhood,
+                city: record.city
             });
 
-            // Animate and switch
             setIsSendingToRoute(true);
             setTimeout(() => {
                 setIsSendingToRoute(false);
-                setMode('scan');
-                setRegisterImage(null);
-                setRegisterFeatures(null);
+                setCapturedImage(null);
                 setAddressInput('');
+                setLocationNameInput('');
+                setNeighborhoodInput('');
+                setCityInput('');
+                setNotesInput('');
+                setLatInput('');
+                setLngInput('');
+                setViewMode('dashboard');
                 onNavigateToDailyRoute();
             }, 2000);
         } catch (err) {
@@ -306,14 +300,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
         }
     };
 
-    const cancelRegister = () => {
-        setMode('scan');
-        setRegisterImage(null);
-        setRegisterFeatures(null);
-        setAddressInput('');
-    };
-
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isRegistering: boolean) => {
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
@@ -327,72 +314,13 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
                 await new Promise(r => { img.onload = r; });
                 const features = await extractFeatures(img);
 
-                if (isRegistering) {
-                    // SETUP FOR REGISTRATION MODAL
-                    setRegisterImage(imageSrc);
-                    setRegisterFeatures(features);
-                    setAddressInput('');
-                    setNeighborhoodInput('');
-                    setCityInput('');
-                    setNotesInput('');
-                    setLatInput('');
-                    setLngInput('');
+                // Setup for confirm mode
+                setCapturedImage(imageSrc);
+                setCapturedFeatures(features);
+                setViewMode('confirm');
 
-                    // Attempt to get initial GPS for registration
-                    if ('geolocation' in navigator) {
-                        navigator.geolocation.getCurrentPosition(
-                            (pos) => {
-                                setLatInput(pos.coords.latitude.toFixed(6));
-                                setLngInput(pos.coords.longitude.toFixed(6));
-                                setAccuracy(pos.coords.accuracy);
-                            },
-                            undefined,
-                            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                        );
-                    }
-
-                    setMode('register');
-                    // Show AI animation after modal opens
-                    setLoading(false);
-                    await runAiWithAnimation(imageSrc);
-                    return; // skip finally setLoading(false) since we called it above
-                } else {
-                    const records = await getRecords();
-                    let bestMatch: LocationRecord | null = null;
-                    let highestSim = 0;
-
-                    for (const rec of records) {
-                        const sim = cosineSimilarity(features, rec.featureVector);
-                        if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
-
-                        if (rec.additionalImages) {
-                            for (const addView of rec.additionalImages) {
-                                const simAdd = cosineSimilarity(features, addView.features);
-                                if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
-                            }
-                        }
-                    }
-
-                    if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
-                        setMatch(bestMatch);
-                        setIsSendingToRoute(true);
-                        setTimeout(() => {
-                            setIsSendingToRoute(false);
-                            onNavigateToRecords();
-                        }, 2000);
-                    } else {
-                        // Visual match failed, use AI to read and suggest registration
-                        setMatch(null);
-
-                        setRegisterImage(imageSrc);
-                        setRegisterFeatures(features);
-                        setMode('register');
-                        // Show AI animation after modal opens
-                        setLoading(false);
-                        await runAiWithAnimation(imageSrc);
-                        return; // skip finally setLoading(false)
-                    }
-                }
+                if (navigator.vibrate) navigator.vibrate(50);
+                await runAiWithAnimation(imageSrc);
             } catch (err) {
                 console.error(err);
             } finally {
@@ -403,34 +331,15 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
         e.target.value = '';
     };
 
-    return (
-        <div className="relative w-full h-full bg-black overflow-hidden flex flex-col pt-safe">
-            {/* HUD Status Bar */}
-            <div className="absolute top-0 z-50 w-full p-6 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-sm border-b border-white/5 animate-fade-in">
-                <div className="flex justify-between items-start">
-                    <div className="flex flex-col gap-2">
-                        {accuracy !== null && (
-                            <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950/80 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
-                                <div className={`w-1.5 h-1.5 rounded-full ${accuracy < 20 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : accuracy < 50 ? 'bg-yellow-500' : 'bg-red-500'}`} />
-                                <p className="text-[9px] text-white font-black tracking-tighter uppercase italic">SINAL GPS: {Math.round(accuracy)}m</p>
-                            </div>
-                        )}
-                    </div>
-                    {mode === 'scan' && (
-                        <button
-                            onClick={() => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment')}
-                            className="bg-white/[0.03] border border-white/10 p-3 rounded-2xl text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-95"
-                        >
-                            <SwitchCamera size={20} />
-                        </button>
-                    )}
-                </div>
-            </div>
+    // --- UI Helpers ---
+    const user = settings?.personalData;
 
-            <div className="relative flex-1 overflow-hidden">
-                {mode === 'scan' && !match && (
+    if (viewMode === 'camera') {
+        return (
+            <div className="fixed inset-0 z-[100] bg-black flex flex-col font-sans overflow-hidden">
+                {/* Camera Layer */}
+                <div className="absolute inset-0 z-0">
                     <Webcam
-                        key={facingMode}
                         ref={webcamRef}
                         audio={false}
                         screenshotFormat="image/jpeg"
@@ -438,270 +347,404 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
                             facingMode,
                             width: { ideal: 4096 },
                             height: { ideal: 2160 },
-                            advanced: [{ focusMode: 'continuous' } as any]
+                            //@ts-ignore
+                            advanced: [{ torch }]
                         }}
-                        className="absolute inset-0 w-full h-full object-cover"
+                        className="w-full h-full object-cover"
                     />
-                )}
+                    <div className="absolute inset-0 camera-grid" />
 
-                {mode === 'register' && registerImage && (
-                    <div className="absolute inset-0">
-                        <img src={registerImage} className="w-full h-full object-cover blur-2xl scale-110 opacity-30" alt="Preview Background" />
-                        <div className="absolute inset-0 bg-gradient-to-b from-black via-transparent to-black" />
-                    </div>
-                )}
-
-                {/* Scanning Interface Overlay */}
-                {mode === 'scan' && !match && (
-                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px]"></div>
-
-                        {/* High-Tech Scanner Frame */}
-                        <div className="relative w-64 h-64">
-                            <div className="absolute inset-0 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.8)]">
-                                {/* Corners */}
-                                <div className="absolute top-0 left-0 w-12 h-12 border-t-2 border-l-2 border-blue-500 rounded-tl-[2rem]"></div>
-                                <div className="absolute top-0 right-0 w-12 h-12 border-t-2 border-r-2 border-blue-500 rounded-tr-[2rem]"></div>
-                                <div className="absolute bottom-0 left-0 w-12 h-12 border-b-2 border-l-2 border-blue-500 rounded-bl-[2rem]"></div>
-                                <div className="absolute bottom-0 right-0 w-12 h-12 border-b-2 border-r-2 border-blue-500 rounded-br-[2rem]"></div>
-
-                                {/* Scan Line */}
-                                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-[scan_2s_ease-in-out_infinite] shadow-[0_0_20px_rgba(59,130,246,1)] z-10"></div>
-
-                                {/* Center Processing */}
-                                {loading && (
-                                    <div className="absolute inset-0 bg-blue-500/5 backdrop-blur-md flex items-center justify-center animate-pulse">
-                                        <div className="relative">
-                                            <Loader2 className="animate-spin text-blue-500" size={48} />
-                                            <div className="absolute inset-0 blur-xl bg-blue-500/20 rounded-full animate-pulse" />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-
-
-
-                            {/* Decorative HUD Elements */}
-                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-32 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-                            <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-32 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+                    {/* Viewfinder Overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-72 h-48 border-2 border-white/20 rounded-3xl scan-focus relative overflow-hidden">
+                            <div className="scanning-line" />
+                            <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-primary rounded-tl-lg" />
+                            <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-primary rounded-tr-lg" />
+                            <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-primary rounded-bl-lg" />
+                            <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-primary rounded-br-lg" />
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
 
-            {/* Compact Bottom Controls - Now on a row to reduce vertical footprint */}
-            <div className="absolute bottom-0 w-full px-6 pb-40 pt-16 bg-gradient-to-t from-black via-black/95 to-transparent z-10 pointer-events-none">
-                {mode === 'scan' && (
-                    <div className="flex flex-row items-stretch gap-3 max-w-lg mx-auto pointer-events-auto">
-                        {/* New Registration Action */}
+                <header className="relative z-10 px-6 pt-14 pb-6 flex items-center justify-between pointer-events-auto">
+                    <button
+                        onClick={() => setViewMode('dashboard')}
+                        className="size-11 flex items-center justify-center rounded-full glass-ui text-white active:scale-90 transition-transform"
+                    >
+                        <span className="material-symbols-outlined !text-[20px]">arrow_back_ios_new</span>
+                    </button>
+
+                    <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-bold text-primary tracking-[0.3em] uppercase mb-0.5 animate-pulse">Scanner Digital</span>
+                        <h1 className="text-sm font-bold tracking-tight text-white/90">Aponte para a etiqueta</h1>
+                    </div>
+
+                    <button
+                        onClick={() => setTorch(!torch)}
+                        className={`size-11 flex items-center justify-center rounded-full glass-ui transition-all ${torch ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' : 'text-white'}`}
+                    >
+                        <span className={`material-symbols-outlined ${torch ? 'filled-icon' : ''}`}>
+                            {torch ? 'flash_on' : 'flash_off'}
+                        </span>
+                    </button>
+                </header>
+
+                {/* Floating Status HUD */}
+                <div className="absolute top-40 right-6 z-10 space-y-4 pointer-events-none">
+                    <div className="glass-ui px-3 py-2 rounded-xl border-l-4 border-primary">
+                        <p className="text-[8px] font-bold text-slate-500 uppercase">Resolução</p>
+                        <p className="text-[10px] font-mono font-bold text-white">4K - 60FPS</p>
+                    </div>
+                    <div className="glass-ui px-3 py-2 rounded-xl border-l-4 border-emerald-500">
+                        <p className="text-[8px] font-bold text-slate-500 uppercase">Foco</p>
+                        <p className="text-[10px] font-mono font-bold text-white">AUTO_LOCK</p>
+                    </div>
+                </div>
+
+                {/* Bottom UI Panel */}
+                <main className="fixed bottom-0 left-0 right-0 z-20 pb-12 pt-8 px-8 glass-ui rounded-t-[3rem] pointer-events-auto">
+                    {/* Last Capture Small Preview */}
+                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+                        <div className="size-20 rounded-2xl border-2 border-white/20 overflow-hidden shadow-2xl p-1 bg-white/10 backdrop-blur-md">
+                            {lastCapturePreview ? (
+                                <img src={lastCapturePreview} className="w-full h-full object-cover rounded-xl" alt="Preview" />
+                            ) : (
+                                <div className="w-full h-full bg-white/5 rounded-xl flex items-center justify-center">
+                                    <MapPin size={24} className="text-white/10" />
+                                </div>
+                            )}
+                        </div>
+                        <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Última Captura</span>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-8">
+                        {/* Manual Trigger (re-labeled as Nova Foto/Câmera) */}
                         <button
-                            onClick={handleRegisterStart}
-                            disabled={loading}
-                            className="flex-1 group bg-blue-600/10 border border-blue-500/20 py-4 rounded-2xl flex flex-col items-center justify-center transition-all hover:bg-blue-600/20 active:scale-95 disabled:opacity-30 shadow-[0_10px_30px_rgba(59,130,246,0.1)]"
+                            onClick={() => {
+                                if (navigator.vibrate) navigator.vibrate(50);
+                                // Visual feedback only, capture is handled by center button
+                            }}
+                            className="flex flex-col items-center gap-2 group"
                         >
-                            <Camera size={22} className="text-blue-500 group-hover:text-blue-400 transition-colors" />
-                            <span className="font-black italic uppercase text-[9px] tracking-widest text-blue-500 group-hover:text-blue-400 mt-2 transition-colors">Nova Foto</span>
+                            <div className="size-14 rounded-2xl bg-white/5 flex items-center justify-center text-slate-300 border border-white/10 group-active:scale-95 transition-transform">
+                                <span className="material-symbols-outlined !text-[24px]">add_a_photo</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Nova Foto</span>
                         </button>
 
-                        {/* Scanner Validation Action */}
-                        <button
-                            onClick={handleManualScan}
-                            disabled={loading}
-                            className="flex-1 group bg-emerald-500/10 border border-emerald-500/20 py-4 rounded-2xl flex flex-col items-center justify-center transition-all hover:bg-emerald-500/20 active:scale-95 disabled:opacity-30 shadow-[0_10px_30px_rgba(16,185,129,0.1)]"
-                        >
-                            <ScanLine size={22} className="text-emerald-500 group-hover:text-emerald-400 transition-colors" />
-                            <span className="font-black italic uppercase text-[9px] tracking-widest text-emerald-500 group-hover:text-emerald-400 mt-2 transition-colors">Escanear</span>
-                        </button>
+                        {/* Main Capture Button */}
+                        <div className="relative">
+                            <button
+                                onClick={handleCapture}
+                                disabled={loading}
+                                className="size-24 rounded-full bg-gradient-to-tr from-primary to-accent text-white flex items-center justify-center glow-blue active:scale-[0.92] transition-all shadow-inner relative overflow-hidden group"
+                            >
+                                {loading ? (
+                                    <Loader2 className="animate-spin" size={40} />
+                                ) : (
+                                    <span className="material-symbols-outlined !text-[44px] !font-light group-hover:scale-110 transition-transform">barcode_scanner</span>
+                                )}
+                            </button>
+                            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-max">
+                                <span className="text-[11px] font-extrabold text-white uppercase tracking-[0.1em]">Escanear</span>
+                            </div>
+                        </div>
 
-                        {/* Import Image Action */}
-                        <label className="w-16 bg-white/[0.03] border border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer text-zinc-400 hover:text-white hover:border-white/20 transition-all active:scale-95 shadow-lg">
-                            <Database size={18} />
-                            <span className="text-[7px] font-black uppercase tracking-widest mt-1">Pasta</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, false)} />
+                        {/* Import Button */}
+                        <label className="flex flex-col items-center gap-2 group cursor-pointer">
+                            <div className="size-14 rounded-2xl bg-white/5 flex items-center justify-center text-slate-300 border border-white/10 group-active:scale-95 transition-transform">
+                                <span className="material-symbols-outlined !text-[24px]">file_upload</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Importar</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                         </label>
                     </div>
-                )}
-            </div>
-            {/* REGISTRATION BOTTOM SHEET */}
-            {mode === 'register' && (
-                <div className="fixed inset-0 z-[10000] flex flex-col justify-end pointer-events-none">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" onClick={cancelRegister} />
-                    <div className={`relative w-full bg-[#09090b] border-t border-white/10 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] transition-all duration-500 pointer-events-auto flex flex-col ${sheetExpanded ? 'h-[90vh]' : 'h-[85vh]'}`}>
-                        {/* Drag Handle */}
-                        <div onClick={() => setSheetExpanded(!sheetExpanded)} className="py-6 flex flex-col items-center gap-1 cursor-pointer">
-                            <div className="w-12 h-1.5 bg-zinc-800 rounded-full" />
-                            <ChevronUp size={20} className={`text-zinc-600 transition-transform duration-500 ${sheetExpanded ? 'rotate-180' : ''}`} />
-                        </div>
 
-                        <div className="px-8 flex-1 overflow-y-auto w-full no-scrollbar pb-10">
-                            <div className="flex justify-between items-center mb-6">
-                                <div className="space-y-1">
-                                    <h3 className="text-3xl font-black italic uppercase text-white tracking-tighter leading-none">Dados de Registro</h3>
-                                    <p className="text-[9px] font-black text-blue-500/60 uppercase tracking-[0.3em]">Ambiente de Indexação Operacional</p>
+                    {/* Footer Slide Indicator */}
+                    <div className="mt-14 flex justify-center">
+                        <div className="w-32 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                            <div className="w-1/2 h-full bg-primary/40 rounded-full animate-[pulse_2s_infinite]"></div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
+    if (viewMode === 'confirm') {
+        const coordsValue = latInput && lngInput ? `${latInput}, ${lngInput}` : '';
+
+        return (
+            <div className="fixed inset-0 z-[200] bg-bg-deep flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-500 overflow-hidden font-sans">
+                <header className="sticky top-0 z-50 backdrop-blur-xl bg-bg-deep/60 border-b border-white/5 px-6 pt-10 pb-5">
+                    <div className="flex items-center justify-between">
+                        <button
+                            onClick={() => setViewMode('camera')}
+                            className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 text-slate-300 active:scale-90 transition-transform"
+                        >
+                            <span className="material-symbols-outlined !text-[20px]">arrow_back_ios_new</span>
+                        </button>
+                        <h1 className="text-lg font-bold tracking-tight text-white/90">Novo Endereço</h1>
+                        <div className="size-10"></div>
+                    </div>
+                </header>
+
+                <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 no-scrollbar">
+                    {/* Capture Preview Section (Replaces the "Tirar Foto" placeholder if image exists) */}
+                    <div className="space-y-3">
+                        <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
+                            Foto da Etiqueta
+                        </label>
+                        <div className="relative w-full aspect-video rounded-[2rem] border-2 border-dashed border-white/20 overflow-hidden group">
+                            {capturedImage ? (
+                                <img src={capturedImage} className="w-full h-full object-cover" alt="Capture" />
+                            ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-white/5">
+                                    <div className="size-16 rounded-2xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center shadow-xl shadow-primary/20">
+                                        <span className="material-symbols-outlined text-white text-3xl">add_a_photo</span>
+                                    </div>
+                                    <p className="text-[15px] font-bold text-white tracking-wide">Sem Foto</p>
                                 </div>
-                                <button onClick={cancelRegister} className="p-3 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-all">
-                                    <X size={20} />
+                            )}
+
+                            {isAiAnalyzing && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-bg-deep/80 backdrop-blur-md animate-in fade-in scale-in duration-500">
+                                    <Sparkles className="text-primary animate-pulse mb-4" size={32} />
+                                    <p className="text-xs font-bold text-white uppercase tracking-widest">{aiStatus}</p>
+                                    <div className="mt-4 flex gap-1">
+                                        <div className="size-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                        <div className="size-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                        <div className="size-1.5 bg-primary rounded-full animate-bounce"></div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                        <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
+                            Nome do Local
+                        </label>
+                        <div className="relative group">
+                            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors">home_work</span>
+                            <input
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none transition-all duration-300 placeholder:text-slate-500 placeholder:font-light focus:border-primary/50 focus:ring-1 focus:ring-primary/30 focus:bg-white/10 text-white pr-12"
+                                placeholder="Ex: Centro de Logística Norte"
+                                type="text"
+                                value={locationNameInput}
+                                onChange={e => setLocationNameInput(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                        <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
+                            Endereço Completo
+                        </label>
+                        <div className="relative group">
+                            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors">location_on</span>
+                            <input
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none transition-all duration-300 placeholder:text-slate-500 placeholder:font-light focus:border-primary/50 focus:ring-1 focus:ring-primary/30 focus:bg-white/10 text-white pr-12"
+                                placeholder="Av. Paulista, 1000 - Bela Vista"
+                                type="text"
+                                value={addressInput}
+                                onChange={e => setAddressInput(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                        <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
+                            Coordenadas (Lat/Long)
+                        </label>
+                        <div className="relative group">
+                            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors">distance</span>
+                            <input
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none transition-all duration-300 placeholder:text-slate-500 placeholder:font-light focus:border-primary/50 focus:ring-1 focus:ring-primary/30 focus:bg-white/10 text-white pr-12"
+                                placeholder="-23.5505, -46.6333"
+                                type="text"
+                                value={coordsValue}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    const parts = val.split(',').map(p => p.trim());
+                                    if (parts[0]) setLatInput(parts[0]);
+                                    if (parts[1]) setLngInput(parts[1]);
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                        <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
+                            Observações Detalhadas
+                        </label>
+                        <textarea
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none transition-all duration-300 placeholder:text-slate-500 placeholder:font-light focus:border-primary/50 focus:ring-1 focus:ring-primary/30 focus:bg-white/10 text-white min-h-[120px] resize-none"
+                            placeholder="Informe pontos de referência, portões ou horários específicos de recebimento..."
+                            value={notesInput}
+                            onChange={e => setNotesInput(e.target.value)}
+                        ></textarea>
+                    </div>
+                </main>
+
+                <footer className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg-graphite via-bg-graphite/90 to-transparent p-6 pb-10 z-[210]">
+                    <button
+                        onClick={handleSaveEntry}
+                        disabled={loading || !addressInput.trim()}
+                        className="w-full h-16 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold text-[16px] rounded-2xl shadow-[0_15px_30px_-10px_rgba(59,130,246,0.5)] active:scale-[0.97] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                        {loading ? <Loader2 size={18} className="animate-spin" /> : (
+                            <>
+                                <span className="material-symbols-outlined !font-semibold">verified</span>
+                                <span>Salvar Endereço</span>
+                            </>
+                        )}
+                    </button>
+                </footer>
+            </div>
+        );
+    }
+
+    return (
+        <div className="relative w-full h-full bg-bg-deep overflow-hidden flex flex-col font-sans">
+            <header className="sticky top-0 z-50 backdrop-blur-2xl bg-bg-deep/80 border-b border-white/5 px-6 pt-12 pb-6 flex items-center justify-between">
+                <div className="flex flex-col">
+                    <span className="text-[11px] font-bold text-primary tracking-[0.2em] uppercase mb-0.5">Visão Geral</span>
+                    <h1 className="text-2xl font-extrabold tracking-tight text-white">Dashboard</h1>
+                </div>
+                <button className="relative flex items-center justify-center size-12 rounded-2xl bg-white/[0.03] border border-white/10 text-slate-300 active:scale-95 transition-all">
+                    <Bell size={22} className="opacity-70" />
+                    <span className="absolute top-3.5 right-3.5 size-2 bg-blue-500 rounded-full border-2 border-bg-deep"></span>
+                </button>
+            </header>
+
+            <main className="px-6 py-8 space-y-8 pb-40 overflow-y-auto no-scrollbar flex-1 animate-in fade-in duration-700">
+                {/* Profile Card */}
+                <section className="glass-panel rounded-[2.5rem] p-6 relative overflow-hidden group">
+                    <div className="absolute -top-10 -right-10 size-40 bg-primary/20 blur-[60px] group-hover:bg-primary/30 transition-all duration-700"></div>
+
+                    <div className="flex items-center gap-4 mb-6 relative z-10">
+                        <div className="size-16 rounded-[1.25rem] bg-gradient-to-br from-primary to-accent p-[1px] shadow-lg">
+                            <div className="w-full h-full rounded-[1.25rem] bg-bg-deep flex items-center justify-center overflow-hidden">
+                                {user?.avatar ? (
+                                    <img src={user.avatar} className="w-full h-full object-cover" alt="Profile" />
+                                ) : (
+                                    <div className="text-white font-black text-xl italic">{user?.name ? user.name[0].toUpperCase() : 'C'}</div>
+                                )}
+                            </div>
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-white tracking-tight">{user?.name || 'Motorista'}</h2>
+                            <div className="flex items-center gap-2">
+                                <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                <span className="text-xs font-semibold text-emerald-500 uppercase tracking-wide">Em serviço agora</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 relative z-10">
+                        <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/5 shadow-inner">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Entregas</p>
+                            <p className="text-2xl font-black text-white">{stats.deliveries}<span className="text-slate-600 text-lg">/{stats.total}</span></p>
+                        </div>
+                        <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/5 shadow-inner">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 opacity-60">Ganhos</p>
+                            <p className="text-2xl font-black text-white">R$ {stats.earnings.toFixed(0)}</p>
+                        </div>
+                    </div>
+                </section>
+
+                {/* Next Stop Section */}
+                <section className="space-y-4 animate-in slide-in-from-left-4 duration-500 delay-100">
+                    <h3 className="text-[12px] font-bold tracking-widest uppercase text-slate-500 ml-1 opacity-50">Próxima Parada</h3>
+                    {nextStop ? (
+                        <div className="glass-panel rounded-[2rem] p-5 border-l-4 border-l-primary group active:scale-[0.98] transition-all">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="space-y-1.5">
+                                    <span className="text-[9px] font-black py-1 px-2.5 bg-primary/20 text-blue-400 rounded-lg uppercase tracking-wider">Destino Atual</span>
+                                    <h4 className="text-lg font-extrabold text-white leading-tight pr-4">{nextStop.name}</h4>
+                                </div>
+                                <button className="size-10 rounded-xl bg-white/[0.03] flex items-center justify-center text-slate-500 hover:text-white transition-all">
+                                    <MoreVertical size={18} />
                                 </button>
                             </div>
+                            <div className="flex items-center gap-3 text-slate-400 mb-6">
+                                <MapPin size={16} className="text-primary/60" />
+                                <span className="text-sm font-medium opacity-80 truncate">{nextStop.neighborhood || 'Endereço sem bairro'}</span>
+                            </div>
+                            <button
+                                onClick={onNavigateToMap}
+                                className="w-full py-4 bg-white/[0.04] hover:bg-primary border border-white/10 rounded-2xl text-white font-black text-sm transition-all flex items-center justify-center gap-2 group/btn"
+                            >
+                                <Navigation size={18} className="group-hover/btn:animate-pulse" />
+                                <span>INICIAR NAVEGAÇÃO</span>
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="glass-panel p-8 rounded-[2rem] border-dash flex flex-col items-center justify-center text-center opacity-40">
+                            <div className="size-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                                <CheckCircle2 size={24} className="text-slate-500" />
+                            </div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Sem entregas pendentes</p>
+                        </div>
+                    )}
+                </section>
 
-                            <div className="space-y-6 relative">
-                                {/* AI Status Overlay if analyzing */}
-                                {isAiAnalyzing && (
-                                    <div className="absolute inset-0 z-[60] bg-[#09090b]/90 backdrop-blur-xl flex flex-col items-center justify-center gap-6 animate-in fade-in duration-500 rounded-[2.5rem] border border-violet-500/10">
-                                        <div className="relative">
-                                            <div className="absolute inset-0 rounded-full bg-violet-500/20 blur-3xl scale-150 animate-pulse" />
-                                            <div className="relative w-24 h-24 rounded-[2rem] bg-zinc-900 border border-violet-500/20 flex items-center justify-center shadow-[0_0_50px_rgba(139,92,246,0.3)]">
-                                                <Sparkles size={40} className="text-violet-400 animate-spin" style={{ animationDuration: '4s' }} />
-                                            </div>
-                                        </div>
-                                        <div className="text-center space-y-2">
-                                            <p className="text-sm font-black text-white uppercase tracking-widest px-4">{aiStatus}</p>
-                                            <div className="flex gap-1.5 justify-center">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-[bounce_1s_infinite_0s]" />
-                                                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-[bounce_1s_infinite_0.2s]" />
-                                                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-[bounce_1s_infinite_0.4s]" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                {/* Add Entry Section */}
+                <section className="space-y-5 animate-in slide-in-from-bottom-5 duration-700 delay-200">
+                    <div className="flex justify-between items-center ml-1">
+                        <h3 className="text-[12px] font-bold tracking-widest uppercase text-slate-500 opacity-50">Adicionar Endereço</h3>
+                        <div className="h-[1px] flex-1 mx-4 bg-white/5"></div>
+                    </div>
 
-                                {registerImage && (
-                                    <div className="relative w-full aspect-video rounded-[2.5rem] overflow-hidden border border-white/5 group shadow-2xl shrink-0" onClick={() => setIsPreviewExpanded(true)}>
-                                        <img src={registerImage} className="w-full h-full object-cover grayscale brightness-50 group-hover:grayscale-0 group-hover:brightness-100 transition-all duration-700" alt="Capture" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-                                        <div className="absolute bottom-6 left-8 flex items-center gap-3">
-                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                                            <span className="text-[9px] font-black text-white uppercase tracking-widest">Visual do Alvo</span>
-                                        </div>
-                                    </div>
-                                )}
+                    <div className="space-y-4">
+                        <button
+                            onClick={onNavigateToDailyRoute}
+                            className="w-full relative group transition-all"
+                        >
+                            <div className="absolute inset-y-0 left-5 flex items-center text-slate-500 group-hover:text-primary transition-colors">
+                                <Search size={20} />
+                            </div>
+                            <div className="w-full bg-white/[0.03] border border-white/10 rounded-[1.25rem] py-5 pl-14 pr-5 text-left">
+                                <span className="text-sm text-slate-500 font-medium">Pesquisar ou Listagem Diária</span>
+                            </div>
+                        </button>
 
-                                <div className="space-y-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-4">Endereço Principal</label>
-                                        <input
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-white focus:border-blue-500 transition-all outline-none font-bold italic"
-                                            placeholder="LOGRADOURO, NÚMERO..."
-                                            value={addressInput}
-                                            onChange={e => setAddressInput(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-4">Setor/Bairro</label>
-                                            <input
-                                                className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-4 text-sm text-white focus:border-blue-500 transition-all outline-none"
-                                                placeholder="BAIRRO"
-                                                value={neighborhoodInput}
-                                                onChange={e => setNeighborhoodInput(e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-4">Cidade</label>
-                                            <input
-                                                className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-4 text-sm text-white focus:border-blue-500 transition-all outline-none"
-                                                placeholder="CIDADE"
-                                                value={cityInput}
-                                                onChange={e => setCityInput(e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-blue-600/5 border border-blue-600/10 rounded-3xl p-4 flex flex-col gap-1 relative shadow-inner">
-                                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Latitude</label>
-                                            <input
-                                                value={latInput}
-                                                onChange={(e) => setLatInput(e.target.value)}
-                                                className="bg-transparent text-sm font-mono text-white tracking-widest outline-none"
-                                                placeholder="0.000000"
-                                            />
-                                            <LocateFixed size={14} className="absolute top-4 right-4 text-blue-500/20" />
-                                        </div>
-                                        <div className="bg-indigo-600/5 border border-indigo-600/10 rounded-3xl p-4 flex flex-col gap-1 relative shadow-inner">
-                                            <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Longitude</label>
-                                            <input
-                                                value={lngInput}
-                                                onChange={(e) => setLngInput(e.target.value)}
-                                                className="bg-transparent text-sm font-mono text-white tracking-widest outline-none"
-                                                placeholder="0.000000"
-                                            />
-                                            <LocateFixed size={14} className="absolute top-4 right-4 text-indigo-500/20" />
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        onClick={async () => {
-                                            if (!latInput || !lngInput) return alert('Capture coordenadas primeiro.');
-                                            setLoading(true);
-                                            try {
-                                                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latInput}&lon=${lngInput}`);
-                                                const data = await res.json();
-                                                if (data?.address) {
-                                                    const a = data.address;
-                                                    setAddressInput(`${a.road || a.pedestrian || ''}${a.house_number ? ', ' + a.house_number : ''}`);
-                                                    setNeighborhoodInput(a.suburb || a.neighbourhood || '');
-                                                    setCityInput(a.city || a.town || '');
-                                                }
-                                            } finally { setLoading(false); }
-                                        }}
-                                        disabled={loading || !latInput}
-                                        className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-3xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-emerald-500/20 transition-all shadow-lg active:scale-95 mt-2"
-                                    >
-                                        <Database size={18} className={loading ? 'animate-spin' : ''} />
-                                        SINCRONIZAÇÃO GEOGRÁFICA
-                                    </button>
-
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-4 mt-2">Diretivas Adicionais</label>
-                                        <textarea
-                                            placeholder="PONTOS DE REFERÊNCIA OPERACIONAIS..."
-                                            className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-5 text-sm text-zinc-400 h-20 outline-none italic focus:border-blue-500 transition-all"
-                                            value={notesInput}
-                                            onChange={e => setNotesInput(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <button
-                                        onClick={handleSaveRegistration}
-                                        disabled={loading}
-                                        className="w-full bg-blue-600 py-6 mt-4 rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-white shadow-[0_20px_60px_rgba(37,99,235,0.3)] active:scale-95 transition-all text-[11px]"
-                                    >
-                                        {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : 'CONFIRMAR INDEXAÇÃO'}
-                                    </button>
-                                </div>
+                        <div
+                            onClick={handleStartCamera}
+                            className="glass-panel rounded-[2rem] p-10 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-5 cursor-pointer hover:border-primary/50 hover:bg-white/[0.05] active:scale-[0.97] transition-all group"
+                        >
+                            <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 shadow-lg transition-transform">
+                                <Camera size={32} />
+                            </div>
+                            <div className="text-center space-y-1">
+                                <p className="text-base font-extrabold text-white tracking-tight">Foto da Etiqueta</p>
+                                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest opacity-60">Toque para escanear com IA</p>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                </section>
+            </main>
 
-            {/* Cinematic Transition Overlay */}
+            {/* Premium FAB Footer */}
+            <footer className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg-deep via-bg-deep/95 to-transparent p-6 pb-12 z-50">
+                <button
+                    onClick={handleStartCamera}
+                    className="w-full h-18 bg-gradient-to-r from-blue-700 to-blue-500 text-white font-black text-lg rounded-[1.25rem] shadow-fab active:scale-[0.96] active:brightness-110 transition-all flex items-center justify-center gap-3 group"
+                >
+                    <PlusCircle size={28} className="group-hover:rotate-90 transition-transform duration-500" />
+                    <span>NOVO REGISTRO</span>
+                    <ChevronRight size={18} className="ml-2 opacity-40 group-hover:translate-x-1 transition-transform" />
+                </button>
+            </footer>
+
+            {/* Sync Overlay */}
             {isSendingToRoute && (
                 <LoadingOverlay
-                    title="Integração de Rota"
-                    subtitle="Codificando Vetores Geográficos e Mapeando..."
-                    icon={<MapPin size={32} className="text-white animate-bounce" />}
+                    title="Processando Rota"
+                    subtitle="Identificando via Matriz de IA e Sincronizando..."
+                    icon={<Loader2 size={32} className="animate-spin text-white" />}
                 />
-            )}
-
-            {/* Expanded Media Viewer */}
-            {isPreviewExpanded && registerImage && (
-                <div className="fixed inset-0 z-[2000] bg-black/98 backdrop-blur-2xl flex flex-col items-center justify-center p-8 animate-in fade-in duration-500">
-                    <button
-                        onClick={() => setIsPreviewExpanded(false)}
-                        className="absolute top-10 right-10 p-5 bg-white/5 rounded-[2rem] text-white/40 hover:text-white hover:bg-white/10 transition-all backdrop-blur-md"
-                    >
-                        <X size={28} />
-                    </button>
-                    <div className="w-full max-w-5xl aspect-square flex items-center justify-center relative group">
-                        <div className="absolute inset-0 blur-3xl bg-blue-500/10 rounded-full animate-pulse opacity-50" />
-                        <img src={registerImage} className="w-full h-full object-contain rounded-3xl shadow-2xl relative z-10" alt="Expanded Media" />
-                    </div>
-                    <p className="text-zinc-600 text-[9px] mt-10 font-black uppercase tracking-[0.4em] italic">Análise de Captura de Alta Precisão</p>
-                </div>
             )}
         </div>
     );

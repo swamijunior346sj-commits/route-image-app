@@ -81,14 +81,19 @@ export default function App() {
         {currentTab === 'records' && (
           <RecordsView
             onNavigateToMap={() => changeTab('map')}
+            onBack={() => changeTab('map')}
           />
         )}
         {currentTab === 'dailyRoute' && (
           <DailyRouteView
             onNavigateToMap={() => changeTab('map')}
+            onBack={() => changeTab('map')}
           />
         )}
-        {currentTab === 'profile' && <ProfileView onLogout={() => setIsAuthenticated(false)} />}
+        {currentTab === 'profile' && <ProfileView
+          onLogout={() => setIsAuthenticated(false)}
+          onBack={() => changeTab('map')}
+        />}
       </div>
       <BottomNav currentTab={currentTab} setTab={changeTab} />
 
