@@ -36,7 +36,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
     const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm' | 'notifications'>(initialViewMode);
     const [torch, setTorch] = useState(false);
-    const [lastCapturePreview, setLastCapturePreview] = useState<string | null>(null);
 
     // Registering/Confirmation State
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -272,7 +271,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput }
             );
 
-            setLastCapturePreview(capturedImage);
 
             await addToDailyRoute({
                 id: record.id,
