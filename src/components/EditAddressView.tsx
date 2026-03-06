@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { RoutePoint, LocationRecord } from '../services/db';
+import { extractFeatures } from '../services/imageProcessing';
 
 interface EditAddressViewProps {
     item: RoutePoint | LocationRecord;
@@ -15,6 +16,56 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
     const [lng, setLng] = useState(item.lng?.toString() || '');
     const [notes, setNotes] = useState(item.notes || '');
     const [image, setImage] = useState((item as LocationRecord).imageThumbnail || '');
+    const [additionalImages, setAdditionalImages] = useState<{ id: string; image: string; features: number[] }[]>((item as LocationRecord).additionalImages || []);
+
+    // UI State
+    const [showCockpit, setShowCockpit] = useState(false);
+    const [isCapturing, setIsCapturing] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const cockpitRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (cockpitRef.current && !cockpitRef.current.contains(event.target as Node)) {
+                setShowCockpit(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const processNewCapture = async (file: File) => {
+        setIsCapturing(true);
+        setShowCockpit(false);
+        try {
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64 = reader.result as string;
+
+                // AI Feature Extraction
+                const img = new Image();
+                img.src = base64;
+                await img.decode();
+
+                const features = await extractFeatures(img);
+
+                // Update memory without replacing main photo
+                const newImg = {
+                    id: crypto.randomUUID(),
+                    image: base64,
+                    features
+                };
+
+                setAdditionalImages(prev => [...prev, newImg]);
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            console.error("Erro no processamento IA:", error);
+        } finally {
+            setIsCapturing(false);
+        }
+    };
 
     const handleSave = () => {
         onSave({
@@ -24,7 +75,8 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
             lat: lat ? parseFloat(lat) : null,
             lng: lng ? parseFloat(lng) : null,
             notes,
-            ...(image ? { imageThumbnail: image } : {})
+            ...(image ? { imageThumbnail: image } : {}),
+            additionalImages
         });
     };
 
@@ -132,36 +184,124 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
                 </div>
 
                 <div className="space-y-4">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Foto da Etiqueta</h3>
+                    <div className="flex justify-between items-end px-1">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Foto & Memória IA</h3>
+                        <span className="text-[9px] font-black text-primary uppercase tracking-tighter">
+                            {additionalImages.length + (image ? 1 : 0)} capturas em cache
+                        </span>
+                    </div>
+
                     <div className="relative group">
-                        <div className="w-full h-48 rounded-[2rem] overflow-hidden border border-white/10 glass-card">
+                        <div className="w-full h-56 rounded-[2.5rem] overflow-hidden border border-white/10 glass-card relative bg-slate-900/40">
                             {image ? (
-                                <img alt="Etiqueta Fotografada" className="w-full h-full object-cover opacity-70" src={image} />
+                                <img alt="Etiqueta Fotografada" className="w-full h-full object-cover opacity-60 grayscale-[0.3]" src={image} />
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-white/5">
-                                    <span className="material-symbols-outlined !text-[48px] text-slate-700">image</span>
+                                <div className="w-full h-full flex flex-col items-center justify-center">
+                                    <span className="material-symbols-outlined !text-[48px] text-slate-700 animate-pulse">image_not_supported</span>
+                                    <p className="text-[10px] font-bold text-slate-600 uppercase mt-2 tracking-widest">Sem imagem base</p>
                                 </div>
                             )}
-                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                                <label className="flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full text-sm font-semibold text-white active:scale-95 transition-all cursor-pointer">
-                                    <span className="material-symbols-outlined !text-[20px]">photo_camera</span>
-                                    Substituir Foto
-                                    <input
-                                        type="file"
-                                        className="hidden"
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => setImage(reader.result as string);
-                                                reader.readAsDataURL(file);
-                                            }
-                                        }}
-                                    />
-                                </label>
+
+                            {/* Floating Stats Badge */}
+                            <div className="absolute top-4 left-4 px-3 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
+                                <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                <span className="text-[9px] font-black text-white/70 uppercase">IA Ativa</span>
                             </div>
+
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end justify-center pb-6">
+                                <button
+                                    onClick={() => setShowCockpit(!showCockpit)}
+                                    className="px-8 py-3 bg-primary shadow-[0_0_25px_rgba(59,130,246,0.5)] rounded-2xl text-sm font-black text-white uppercase italic tracking-widest flex items-center gap-3 active:scale-95 transition-all z-20"
+                                >
+                                    <span className="material-symbols-outlined !text-[20px]">settings_input_composite</span>
+                                    Cockpit
+                                </button>
+                            </div>
+
+                            {/* Cockpit Overlay Menu */}
+                            {showCockpit && (
+                                <div
+                                    ref={cockpitRef}
+                                    className="absolute inset-0 bg-bg-start/80 backdrop-blur-xl z-30 animate-fade-in flex flex-col items-center justify-center p-8 space-y-4"
+                                >
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="w-full p-5 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-between group active:bg-primary/20 transition-all"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="size-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary">
+                                                <span className="material-symbols-outlined !text-[24px]">add_a_photo</span>
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="text-sm font-black text-white italic uppercase tracking-tight">Nova Captura</p>
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Treinar reconhecimento</p>
+                                            </div>
+                                        </div>
+                                        <span className="material-symbols-outlined text-slate-600">chevron_right</span>
+                                    </button>
+
+                                    <button className="w-full p-5 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-between active:bg-white/10 transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <div className="size-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-500">
+                                                <span className="material-symbols-outlined !text-[24px]">memory</span>
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="text-sm font-black text-white italic uppercase tracking-tight">Editar Memória</p>
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{additionalImages.length} itens salvos</p>
+                                            </div>
+                                        </div>
+                                        <span className="material-symbols-outlined text-slate-600">chevron_right</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setImage(''); setAdditionalImages([]); setShowCockpit(false); }}
+                                        className="w-full p-5 bg-red-500/5 border border-red-500/10 rounded-3xl flex items-center justify-between active:bg-red-500/20 transition-all"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="size-12 rounded-2xl bg-red-500/20 flex items-center justify-center text-red-500">
+                                                <span className="material-symbols-outlined !text-[24px]">delete_forever</span>
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="text-sm font-black text-red-500 italic uppercase tracking-tight">Excluir Tudo</p>
+                                                <p className="text-[10px] text-red-500/50 font-bold uppercase tracking-widest">Limpar cache local</p>
+                                            </div>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setShowCockpit(false)}
+                                        className="mt-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] hover:text-white transition-colors"
+                                    >
+                                        Fechar Cockpit
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Processing Overlay */}
+                            {isCapturing && (
+                                <div className="absolute inset-0 bg-bg-start/90 backdrop-blur-3xl z-40 flex flex-col items-center justify-center space-y-4">
+                                    <div className="size-20 rounded-full border border-primary/30 flex items-center justify-center relative">
+                                        <div className="absolute inset-0 border-t-2 border-primary rounded-full animate-spin"></div>
+                                        <span className="material-symbols-outlined text-primary animate-pulse !text-[32px]">neurology</span>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-xs font-black text-white italic uppercase tracking-tighter">Processamento IA</p>
+                                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Extraindo vetores de OCR</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
+
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) processNewCapture(file);
+                            }}
+                        />
                     </div>
                 </div>
             </main>

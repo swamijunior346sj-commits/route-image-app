@@ -48,7 +48,7 @@ export interface AppSettings {
     subscriptionPlan: 'free' | 'pro' | 'enterprise';
 }
 
-const defaultSettings: AppSettings = {
+export const defaultSettings: AppSettings = {
     personalData: {
         name: '',
         email: '',
@@ -326,50 +326,55 @@ export const clearDailyRoute = async (): Promise<void> => {
 // --- SETTINGS ---
 
 export const getSettings = async (): Promise<AppSettings> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return defaultSettings;
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return defaultSettings;
 
-    const [settingsRes, profileRes] = await Promise.all([
-        supabase.from('app_settings').select('*').eq('id', session.user.id).single(),
-        supabase.from('profiles').select('subscription_plan').eq('id', session.user.id).single()
-    ]);
+        const [settingsRes, profileRes] = await Promise.all([
+            supabase.from('app_settings').select('*').eq('id', session.user.id).single(),
+            supabase.from('profiles').select('subscription_plan').eq('id', session.user.id).single()
+        ]);
 
-    const data = settingsRes.data;
-    const profile = profileRes.data;
+        const data = settingsRes.data;
+        const profile = profileRes.data;
 
-    if (!profile) {
-        // Create initial profile if missing
-        await supabase.from('profiles').insert({
-            id: session.user.id,
-            subscription_plan: 'free',
-            daily_scan_count: 0
-        });
-    }
+        if (!profile) {
+            // Create initial profile if missing
+            await supabase.from('profiles').insert({
+                id: session.user.id,
+                subscription_plan: 'free',
+                daily_scan_count: 0
+            });
+        }
 
-    if (!data) {
-        console.log("📝 Gerando configurações iniciais para usuário...");
-        // Create initial settings if missing
-        const newSettings = {
-            id: session.user.id,
-            personal_data: {
-                name: session.user.user_metadata?.full_name || 'Usuário',
-                email: session.user.email || '',
-                phone: '',
-                vehicle: ''
-            },
-            notifications: defaultSettings.notifications,
-            map_preferences: defaultSettings.mapPreferences
+        if (!data) {
+            console.log("📝 Gerando configurações iniciais para usuário...");
+            // Create initial settings if missing
+            const newSettings = {
+                id: session.user.id,
+                personal_data: {
+                    name: session.user.user_metadata?.full_name || 'Usuário',
+                    email: session.user.email || '',
+                    phone: '',
+                    vehicle: ''
+                },
+                notifications: defaultSettings.notifications,
+                map_preferences: defaultSettings.mapPreferences
+            };
+            await supabase.from('app_settings').insert(newSettings);
+            return { ...defaultSettings, subscriptionPlan: (profile?.subscription_plan as any) || 'free' };
+        }
+
+        return {
+            personalData: data.personal_data,
+            notifications: data.notifications,
+            mapPreferences: data.map_preferences,
+            subscriptionPlan: (profile?.subscription_plan as any) || 'free'
         };
-        await supabase.from('app_settings').insert(newSettings);
-        return { ...defaultSettings, subscriptionPlan: (profile?.subscription_plan as any) || 'free' };
+    } catch (err) {
+        console.warn("❌ Erro ao buscar configurações no Supabase:", err);
+        return defaultSettings;
     }
-
-    return {
-        personalData: data.personal_data,
-        notifications: data.notifications,
-        mapPreferences: data.map_preferences,
-        subscriptionPlan: (profile?.subscription_plan as any) || 'free'
-    };
 };
 
 export const updateSettings = async (updates: Partial<AppSettings>): Promise<AppSettings> => {

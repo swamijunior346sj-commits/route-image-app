@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 interface LoadingOverlayProps {
     title?: string;
     subtitle?: string;
@@ -9,6 +11,12 @@ export const LoadingOverlay = ({
     subtitle = 'Sincronizando registros com o banco central',
     icon = <span className="material-symbols-outlined !text-4xl text-white animate-pulse">database</span>
 }: LoadingOverlayProps) => {
+    const [showReload, setShowReload] = useState(false);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setShowReload(true), 5000);
+        return () => clearTimeout(timer);
+    }, []);
     return (
         <div className="fixed inset-0 z-[9999] bg-bg-start/80 backdrop-blur-3xl flex flex-col items-center justify-center p-12 text-center animate-fade-in">
             <div className="relative mb-8">
@@ -33,6 +41,15 @@ export const LoadingOverlay = ({
             <div className="mt-10 w-44 h-1 bg-white/5 rounded-full overflow-hidden relative z-10 border border-white/5 shadow-inner">
                 <div className="h-full bg-gradient-to-r from-primary via-accent to-primary w-full animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
             </div>
+
+            {showReload && (
+                <button
+                    onClick={() => window.location.reload()}
+                    className="mt-8 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/60 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all animate-fade-in"
+                >
+                    Recarregar App
+                </button>
+            )}
 
             {/* Corner Accents */}
             <div className="absolute top-12 left-12 w-10 h-10 border-t border-l border-white/10 rounded-tl-3xl" />

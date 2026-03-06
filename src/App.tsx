@@ -11,7 +11,7 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 import { AdminView } from './components/AdminView';
 import { SubscriptionView } from './components/SubscriptionView';
 import { supabase } from './services/supabase';
-import { getSettings, type AppSettings } from './services/db';
+import { getSettings, type AppSettings, defaultSettings } from './services/db';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const ADMIN_EMAIL = 'admin@admin.com';
@@ -24,7 +24,7 @@ export default function App() {
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [scannerInitialMode, setScannerInitialMode] = useState<'dashboard' | 'camera'>('dashboard');
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
 
   // Use localStorage to pretend we have a real session active
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -89,7 +89,7 @@ export default function App() {
       }
       else {
         localStorage.removeItem('isAuthenticated');
-        setSettings(null);
+        setSettings(defaultSettings);
       }
     });
 
@@ -183,26 +183,18 @@ export default function App() {
           />
         )}
         {currentTab === 'profile' && (
-          settings ? (
-            <ProfileView
-              onLogout={async () => {
-                await supabase.auth.signOut();
-                localStorage.removeItem('isAuthenticated');
-                setIsAuthenticated(false);
-              }}
-              onBack={() => changeTab('map')}
-              onNavigateToAdmin={user?.email === ADMIN_EMAIL ? () => setIsAdminOpen(true) : undefined}
-              isAdmin={user?.email === ADMIN_EMAIL}
-              settings={settings}
-              onUpdateSettings={setSettings}
-            />
-          ) : (
-            <LoadingOverlay
-              title="Acessando Conta"
-              subtitle="Sincronizando preferências seguras..."
-              icon={<span className="material-symbols-outlined !text-[32px] animate-spin text-primary">sync</span>}
-            />
-          )
+          <ProfileView
+            onLogout={async () => {
+              await supabase.auth.signOut();
+              localStorage.removeItem('isAuthenticated');
+              setIsAuthenticated(false);
+            }}
+            onBack={() => changeTab('map')}
+            onNavigateToAdmin={user?.email === ADMIN_EMAIL ? () => setIsAdminOpen(true) : undefined}
+            isAdmin={user?.email === ADMIN_EMAIL}
+            settings={settings}
+            onUpdateSettings={setSettings}
+          />
         )}
       </div>
       {!isAdminOpen && <BottomNav currentTab={currentTab} setTab={changeTab} />}
