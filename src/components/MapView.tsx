@@ -139,8 +139,8 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
 
                 const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                 setCurrentPos(newPos);
-                // Set map center only on initial lock so user can drag freely afterwards
-                setMapCenter(prev => prev === defaultCenter ? newPos : prev);
+                // Automatically center the map on the user's current location
+                setMapCenter(newPos);
             },
             undefined,
             { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }

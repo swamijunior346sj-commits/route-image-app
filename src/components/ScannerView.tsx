@@ -335,13 +335,13 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                             facingMode,
                             width: { ideal: 4096 },
                             height: { ideal: 2160 },
-                            //@ts-ignore
+                            // @ts-ignore - Mobile camera constraints (torch, focusMode) are not in standard types
                             advanced: [
                                 { torch },
                                 { focusMode: 'continuous' },
                                 { whiteBalanceMode: 'continuous' },
                                 { exposureMode: 'continuous' }
-                            ]
+                            ] as any
                         }}
                         className="w-full h-full object-cover"
                     />
