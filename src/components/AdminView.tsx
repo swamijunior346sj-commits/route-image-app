@@ -29,7 +29,6 @@ export const AdminView = ({ onBack }: AdminViewProps) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'billing' | 'security'>('overview');
     const [isLoading, setIsLoading] = useState(true);
     const [users, setUsers] = useState<AdminUser[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
     const [logs, setLogs] = useState<AdminLog[]>([]);
 
     useEffect(() => {
