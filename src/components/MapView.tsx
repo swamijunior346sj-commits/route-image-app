@@ -94,6 +94,11 @@ const defaultCenter: [number, number] = [-20.143196, -44.2174965];
 export const MapView = () => {
     const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
 
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
+
     // Constant solid navigation line linking pending stops
     const routeLine = useMemo(() => {
         const line: [number, number][] = [];
@@ -107,11 +112,6 @@ export const MapView = () => {
         });
         return line;
     }, [routePoints, userLocation]);
-
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [navigationIndex, setNavigationIndex] = useState(0);
     const [showCelebration, setShowCelebration] = useState(false);
