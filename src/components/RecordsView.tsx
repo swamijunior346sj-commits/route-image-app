@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import {
@@ -16,7 +16,6 @@ import {
     CheckCircle2,
     Database,
     Loader2,
-    FileText,
     Image as ImageIcon,
     Camera
 } from 'lucide-react';

@@ -3,19 +3,15 @@ import Webcam from 'react-webcam';
 import {
     Bell,
     Camera,
-    ChevronUp,
     Navigation,
     MapPin,
     MoreVertical,
     PlusCircle,
     Sparkles,
-    X,
     Loader2,
     CheckCircle2,
     ChevronRight,
     Search,
-    LocateFixed,
-    ScanLine
 } from 'lucide-react';
 import {
     getRecords,
@@ -34,16 +30,14 @@ import { LoadingOverlay } from './LoadingOverlay';
 
 interface ScannerProps {
     onNavigateToMap: () => void;
-    onNavigateToRecords: () => void;
     onNavigateToDailyRoute: () => void;
 }
 
-export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateToDailyRoute }: ScannerProps) => {
+export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: ScannerProps) => {
     // --- Dashboard State ---
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const [stats, setStats] = useState({ deliveries: 0, total: 0, earnings: 0 });
     const [nextStop, setNextStop] = useState<RoutePoint | null>(null);
-    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // --- Functional State ---
     const webcamRef = useRef<Webcam>(null);
@@ -66,7 +60,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
 
     const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
     const [aiStatus, setAiStatus] = useState('');
-    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+    const [facingMode] = useState<'environment' | 'user'>('environment');
 
     const VALOR_POR_PACOTE = 2.50;
     const SIMILARITY_THRESHOLD = 0.80;
@@ -77,7 +71,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
     }, []);
 
     const loadDashboardData = async () => {
-        setIsRefreshing(true);
         try {
             const [appSettings, route] = await Promise.all([
                 getSettings(),
@@ -108,7 +101,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
         } catch (err) {
             console.error('Failed to load dashboard:', err);
         } finally {
-            setIsRefreshing(false);
+            // Dashboard load complete
         }
     };
 

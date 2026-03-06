@@ -1,4 +1,4 @@
-import { Phone, MapPin, StickyNote, Package, CheckCircle2, MessageSquare, ChevronLeft } from 'lucide-react';
+import { Phone, MapPin, StickyNote, Package, CheckCircle2, ChevronLeft } from 'lucide-react';
 import type { LocationRecord } from '../services/db';
 
 interface DeliveryDetailViewProps {

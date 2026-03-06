@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LogOut, User, Bell, Shield, Settings, ChevronLeft, ChevronRight, Save, Key, Mail, Phone, Bike, Eye, EyeOff, Moon, ScanLine, Route, LocateFixed } from 'lucide-react';
+import { ChevronLeft, LogOut, Check, Bike, Star, Clock, CreditCard, Bell, Eye, Moon, Navigation, ChevronRight } from 'lucide-react';
 import { getSettings, updateSettings } from '../services/db';
 import type { AppSettings } from '../services/db';
 import { LoadingOverlay } from './LoadingOverlay';
@@ -10,23 +10,13 @@ interface ProfileViewProps {
 }
 
 export const ProfileView = ({ onLogout, onBack }: ProfileViewProps) => {
-    const [subview, setSubview] = useState<'main' | 'personal' | 'privacy' | 'notifications' | 'map'>('main');
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const [loading, setLoading] = useState(true);
-
-    // Temp form state
-    const [personalForm, setPersonalForm] = useState({ name: '', email: '', phone: '', vehicle: '', avatar: '' });
-    const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
-    const [showPass, setShowPass] = useState(false);
 
     useEffect(() => {
         const load = async () => {
             const s = await getSettings();
             setSettings(s);
-            setPersonalForm({
-                ...s.personalData,
-                avatar: s.personalData.avatar || ''
-            });
             setLoading(false);
         };
         load();
@@ -39,12 +29,13 @@ export const ProfileView = ({ onLogout, onBack }: ProfileViewProps) => {
         }
     };
 
-    const handleSavePersonal = async () => {
+    const toggleSetting = async (category: 'notifications' | 'mapPreferences', field: string) => {
         if (!settings) return;
-        const updated = await updateSettings({ ...settings, personalData: personalForm });
+        const categoryData = settings[category] as any;
+        const newCat = { ...categoryData, [field]: !categoryData[field] };
+        const updated = await updateSettings({ ...settings, [category]: newCat } as AppSettings);
         setSettings(updated);
-        setSubview('main');
-        if (navigator.vibrate) navigator.vibrate(20);
+        if (navigator.vibrate) navigator.vibrate(10);
     };
 
     const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,328 +54,170 @@ export const ProfileView = ({ onLogout, onBack }: ProfileViewProps) => {
         reader.readAsDataURL(file);
     };
 
-    const toggleSetting = async (category: 'notifications' | 'mapPreferences', field: string) => {
-        if (!settings) return;
-        const categoryData = settings[category] as any;
-        const newCat = { ...categoryData, [field]: !categoryData[field] };
-        const updated = await updateSettings({ ...settings, [category]: newCat } as AppSettings);
-        setSettings(updated);
-        if (navigator.vibrate) navigator.vibrate(10);
-    };
-
     if (loading || !settings) return (
         <LoadingOverlay
-            title="Terminal de Agente"
-            subtitle="Autenticando e Recuperando Preferências"
-            icon={<Shield size={32} className="text-white animate-pulse" />}
+            title="Sincronizando Perfil"
+            subtitle="Carregando estatísticas e preferências..."
         />
     );
 
-    if (subview === 'personal') {
-        return (
-            <div className="w-full h-full bg-black flex flex-col pt-safe pb-24 text-white animate-[slideRight_0.4s_ease-out]">
-                <div className="p-6 border-b border-white/5 flex items-center gap-6 bg-zinc-950/20 backdrop-blur-md">
-                    <button onClick={() => setSubview('main')} className="p-3 bg-white/[0.03] border border-white/10 rounded-2xl text-zinc-400 hover:text-white transition-all"><ChevronLeft size={20} /></button>
-                    <div>
-                        <h2 className="text-2xl font-black italic uppercase italic tracking-tighter">Dados Pessoais</h2>
-                        <p className="text-[9px] font-black text-blue-500/60 uppercase tracking-[0.3em]">Módulo de Perfil do Agente</p>
-                    </div>
-                </div>
-                <div className="p-8 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
-                    <div className="space-y-2 group">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-4">Nome Operacional</label>
-                        <div className="relative">
-                            <User size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500/40 group-focus-within:text-blue-500 transition-colors" />
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-sm text-white focus:border-blue-500/50 focus:outline-none transition-all italic font-medium" value={personalForm.name} onChange={e => setPersonalForm({ ...personalForm, name: e.target.value })} />
-                        </div>
-                    </div>
-                    <div className="space-y-2 group">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-4">Comunicação Digital</label>
-                        <div className="relative">
-                            <Mail size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500/40 group-focus-within:text-blue-500 transition-colors" />
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-sm text-white focus:border-blue-500/50 focus:outline-none transition-all italic font-medium" value={personalForm.email} onChange={e => setPersonalForm({ ...personalForm, email: e.target.value })} />
-                        </div>
-                    </div>
-                    <div className="space-y-2 group">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-4">Terminal Móvel</label>
-                        <div className="relative">
-                            <Phone size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500/40 group-focus-within:text-blue-500 transition-colors" />
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-sm text-white focus:border-blue-500/50 focus:outline-none transition-all italic font-medium" value={personalForm.phone} onChange={e => setPersonalForm({ ...personalForm, phone: e.target.value })} />
-                        </div>
-                    </div>
-                    <div className="space-y-2 group">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-4">Unidade de Transporte</label>
-                        <div className="relative">
-                            <Bike size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500/40 group-focus-within:text-blue-500 transition-colors" />
-                            <input className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-sm text-white focus:border-blue-500/50 focus:outline-none transition-all italic font-medium" value={personalForm.vehicle} onChange={e => setPersonalForm({ ...personalForm, vehicle: e.target.value })} />
-                        </div>
-                    </div>
-
-                    <button onClick={handleSavePersonal} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black italic uppercase tracking-[0.2em] py-5 rounded-[2rem] shadow-[0_20px_50px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-3 text-xs mt-6 active:scale-95">
-                        <Save size={18} /> Sincronizar Novos Dados
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    if (subview === 'privacy') {
-        return (
-            <div className="w-full h-full bg-black flex flex-col pt-safe pb-24 text-white animate-[slideRight_0.4s_ease-out]">
-                <div className="p-6 border-b border-white/5 flex items-center gap-6 bg-zinc-950/20 backdrop-blur-md">
-                    <button onClick={() => setSubview('main')} className="p-3 bg-white/[0.03] border border-white/10 rounded-2xl text-zinc-400 hover:text-white transition-all"><ChevronLeft size={20} /></button>
-                    <div>
-                        <h2 className="text-2xl font-black italic uppercase italic tracking-tighter">Segurança</h2>
-                        <p className="text-[9px] font-black text-purple-500/60 uppercase tracking-[0.3em]">Criptografia de Terminal</p>
-                    </div>
-                </div>
-                <div className="p-8 flex flex-col gap-8">
-                    <div className="bg-zinc-950 border border-white/5 p-6 rounded-[2rem] flex items-center gap-5 shadow-2xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
-                        <div className="w-14 h-14 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.1)]"><Key size={24} /></div>
-                        <div>
-                            <h4 className="font-black italic uppercase text-sm tracking-tight text-white">Chave de Acesso</h4>
-                            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-0.5">Nível de Segurança: Máximo</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-5">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-4">Assinatura Atual</label>
-                            <input type={showPass ? "text" : "password"} className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-5 text-sm text-white focus:border-purple-500/50 focus:outline-none transition-all font-mono italic" value={passwordForm.current} onChange={e => setPasswordForm({ ...passwordForm, current: e.target.value })} />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-4">Nova Assinatura Digital</label>
-                            <input type={showPass ? "text" : "password"} className="w-full bg-white/[0.03] border border-white/10 rounded-2xl p-5 text-sm text-white focus:border-purple-500/50 focus:outline-none transition-all font-mono italic" value={passwordForm.new} onChange={e => setPasswordForm({ ...passwordForm, new: e.target.value })} />
-                        </div>
-                        <button onClick={() => setShowPass(!showPass)} className="flex items-center gap-3 px-2 text-zinc-600 hover:text-zinc-400 transition-colors group">
-                            {showPass ? <EyeOff size={16} className="group-hover:text-purple-400" /> : <Eye size={16} className="group-hover:text-purple-400" />}
-                            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Alternar Visibilidade de Código</span>
-                        </button>
-                    </div>
-
-                    <button onClick={() => { alert('Assinatura atualizada!'); setSubview('main'); }} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black italic uppercase tracking-[0.2em] py-5 rounded-[2rem] shadow-[0_20px_50px_rgba(147,51,234,0.3)] transition-all flex items-center justify-center gap-3 text-xs mt-2 active:scale-95">
-                        Codificar Nova Assinatura
-                    </button>
-
-                    <div className="p-6 bg-zinc-950/20 rounded-[2rem] border border-dashed border-white/10 relative group overflow-hidden">
-                        <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/[0.02] transition-colors" />
-                        <h4 className="text-[10px] font-black text-zinc-400 mb-3 uppercase tracking-widest flex items-center gap-2"><Shield size={14} className="text-zinc-500" /> Diretiva de Sigilo</h4>
-                        <p className="text-[9px] font-medium text-zinc-600 leading-relaxed italic uppercase tracking-wider">Seus dados biométricos e geográficos são processados via hardware local e protegidos por protocolo de ponta-a-ponta.</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    if (subview === 'notifications') {
-        const toggle = (field: keyof typeof settings.notifications) => toggleSetting('notifications', field);
-        return (
-            <div className="w-full h-full bg-black flex flex-col pt-safe pb-24 text-white animate-[slideRight_0.4s_ease-out]">
-                <div className="p-6 border-b border-white/5 flex items-center gap-6 bg-zinc-950/20 backdrop-blur-md">
-                    <button onClick={() => setSubview('main')} className="p-3 bg-white/[0.03] border border-white/10 rounded-2xl text-zinc-400 hover:text-white transition-all"><ChevronLeft size={20} /></button>
-                    <div>
-                        <h2 className="text-2xl font-black italic uppercase italic tracking-tighter">Alertas</h2>
-                        <p className="text-[9px] font-black text-emerald-500/60 uppercase tracking-[0.3em]">Comunicação de Interface</p>
-                    </div>
-                </div>
-                <div className="p-8 space-y-4">
-                    {[
-                        { id: 'push', title: 'Broadcast Push', desc: 'Sinalização de novas coordenadas', icon: <Bell size={20} className="text-emerald-400" /> },
-                        { id: 'haptic', title: 'Feedback Háptico', desc: 'Vibração de pulso por proximidade', icon: <ScanLine size={20} className="text-blue-400" /> },
-                        { id: 'sound', title: 'Resposta Acústica', desc: 'Confirmação sonora de sucesso', icon: <Bell size={20} className="text-orange-400" /> }
-                    ].map(item => (
-                        <button key={item.id} onClick={() => toggle(item.id as any)} className="group w-full p-6 bg-zinc-950/40 border border-white/5 rounded-[2rem] flex items-center justify-between hover:border-white/20 transition-all shadow-xl">
-                            <div className="flex items-center gap-6">
-                                <div className="p-4 bg-white/[0.03] border border-white/5 rounded-2xl group-hover:scale-110 transition-transform">{item.icon}</div>
-                                <div className="text-left">
-                                    <h4 className="font-black italic uppercase text-xs tracking-tight text-white">{item.title}</h4>
-                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">{item.desc}</p>
-                                </div>
-                            </div>
-                            <div className={`w-14 h-7 rounded-full relative transition-all duration-500 overflow-hidden ${settings.notifications[item.id as keyof typeof settings.notifications] ? 'bg-emerald-500' : 'bg-zinc-900 border border-white/10'}`}>
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-150%] animate-[shimmer_2s_infinite]" />
-                                <div className={`absolute top-1.5 w-4 h-4 rounded-full transition-all duration-300 shadow-md ${settings.notifications[item.id as keyof typeof settings.notifications] ? 'left-8 bg-white' : 'left-2 bg-zinc-600'}`}></div>
-                            </div>
-                        </button>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-
-    if (subview === 'map') {
-        const toggle = (field: keyof typeof settings.mapPreferences) => toggleSetting('mapPreferences', field);
-        return (
-            <div className="w-full h-full bg-black flex flex-col pt-safe pb-24 text-white animate-[slideRight_0.4s_ease-out]">
-                <div className="p-6 border-b border-white/5 flex items-center gap-6 bg-zinc-950/20 backdrop-blur-md">
-                    <button onClick={() => setSubview('main')} className="p-3 bg-white/[0.03] border border-white/10 rounded-2xl text-zinc-400 hover:text-white transition-all"><ChevronLeft size={20} /></button>
-                    <div>
-                        <h2 className="text-2xl font-black italic uppercase italic tracking-tighter">Navegação</h2>
-                        <p className="text-[9px] font-black text-orange-500/60 uppercase tracking-[0.3em]">Calibragem de HUD Cartográfico</p>
-                    </div>
-                </div>
-                <div className="p-8 space-y-4">
-                    {[
-                        { id: 'darkMode', title: 'Render Noturno', desc: 'Visual cinemático de alta gama', icon: <Moon size={20} className="text-indigo-400" /> },
-                        { id: 'showTraffic', title: 'Vetor de Tráfego', desc: 'Monitoramento termográfico de fluxo', icon: <Route size={20} className="text-orange-400" /> },
-                        { id: 'autoCenter', title: 'Foco Dinâmico', desc: 'Lock-on automático do agente', icon: <LocateFixed size={20} className="text-blue-400" /> }
-                    ].map(item => (
-                        <button key={item.id} onClick={() => toggle(item.id as any)} className="group w-full p-6 bg-zinc-950/40 border border-white/5 rounded-[2rem] flex items-center justify-between hover:border-white/20 transition-all shadow-xl">
-                            <div className="flex items-center gap-6">
-                                <div className="p-4 bg-white/[0.03] border border-white/5 rounded-2xl group-hover:scale-110 transition-transform">{item.icon}</div>
-                                <div className="text-left">
-                                    <h4 className="font-black italic uppercase text-xs tracking-tight text-white">{item.title}</h4>
-                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">{item.desc}</p>
-                                </div>
-                            </div>
-                            <div className={`w-14 h-7 rounded-full relative transition-all duration-500 overflow-hidden ${settings.mapPreferences[item.id as keyof typeof settings.mapPreferences] ? 'bg-blue-600' : 'bg-zinc-900 border border-white/10'}`}>
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-150%] animate-[shimmer_2s_infinite]" />
-                                <div className={`absolute top-1.5 w-4 h-4 rounded-full transition-all duration-300 shadow-md ${settings.mapPreferences[item.id as keyof typeof settings.mapPreferences] ? 'left-8 bg-white' : 'left-2 bg-zinc-600'}`}></div>
-                            </div>
-                        </button>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="w-full h-full bg-black flex flex-col pt-safe pb-24 overflow-y-auto relative text-white custom-scrollbar">
-            {/* Cinematic Background Decoration */}
-            <div className="absolute top-[5%] right-[-10%] w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none animate-pulse"></div>
-            <div className="absolute bottom-[20%] left-[-10%] w-[300px] h-[300px] bg-purple-600/5 rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="fixed inset-0 bg-bg-deep flex flex-col font-sans overflow-x-hidden pb-12 overflow-y-auto no-scrollbar">
+            {/* Header Banner Section */}
+            <div className="relative h-72 w-full overflow-hidden shrink-0">
+                <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-primary/20 rounded-full blur-[80px]"></div>
+                <div className="absolute bottom-[-20%] left-[-10%] w-64 h-64 bg-accent/10 rounded-full blur-[80px]"></div>
 
-            {/* Profile HUD Header */}
-            <header className="sticky top-0 z-50 px-6 pt-14 pb-8 flex items-center justify-between bg-black/40 backdrop-blur-2xl border-b border-white/5">
-                <button
-                    onClick={onBack}
-                    className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 active:scale-95 transition-all text-white/90"
-                >
-                    <ChevronLeft size={24} />
-                </button>
-                <div className="text-center">
-                    <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-0.5">SISTEMA</h1>
-                    <p className="text-lg font-bold tracking-tight text-white/90">Meu Perfil</p>
-                </div>
-                <button onClick={handleLogout} className="flex items-center justify-center size-10 rounded-full bg-red-500/10 border border-red-500/10 active:scale-95 transition-all text-red-500">
-                    <LogOut size={20} />
-                </button>
-            </header>
+                <div className="absolute inset-0 pt-10 px-6 flex flex-col items-center justify-start bg-white/[0.02] backdrop-blur-xl border-b border-white/5">
+                    {/* Back Button */}
+                    <button
+                        onClick={onBack}
+                        className="absolute top-10 left-6 size-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/90 active:scale-90 transition-all"
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
 
-            <div className="px-8 pb-32 flex flex-col gap-10 animate-[slideUp_0.6s_ease-out] pt-8">
-                {/* Profile Detail HUD */}
-                <div className="flex items-center gap-8 px-2 mb-4">
-                    <div className="relative group cursor-pointer">
-                        <label className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-[2.5rem] cursor-pointer">
-                            <User size={24} className="text-white mb-1" />
-                            <span className="text-[8px] font-black text-white uppercase tracking-widest">Alterar</span>
+                    <div className="relative group">
+                        <label className="cursor-pointer block">
+                            <div className="size-24 rounded-full border-2 border-primary/30 p-1 bg-white/5 shadow-2xl relative overflow-hidden group">
+                                {settings.personalData.avatar ? (
+                                    <img alt="Perfil" className="w-full h-full rounded-full object-cover group-hover:opacity-75 transition-opacity" src={settings.personalData.avatar} />
+                                ) : (
+                                    <div className="w-full h-full rounded-full bg-primary/10 flex items-center justify-center">
+                                        <span className="text-3xl font-black text-primary">{settings.personalData.name?.charAt(0) || 'R'}</span>
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-bold uppercase tracking-widest">Alterar</div>
+                            </div>
                             <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
                         </label>
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-[2.5rem] blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <div className="relative w-24 h-24 rounded-[2.5rem] bg-zinc-950 border border-white/10 flex items-center justify-center p-1 overflow-hidden shadow-2xl">
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-                            <div className="w-full h-full rounded-[2rem] bg-zinc-900 flex items-center justify-center border border-white/5 overflow-hidden">
-                                {settings.personalData.avatar ? (
-                                    <img src={settings.personalData.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                                ) : (
-                                    <User size={40} className="text-blue-500/60" />
-                                )}
-                            </div>
+                        <div className="absolute bottom-0 right-0 size-7 bg-primary rounded-full border-2 border-[#0F172A] flex items-center justify-center shadow-lg">
+                            <Check size={14} className="text-white font-bold" />
                         </div>
                     </div>
-                    <div className="flex flex-col space-y-1">
-                        <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter">{settings.personalData.name || 'Nome do Usuário'}</h2>
-                        <div className="flex items-center gap-3">
-                            <div className="flex gap-1">
-                                {[1, 2, 3, 4, 5].map(i => (
-                                    <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= 3 ? 'bg-blue-500' : 'bg-zinc-800'}`} />
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Section 1: Command Settings */}
-                <div className="space-y-4">
-                    <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.4em] ml-4 italic">Protocolos de Identidade</h3>
-                    <div className="bg-zinc-950/40 border border-white/5 rounded-[2.5rem] overflow-hidden backdrop-blur-sm shadow-2xl transition-all hover:border-white/10">
-                        <button onClick={() => setSubview('personal')} className="group w-full flex items-center justify-between p-6 hover:bg-white/[0.02] transition-all">
-                            <div className="flex items-center gap-6">
-                                <div className="bg-blue-500/5 border border-blue-500/10 p-4 rounded-2xl group-hover:scale-110 transition-transform"><User size={20} className="text-blue-500" /></div>
-                                <div className="text-left">
-                                    <span className="block font-black italic uppercase text-xs tracking-tight text-white/80 group-hover:text-white">Dados Operacionais</span>
-                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Sincronização de Perfil</p>
-                                </div>
-                            </div>
-                            <ChevronRight size={18} className="text-zinc-700 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
-                        </button>
-                        <div className="h-[1px] w-[80%] mx-auto bg-white/5" />
-                        <button onClick={() => setSubview('privacy')} className="group w-full flex items-center justify-between p-6 hover:bg-white/[0.02] transition-all">
-                            <div className="flex items-center gap-6">
-                                <div className="bg-purple-500/5 border border-purple-500/10 p-4 rounded-2xl group-hover:scale-110 transition-transform"><Shield size={20} className="text-purple-500" /></div>
-                                <div className="text-left">
-                                    <span className="block font-black italic uppercase text-xs tracking-tight text-white/80 group-hover:text-white">Segurança & Criptografia</span>
-                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Gerenciar Chaves de Segurança</p>
-                                </div>
-                            </div>
-                            <ChevronRight size={18} className="text-zinc-700 group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Section 2: HUD Calibrations */}
-                <div className="space-y-4">
-                    <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.4em] ml-4 italic">Calibragem de Interface</h3>
-                    <div className="bg-zinc-950/40 border border-white/5 rounded-[2.5rem] overflow-hidden backdrop-blur-sm shadow-2xl transition-all hover:border-white/10">
-                        <button onClick={() => setSubview('notifications')} className="group w-full flex items-center justify-between p-6 hover:bg-white/[0.02] transition-all">
-                            <div className="flex items-center gap-6">
-                                <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl group-hover:scale-110 transition-transform"><Bell size={20} className="text-emerald-500" /></div>
-                                <div className="text-left">
-                                    <span className="block font-black italic uppercase text-xs tracking-tight text-white/80 group-hover:text-white">Matriz de Notificações</span>
-                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Configurar Alertas de Missão</p>
-                                </div>
-                            </div>
-                            <ChevronRight size={18} className="text-zinc-700 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
-                        </button>
-                        <div className="h-[1px] w-[80%] mx-auto bg-white/5" />
-                        <button onClick={() => setSubview('map')} className="group w-full flex items-center justify-between p-6 hover:bg-white/[0.02] transition-all">
-                            <div className="flex items-center gap-6">
-                                <div className="bg-orange-500/5 border border-orange-500/10 p-4 rounded-2xl group-hover:scale-110 transition-transform"><Settings size={20} className="text-orange-500" /></div>
-                                <div className="text-left">
-                                    <span className="block font-black italic uppercase text-xs tracking-tight text-white/80 group-hover:text-white">Motor Cartográfico (GPS)</span>
-                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mt-1">Otimização de Renderização</p>
-                                </div>
-                            </div>
-                            <ChevronRight size={18} className="text-zinc-700 group-hover:text-orange-500 group-hover:translate-x-1 transition-all" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Logout Zone */}
-                <div className="mt-4 mb-10 space-y-8 flex flex-col items-center">
-                    <button
-                        onClick={handleLogout}
-                        className="group w-full relative h-20 rounded-[2.5rem] overflow-hidden transition-all active:scale-95"
-                    >
-                        <div className="absolute inset-0 bg-red-600 opacity-10 group-hover:opacity-20 transition-opacity" />
-                        <div className="absolute inset-x-0 bottom-0 h-[1px] bg-red-600/50" />
-                        <div className="relative h-full flex items-center justify-center gap-4 text-red-500">
-                            <LogOut size={22} className="group-hover:translate-x-[-4px] transition-transform" />
-                            <span className="font-black italic uppercase text-sm tracking-[0.3em]">Encerrar Sessão</span>
-                        </div>
-                    </button>
-
-                    <div className="flex flex-col items-center gap-2">
-                        <div className="flex items-center gap-4 text-[9px] font-black text-zinc-700 uppercase tracking-[0.5em] italic">
-                            <div className="w-8 h-[1px] bg-zinc-800" />
-                            Core.OS 1.0.0.Stable
-                            <div className="w-8 h-[1px] bg-zinc-800" />
-                        </div>
-                        <p className="text-[8px] font-black text-zinc-800 uppercase tracking-widest">Desenvolvido sob protocolo RouteVision™</p>
-                    </div>
+                    <h2 className="mt-4 text-2xl font-bold text-white tracking-tight">{settings.personalData.name || 'Ricardo Oliveira'}</h2>
+                    <p className="text-sm font-medium text-slate-400">Entregador Premium • Nível 4</p>
                 </div>
             </div>
+
+            <main className="px-6 -mt-10 relative z-10 space-y-8 pb-20">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 flex flex-col justify-between h-32 shadow-xl">
+                        <Bike size={24} className="text-primary" />
+                        <div>
+                            <p className="text-[22px] font-bold text-white">482</p>
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Entregas/Mês</p>
+                        </div>
+                    </div>
+                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 flex flex-col justify-between h-32 shadow-xl">
+                        <Star size={24} className="text-emerald-400" />
+                        <div>
+                            <p className="text-[22px] font-bold text-white">4.98</p>
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Avaliação</p>
+                        </div>
+                    </div>
+                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 flex flex-col justify-between h-32 shadow-xl">
+                        <Clock size={24} className="text-amber-400" />
+                        <div>
+                            <p className="text-[22px] font-bold text-white">124h</p>
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Tempo Online</p>
+                        </div>
+                    </div>
+                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 flex flex-col justify-between h-32 shadow-xl">
+                        <CreditCard size={24} className="text-blue-400" />
+                        <div>
+                            <p className="text-[22px] font-bold text-white">R$ 3.2k</p>
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Ganhos</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Vehicle Section */}
+                <section className="space-y-4">
+                    <h3 className="text-[13px] font-bold uppercase tracking-widest text-slate-400 ml-1">Veículo Principal</h3>
+                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex items-center gap-5 shadow-xl group active:scale-[0.98] transition-all">
+                        <div className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-inner">
+                            <span className="material-symbols-outlined !text-3xl text-primary font-light">two_wheeler</span>
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-white font-bold text-base">{settings.personalData.vehicle || 'Honda CB 500X'}</p>
+                            <p className="text-slate-400 text-sm">Placa: ABC-1234 • Cor: Cinza</p>
+                        </div>
+                        <ChevronRight size={20} className="text-slate-600 group-hover:text-primary transition-colors" />
+                    </div>
+                </section>
+
+                {/* Settings Section */}
+                <section className="space-y-4">
+                    <h3 className="text-[13px] font-bold uppercase tracking-widest text-slate-400 ml-1">Configurações</h3>
+                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2.5rem] divide-y divide-white/5 shadow-2xl">
+                        {/* Notifications Toggle */}
+                        <div className="flex items-center justify-between p-6">
+                            <div className="flex items-center gap-4">
+                                <Bell size={20} className="text-slate-400" />
+                                <span className="text-[15px] font-medium text-white/90">Notificações Push</span>
+                            </div>
+                            <button
+                                onClick={() => toggleSetting('notifications', 'push')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${settings.notifications.push ? 'bg-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/10'}`}
+                            >
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${settings.notifications.push ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                        </div>
+
+                        {/* Invisible Mode (Mapped to a placeholder toggle) */}
+                        <div className="flex items-center justify-between p-6">
+                            <div className="flex items-center gap-4">
+                                <Eye size={20} className="text-slate-400" />
+                                <span className="text-[15px] font-medium text-white/90">Modo Invisível</span>
+                            </div>
+                            <button
+                                onClick={() => toggleSetting('notifications', 'haptic')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${settings.notifications.haptic ? 'bg-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/10'}`}
+                            >
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${settings.notifications.haptic ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                        </div>
+
+                        {/* Dark Mode Toggle */}
+                        <div className="flex items-center justify-between p-6">
+                            <div className="flex items-center gap-4">
+                                <Moon size={20} className="text-slate-400" />
+                                <span className="text-[15px] font-medium text-white/90">Tema Escuro Automático</span>
+                            </div>
+                            <button
+                                onClick={() => toggleSetting('mapPreferences', 'darkMode')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${settings.mapPreferences.darkMode ? 'bg-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/10'}`}
+                            >
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${settings.mapPreferences.darkMode ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                        </div>
+
+                        {/* Route Optimization Toggle */}
+                        <div className="flex items-center justify-between p-6">
+                            <div className="flex items-center gap-4">
+                                <Navigation size={20} className="text-slate-400" />
+                                <span className="text-[15px] font-medium text-white/90">Otimização de Rota</span>
+                            </div>
+                            <button
+                                onClick={() => toggleSetting('mapPreferences', 'autoCenter')}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${settings.mapPreferences.autoCenter ? 'bg-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-white/10'}`}
+                            >
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${settings.mapPreferences.autoCenter ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <button
+                    onClick={handleLogout}
+                    className="w-full py-6 text-red-400 font-bold text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all opacity-80 hover:opacity-100"
+                >
+                    <LogOut size={20} />
+                    Sair da Conta
+                </button>
+            </main>
         </div>
     );
 };

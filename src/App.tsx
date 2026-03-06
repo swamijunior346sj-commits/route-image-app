@@ -73,7 +73,6 @@ export default function App() {
         {currentTab === 'scanner' && (
           <ScannerView
             onNavigateToMap={() => changeTab('map')}
-            onNavigateToRecords={() => changeTab('records')}
             onNavigateToDailyRoute={() => changeTab('dailyRoute')}
           />
         )}
