@@ -258,21 +258,21 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                 </button>
             )}
 
-            {/* Tab Bar - Elevated to avoid overlap */}
-            <div className="absolute bottom-32 inset-x-6 z-20 flex gap-4">
+            {/* Tab Bar - Repositioned to left, smaller size */}
+            <div className="absolute bottom-32 left-4 z-20 flex flex-col gap-3">
                 <button
                     onClick={() => setActiveTab('map')}
-                    className={`flex-1 h-14 rounded-[1.5rem] flex items-center justify-center gap-2 font-black italic uppercase tracking-widest text-[11px] transition-all ${activeTab === 'map' ? 'bg-white text-bg-start shadow-xl' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}
+                    className={`h-10 px-4 rounded-xl flex items-center w-full gap-2 font-bold text-[10px] uppercase tracking-wider transition-all ${activeTab === 'map' ? 'bg-white text-bg-start shadow-lg' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white'}`}
                 >
-                    <span className="material-symbols-outlined !text-[18px]">satellite_alt</span>
-                    SATÉLITE
+                    <span className="material-symbols-outlined !text-[16px]">satellite_alt</span>
+                    <span className="flex-1 text-left">SATÉLITE</span>
                 </button>
                 <button
                     onClick={() => setActiveTab('list')}
-                    className={`flex-1 h-14 rounded-[1.5rem] flex items-center justify-center gap-2 font-black italic uppercase tracking-widest text-[11px] transition-all ${activeTab === 'list' ? 'bg-white text-bg-start shadow-xl' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}
+                    className={`h-10 px-4 rounded-xl flex items-center w-full gap-2 font-bold text-[10px] uppercase tracking-wider transition-all ${activeTab === 'list' ? 'bg-white text-bg-start shadow-lg' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white'}`}
                 >
-                    <span className="material-symbols-outlined !text-[18px]">list_alt</span>
-                    LISTAGEM
+                    <span className="material-symbols-outlined !text-[16px]">list_alt</span>
+                    <span className="flex-1 text-left">LISTAGEM</span>
                 </button>
             </div>
 

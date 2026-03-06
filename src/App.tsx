@@ -1,4 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
+import type { ReactNode } from 'react';
+
+class ErrorBoundary extends Component<{ children: ReactNode, fallback: (error: Error) => ReactNode }, { hasError: boolean, error: Error | null }> {
+  constructor(props: { children: ReactNode, fallback: (error: Error) => ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
+  componentDidCatch(error: Error, _info: any) {
+    console.error("Caught by ErrorBoundary:", error, _info);
+    alert("CRASH: " + error.message);
+  }
+  render() {
+    if (this.state.hasError && this.state.error) { return this.props.fallback(this.state.error); }
+    return this.props.children;
+  }
+}
+
 import { ScannerView } from './components/ScannerView';
 import { MapView } from './components/MapView';
 import { RecordsView } from './components/RecordsView';
@@ -157,6 +175,20 @@ export default function App() {
     return <AuthView onLogin={() => setIsAuthenticated(true)} />;
   }
 
+  if (isAdminOpen) {
+    return (
+      <ErrorBoundary fallback={(error) => (
+        <div className="fixed inset-0 z-[500] bg-red-900 flex flex-col items-center justify-center p-8 text-white">
+          <h2 className="text-2xl font-black mb-4">CRASH NO PAINEL</h2>
+          <p className="font-mono text-xs">{error.message}</p>
+          <button onClick={() => setIsAdminOpen(false)} className="mt-8 bg-white/20 px-6 py-4 rounded-xl font-bold">Fechar Erro</button>
+        </div>
+      )}>
+        <AdminView onBack={() => setIsAdminOpen(false)} />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <div className="w-full h-screen bg-black text-white overflow-hidden flex flex-col font-sans">
       <div className="flex-1 w-full h-full relative">
@@ -209,11 +241,7 @@ export default function App() {
           />
         )}
       </div>
-      {!isAdminOpen && <BottomNav currentTab={currentTab} setTab={changeTab} />}
-
-      {isAdminOpen && (
-        <AdminView onBack={() => setIsAdminOpen(false)} />
-      )}
+      <BottomNav currentTab={currentTab} setTab={changeTab} />
 
       {isSubscriptionOpen && (
         <SubscriptionView
