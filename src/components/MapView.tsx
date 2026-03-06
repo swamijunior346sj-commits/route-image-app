@@ -33,8 +33,27 @@ const createIcon = (color: string, size: number = 32) => L.divIcon({
         "></div>
     </div>`
 });
+const createNumberedIcon = (color: string, number: number, size: number = 28) => L.divIcon({
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
+    popupAnchor: [0, -size],
+    html: `<div style="
+        position: relative;
+        width:${size}px;height:${size}px;
+        background:${color};
+        border:2px solid white;
+        border-radius:50% 50% 50% 0;
+        transform:rotate(-45deg);
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    ">
+        <div style="transform: rotate(45deg); font-weight: 900; font-size: ${size * 0.45}px; color: white;">${number}</div>
+    </div>`
+});
 
-const routeIcon = createIcon('#3b82f6');
 const deliveredIcon = createIcon('#22c55e');
 const currentIcon = L.divIcon({
     className: '',
@@ -113,6 +132,13 @@ export const MapView = () => {
         const deltaY = e.touches[0].clientY - sheetTouchStartY.current;
         if (deltaY < -50) { setManifestExpanded(true); sheetTouchStartY.current = null; }
         else if (deltaY > 50) { setManifestExpanded(false); sheetTouchStartY.current = null; }
+    };
+
+    const handleNavSheetTouchMove = (e: React.TouchEvent) => {
+        if (!sheetTouchStartY.current) return;
+        const deltaY = e.touches[0].clientY - sheetTouchStartY.current;
+        if (deltaY < -50) { setSheetExpanded(true); sheetTouchStartY.current = null; }
+        else if (deltaY > 50) { setSheetExpanded(false); sheetTouchStartY.current = null; }
     };
 
     const handleSheetTouchEnd = () => {
@@ -447,17 +473,27 @@ export const MapView = () => {
                 zoomControl={false}
                 attributionControl={false}
             >
+                {/* Light themed OSM basemap (Positron) */}
                 <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                 />
                 <MapController center={mapCenter} zoom={mapZoom} routePoints={routePoints} />
 
-                {routePoints.map((p, i) => (
-                    p.lat !== null && p.lng !== null && (
+                {routePoints.map((p, i) => {
+                    const isCurrent = p.id === 'current';
+                    // The idx logic to determine the stop number for numbered pins
+                    // We only number pending active stops relative to their execution order
+                    // `routePoints` includes delivered points + current point. 
+                    // Non-delivered points (excluding current) are what we route.
+                    const pendingList = routePoints.filter(rp => rp.id !== 'current' && !rp.isDelivered);
+                    const stopIndex = pendingList.findIndex(rp => rp.id === p.id);
+                    const markerIcon = isCurrent ? currentIcon : p.isDelivered ? deliveredIcon : createNumberedIcon('#3b82f6', stopIndex + 1);
+
+                    return p.lat !== null && p.lng !== null && (
                         <Marker
                             key={`${p.id}-${i}`}
                             position={[p.lat, p.lng]}
-                            icon={p.id === 'current' ? currentIcon : p.isDelivered ? deliveredIcon : routeIcon}
+                            icon={markerIcon}
                             eventHandlers={{ click: () => openEditPanel(p) }}
                         >
                             <Popup>
@@ -465,8 +501,8 @@ export const MapView = () => {
                                 {p.neighborhood && <div className="text-[10px] text-gray-500">{p.neighborhood}</div>}
                             </Popup>
                         </Marker>
-                    )
-                ))}
+                    );
+                })}
 
                 {userLocation && accuracy && (
                     <Circle
@@ -486,9 +522,12 @@ export const MapView = () => {
                     <Polyline
                         positions={routeLine}
                         pathOptions={{
-                            color: '#3b82f6',
-                            weight: 5,
-                            opacity: 0.8
+                            color: '#2563eb', // Emphasized blue color for active path
+                            weight: 6,
+                            opacity: 0.9,
+                            dashArray: '10, 10', // Styling similar to a planned route path
+                            lineCap: 'round',
+                            lineJoin: 'round'
                         }}
                     />
                 )}
@@ -629,29 +668,45 @@ export const MapView = () => {
                             </div>
                         )}
 
-                        <div className={`w-full bg-white border-t-2 border-zinc-100 rounded-t-[3rem] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] transition-all duration-500 pointer-events-auto ${sheetExpanded ? 'h-[70vh]' : 'h-[300px]'}`}>
+                        <div className={`w-full bg-white border-t-2 border-zinc-100 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] transition-all duration-500 pointer-events-auto ${sheetExpanded ? 'h-[85vh]' : 'h-[360px]'}`}>
                             <div className="w-full flex flex-col h-full">
-                                <div onClick={() => setSheetExpanded(!sheetExpanded)} className="py-4 flex flex-col items-center gap-1 cursor-pointer">
-                                    <div className="w-12 h-1.5 bg-zinc-100 rounded-full" />
+                                <div
+                                    onClick={() => setSheetExpanded(!sheetExpanded)}
+                                    onTouchStart={handleSheetTouchStart}
+                                    onTouchMove={handleNavSheetTouchMove}
+                                    onTouchEnd={handleSheetTouchEnd}
+                                    className="py-6 flex flex-col items-center gap-1 cursor-pointer"
+                                >
+                                    <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
                                     <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${sheetExpanded ? 'rotate-180' : ''}`} />
                                 </div>
 
-                                <div className="px-8 pb-10 flex-1 overflow-y-auto">
-                                    <div className="flex items-start justify-between mb-8">
+                                <div className="px-8 pb-10 flex-1 overflow-y-auto no-scrollbar">
+                                    <div className="flex items-start justify-between mb-6">
                                         <div className="flex items-center gap-5">
                                             <div className="w-16 h-16 rounded-[1.5rem] bg-blue-600 flex flex-col items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
                                                 <span className="text-[10px] font-black text-blue-200">#</span>
                                                 <span className="text-2xl font-black text-white">{navigationIndex + 1}</span>
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="text-[11px] font-black text-blue-600 uppercase tracking-[0.2em] mb-1">{currentStop.neighborhood || 'SETOR PENDENTE'}</p>
+                                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">{currentStop.neighborhood || 'SETOR PENDENTE'}</p>
                                                 <h3 className="text-2xl font-black italic uppercase text-zinc-900 leading-tight truncate pr-4">{currentStop.name}</h3>
                                             </div>
                                         </div>
-                                        <button onClick={() => setIsNavigating(false)} className="p-3 bg-zinc-50 rounded-full text-zinc-300 hover:text-red-500 transition-all">
+                                        <button onClick={() => setIsNavigating(false)} className="p-3 bg-zinc-50 rounded-full text-zinc-400 hover:text-red-500 transition-all">
                                             <X size={20} />
                                         </button>
                                     </div>
+
+                                    {/* Observation immediately below the address */}
+                                    {currentStop.notes && (
+                                        <div className="bg-orange-50/50 border border-orange-100 rounded-3xl p-5 mb-8">
+                                            <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <MapPin size={12} /> Observações da Entrega
+                                            </p>
+                                            <p className="text-zinc-700 text-sm font-medium leading-relaxed italic">{currentStop.notes}</p>
+                                        </div>
+                                    )}
 
                                     <div className="grid grid-cols-2 gap-4 mb-8">
                                         <button
@@ -666,28 +721,28 @@ export const MapView = () => {
                                             className="h-20 bg-zinc-900 rounded-3xl flex flex-col items-center justify-center gap-1 text-white shadow-lg shadow-zinc-900/20 active:scale-95 transition-all"
                                         >
                                             <PackageX size={28} />
-                                            <span className="text-[10px] font-black uppercase">Não Entregue</span>
+                                            <span className="text-[10px] font-black uppercase">Falhou</span>
                                         </button>
                                     </div>
 
                                     <button
                                         onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentStop.lat},${currentStop.lng}`, '_blank')}
-                                        className="w-full bg-blue-50 border border-blue-100 py-6 rounded-3xl flex items-center justify-center gap-4 text-blue-600 hover:bg-blue-100 transition-all font-black uppercase tracking-widest text-xs"
+                                        className="w-full bg-blue-50 border border-blue-100 py-6 rounded-[2.5rem] flex items-center justify-center gap-4 text-blue-600 hover:bg-blue-100 transition-all font-black uppercase tracking-widest text-xs"
                                     >
-                                        <Navigation size={20} fill="currentColor" /> Abrir Navegação
+                                        <Navigation size={20} fill="currentColor" /> Rota Externa
                                     </button>
 
                                     {sheetExpanded && (
                                         <div className="mt-10 animate-in fade-in slide-in-from-top-4 duration-500">
-                                            <h4 className="text-[10px] font-black uppercase text-zinc-400 mb-4 tracking-widest">Informações Adicionais</h4>
+                                            <h4 className="text-[10px] font-black uppercase text-zinc-400 mb-4 tracking-widest">Detalhes do Local</h4>
                                             <div className="bg-zinc-50 rounded-3xl p-6 space-y-4">
                                                 <div>
-                                                    <p className="text-[9px] font-black text-zinc-400 uppercase">Cidade</p>
+                                                    <p className="text-[9px] font-black text-zinc-400 uppercase">Cidade de Destino</p>
                                                     <p className="text-zinc-900 font-bold">{currentStop.city || '-'}</p>
                                                 </div>
-                                                <div>
-                                                    <p className="text-[9px] font-black text-zinc-400 uppercase">Notas do Operador</p>
-                                                    <p className="text-zinc-600 text-sm leading-relaxed">{currentStop.notes || 'Sem observações para este local.'}</p>
+                                                <div className="flex items-center justify-between border-t border-zinc-200 pt-4">
+                                                    <p className="text-[9px] font-black text-zinc-400 uppercase">Estado do Pedido</p>
+                                                    <span className="text-xs bg-blue-100 text-blue-600 px-3 py-1 rounded-full font-bold">Em Trânsito</span>
                                                 </div>
                                             </div>
                                         </div>
