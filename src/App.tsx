@@ -138,6 +138,16 @@ export default function App() {
     setCurrentTab(tab);
   };
 
+  // Sync Global Theme
+  useEffect(() => {
+    const isDark = settings?.mapPreferences?.darkMode ?? true;
+    if (!isDark) {
+      document.documentElement.classList.add('light-mode');
+    } else {
+      document.documentElement.classList.remove('light-mode');
+    }
+  }, [settings?.mapPreferences?.darkMode]);
+
   const handleSelectPlan = async (planId: 'free' | 'pro' | 'enterprise') => {
     if (!user) return;
 

@@ -98,6 +98,18 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
 
     const activePoint = route.find(p => !p.isDelivered);
 
+    // Sync Google Maps Theme with Global App Theme
+    useEffect(() => {
+        const checkTheme = () => {
+            const isLight = document.documentElement.classList.contains('light-mode');
+            setMapTheme(isLight ? 'silver' : 'night');
+        };
+        checkTheme();
+        const observer = new MutationObserver(checkTheme);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
+
     useEffect(() => {
         loadRoute();
         const watchId = navigator.geolocation.watchPosition(
@@ -490,29 +502,33 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
             )}
 
             {/* Tab Bar - Repositioned to left, smaller size */}
-            <div className="absolute top-24 right-4 z-20 flex flex-col gap-3 items-end">
+            <div className={`absolute right-4 z-20 flex flex-col gap-3 items-end transition-all duration-500 ${isNavigating ? 'top-6' : 'top-24'}`}>
                 {activeTab === 'map' && (
                     <button
                         onClick={() => setMapCenter({ ...currentPos })}
-                        className="size-10 rounded-xl flex items-center justify-center bg-bg-start/80 backdrop-blur-md border border-white/10 text-primary hover:text-white shadow-[0_10px_20px_rgba(0,0,0,0.8)] transition-all active:scale-95 mb-1"
+                        className="size-10 rounded-xl flex items-center justify-center bg-bg-start/80 backdrop-blur-md border border-white/10 text-primary shadow-[0_10px_20px_rgba(0,0,0,0.2)] transition-all active:scale-95 mb-1"
                     >
                         <span className="material-symbols-outlined !text-[20px]">my_location</span>
                     </button>
                 )}
-                <button
-                    onClick={() => setActiveTab('map')}
-                    className={`h-10 px-4 rounded-xl flex items-center w-full min-w-[120px] gap-2 font-bold text-[10px] uppercase tracking-wider transition-all shadow-[0_10px_20px_rgba(0,0,0,0.5)] ${activeTab === 'map' ? 'bg-white text-bg-start' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white'}`}
-                >
-                    <span className="material-symbols-outlined !text-[16px]">satellite_alt</span>
-                    <span className="flex-1 text-left">SATÉLITE</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('list')}
-                    className={`h-10 px-4 rounded-xl flex items-center w-full min-w-[120px] gap-2 font-bold text-[10px] uppercase tracking-wider transition-all shadow-[0_10px_20px_rgba(0,0,0,0.5)] ${activeTab === 'list' ? 'bg-white text-bg-start' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white'}`}
-                >
-                    <span className="material-symbols-outlined !text-[16px]">list_alt</span>
-                    <span className="flex-1 text-left">LISTAGEM</span>
-                </button>
+                {!isNavigating && (
+                    <>
+                        <button
+                            onClick={() => setActiveTab('map')}
+                            className={`h-10 px-4 rounded-xl flex items-center w-full min-w-[120px] gap-2 font-bold text-[10px] uppercase tracking-wider transition-all shadow-[0_10px_20px_rgba(0,0,0,0.2)] ${activeTab === 'map' ? 'bg-primary text-white border border-primary/40' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-400'}`}
+                        >
+                            <span className="material-symbols-outlined !text-[16px]">satellite_alt</span>
+                            <span className="flex-1 text-left">MAPA</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('list')}
+                            className={`h-10 px-4 rounded-xl flex items-center w-full min-w-[120px] gap-2 font-bold text-[10px] uppercase tracking-wider transition-all shadow-[0_10px_20px_rgba(0,0,0,0.2)] ${activeTab === 'list' ? 'bg-primary text-white border border-primary/40' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-400'}`}
+                        >
+                            <span className="material-symbols-outlined !text-[16px]">list_alt</span>
+                            <span className="flex-1 text-left">LISTAGEM</span>
+                        </button>
+                    </>
+                )}
             </div>
 
             {/* Nav Fade Overlay */}

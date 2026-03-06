@@ -145,16 +145,19 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin, sett
                         <div className="flex items-center justify-between p-4 px-6">
                             <div className="flex items-center gap-4">
                                 <div className="size-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
-                                    <span className="material-symbols-outlined !text-[20px]">dark_mode</span>
+                                    <span className="material-symbols-outlined !text-[20px]">{settings.mapPreferences.darkMode ? 'dark_mode' : 'light_mode'}</span>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-white/90">Tema Escuro IA</p>
+                                    <p className="text-sm font-bold text-white/90">Tema Escuro</p>
                                     <p className="text-[10px] text-slate-500 font-medium capitalize">Otimização de contraste</p>
                                 </div>
                             </div>
-                            <div className="text-slate-600">
-                                <span className="material-symbols-outlined">check_circle</span>
-                            </div>
+                            <button
+                                onClick={() => toggleSetting('mapPreferences', 'darkMode')}
+                                className={`w-12 h-6 rounded-full transition-all relative ${settings.mapPreferences.darkMode ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)]' : 'bg-white/10'}`}
+                            >
+                                <div className={`absolute top-1 size-4 rounded-full bg-white transition-all ${settings.mapPreferences.darkMode ? 'left-7' : 'left-1'}`}></div>
+                            </button>
                         </div>
 
                         <div className="flex items-center justify-between p-4 px-6">
