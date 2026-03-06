@@ -10,32 +10,35 @@ const mapContainerStyle = { width: '100%', height: '100%' };
 
 // Premium Dark Style
 const mapOptions = {
-    styles: [
-        { "elementType": "geometry", "stylers": [{ "color": "#0F172A" }] },
-        { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0F172A" }] },
-        { "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
-        { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
-        { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
-        { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
-        { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#1e293b" }] },
-        { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1E293B" }] },
-        { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#334155" }] },
-        { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
-        { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#3B82F6" }, { "lightness": -40 }] },
-        { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e3a8a" }] },
-        { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
-        { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#2f3948" }] },
-        { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
-        { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#082f49" }] },
-        { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#0c4a6e" }] },
-        { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#0c4a6e" }] }
-    ],
     disableDefaultUI: true,
     zoomControl: false,
     mapTypeControl: false,
     streetViewControl: false,
     fullscreenControl: false,
+    clickableIcons: false, // Prevent Google POI clicks
 };
+
+const getMapStyles = (showPOIs: boolean) => [
+    { "elementType": "geometry", "stylers": [{ "color": "#0F172A" }] },
+    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0F172A" }] },
+    { "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
+    { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
+    { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": showPOIs ? "#64748b" : "transparent" }] },
+    { "featureType": "poi", "elementType": "labels.icon", "stylers": [{ "visibility": showPOIs ? "on" : "off" }] },
+    { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
+    { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#1e293b" }] },
+    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1E293B" }] },
+    { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#334155" }] },
+    { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
+    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#3B82F6" }, { "lightness": -40 }] },
+    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e3a8a" }] },
+    { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+    { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#2f3948" }] },
+    { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
+    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#082f49" }] },
+    { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#0c4a6e" }] },
+    { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#0c4a6e" }] }
+];
 
 // Custom Marker Components
 const NumberedMarker = ({ number, color }: { number: number, color: string }) => (
@@ -82,6 +85,9 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     const [currentPos, setCurrentPos] = useState(defaultCenter);
     const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
     const [traffic, setTraffic] = useState(false);
+    const [showPOIs, setShowPOIs] = useState(false);
+    const [isNavigating, setIsNavigating] = useState(false);
+    const [isHudMinimized, setIsHudMinimized] = useState(false);
 
     const activePoint = route.find(p => !p.isDelivered);
 
@@ -101,7 +107,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     };
 
     useEffect(() => {
-        if (isLoaded && activePoint && currentPos && activePoint.lat !== null && activePoint.lng !== null) {
+        if (isLoaded && activePoint && currentPos && isNavigating && activePoint.lat !== null && activePoint.lng !== null) {
             const directionsService = new google.maps.DirectionsService();
             directionsService.route(
                 {
@@ -115,8 +121,10 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                     }
                 }
             );
+        } else if (!isNavigating) {
+            setDirections(null);
         }
-    }, [isLoaded, activePoint, currentPos]);
+    }, [isLoaded, activePoint, currentPos, isNavigating]);
 
     const handleComplete = async (pointId: string) => {
         const updated = route.map(p => p.id === pointId ? { ...p, isDelivered: true } : p);
@@ -156,6 +164,12 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                     >
                         <span className="material-symbols-outlined !text-[24px]">traffic</span>
                     </button>
+                    <button
+                        onClick={() => setShowPOIs(!showPOIs)}
+                        className={`size-12 rounded-[1.25rem] flex items-center justify-center transition-all ${!showPOIs ? 'bg-primary text-white shadow-premium' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}
+                    >
+                        <span className="material-symbols-outlined !text-[24px]">{showPOIs ? 'visibility' : 'visibility_off'}</span>
+                    </button>
                     <button className="size-12 rounded-[1.25rem] bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400 flex items-center justify-center">
                         <span className="material-symbols-outlined !text-[24px]">settings</span>
                     </button>
@@ -166,9 +180,12 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
             <div className="absolute inset-0 z-0">
                 <GoogleMap
                     mapContainerStyle={mapContainerStyle}
-                    center={defaultCenter}
+                    center={currentPos}
                     zoom={15}
-                    options={mapOptions}
+                    options={{
+                        ...mapOptions,
+                        styles: getMapStyles(showPOIs)
+                    }}
                 >
                     {traffic && <TrafficLayer />}
                     {directions && (
@@ -208,9 +225,15 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
             </div>
 
             {/* Floating Navigation HUD */}
-            {activePoint && (
+            {activePoint && isNavigating && !isHudMinimized && (
                 <div className="absolute bottom-36 inset-x-6 z-20 animate-slide-up">
                     <div className="glass-card rounded-[2.5rem] p-6 shadow-2xl border-white/10 relative overflow-hidden group">
+                        <button
+                            onClick={() => setIsHudMinimized(true)}
+                            className="absolute top-6 right-6 z-20 text-slate-500 hover:text-white transition-colors"
+                        >
+                            <span className="material-symbols-outlined !text-[20px]">close</span>
+                        </button>
                         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[40px] -mr-16 -mt-16 group-hover:bg-primary/20 transition-all duration-700"></div>
 
                         <div className="flex justify-between items-start mb-5 relative z-10">
@@ -243,6 +266,22 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {activePoint && (!isNavigating || isHudMinimized) && (
+                <button
+                    onClick={() => {
+                        setIsNavigating(true);
+                        setIsHudMinimized(false);
+                    }}
+                    className="absolute bottom-36 right-6 z-20 h-16 px-6 rounded-2xl glass-card flex items-center gap-3 text-primary shadow-2xl animate-fade-in active:scale-95 transition-all"
+                >
+                    <span className="material-symbols-outlined !text-[28px] animate-pulse">navigation</span>
+                    <div className="flex flex-col items-start leading-none">
+                        <span className="text-[10px] font-black uppercase tracking-widest">Iniciar</span>
+                        <span className="text-[8px] font-bold text-slate-500 uppercase mt-1">Navegação</span>
+                    </div>
+                </button>
             )}
 
             {/* Bottom Floating Bar */}
