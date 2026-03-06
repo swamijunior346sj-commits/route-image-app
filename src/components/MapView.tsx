@@ -38,18 +38,33 @@ const WAZE_MAP_STYLE = [
 ];
 
 // Custom Marker Components
-const NumberedMarker = ({ number, color }: { number: number, color: string }) => (
-    <div className="relative cursor-pointer" style={{ position: 'absolute', transform: 'translate(-50%, -50%)' }}>
-        <div className="size-6 rounded-full border-[1.5px] border-white shadow-md flex items-center justify-center relative z-10 backdrop-blur-md" style={{ backgroundColor: `${color}E6` }}>
-            <span className="text-white font-black text-[11px] leading-none tracking-tighter" style={{ marginTop: '1px' }}>{number}</span>
+const NumberedMarker = ({ number }: { number: number }) => (
+    <div className="relative cursor-pointer" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
+        <div className="flex flex-col items-center">
+            {/* Number Badge */}
+            <div className="bg-white px-1.5 py-0.5 rounded-md shadow-lg border border-slate-200 mb-0.5 animate-bounce">
+                <span className="text-[10px] font-black text-slate-900 leading-none">{number}</span>
+            </div>
+            {/* The Yellow Box Icon */}
+            <div className={`size-8 rounded-xl flex items-center justify-center shadow-xl border-2 border-white relative z-10`} style={{ backgroundColor: '#FACC15' }}>
+                <span className="material-symbols-outlined text-slate-900 !text-[20px] font-black filled-icon">package_2</span>
+            </div>
+            {/* Pin Pointer Tip */}
+            <div className="size-2 bg-[#FACC15] rotate-45 -mt-1 shadow-md border-r-2 border-b-2 border-white"></div>
         </div>
     </div>
 );
 
 const DeliveredMarker = () => (
-    <div className="relative group" style={{ position: 'absolute', transform: 'translate(-50%, -50%)' }}>
-        <div className="size-4 rounded-full bg-slate-500/80 border-[1px] border-white/20 flex items-center justify-center relative z-10 backdrop-blur-md">
-            <span className="material-symbols-outlined text-white/80 !text-[10px] font-black">check</span>
+    <div className="relative group" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
+        <div className="flex flex-col items-center opacity-60 grayscale-[0.6]">
+            <div className="size-6 rounded-lg bg-slate-400 flex items-center justify-center shadow-md border border-white/40">
+                <span className="material-symbols-outlined text-white !text-[14px]">package_2</span>
+            </div>
+            <div className="absolute -top-1 -right-1 size-4 rounded-full bg-emerald-500 border border-white flex items-center justify-center shadow-sm">
+                <span className="material-symbols-outlined text-white !text-[10px] font-black">check</span>
+            </div>
+            <div className="size-1.5 bg-slate-400 rotate-45 -mt-[3px]"></div>
         </div>
     </div>
 );
@@ -222,12 +237,25 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     };
 
     const handleClearRoute = async () => {
-        if (confirm("Deseja apagar toda a rota ativa? Esta ação não pode ser desfeita.")) {
-            await clearActiveRoute();
-            setRoute([]);
-            setDirections(null);
-            setIsNavigating(false);
-            if (navigator.vibrate) navigator.vibrate(50);
+        console.log("🗑️ Iniciando processo de limpeza de rota...");
+        if (window.confirm("Deseja apagar toda a rota ativa? Esta ação não pode ser desfeita.")) {
+            try {
+                // Optimistic UI: Clear local state first for immediate response
+                console.log("♻️ Limpando estado local...");
+                setRoute([]);
+                setDirections(null);
+                setFullDirections(null);
+                setIsNavigating(false);
+
+                // Then sync with DB
+                await clearActiveRoute();
+                console.log("✅ Rota limpa com sucesso do banco de dados.");
+
+                if (navigator.vibrate) navigator.vibrate(50);
+            } catch (err) {
+                console.error("❌ Erro ao limpar rota:", err);
+                // Even if DB fails, the UI is already clear, which is better for the user
+            }
         }
     };
 
@@ -284,51 +312,58 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
 
     return (
         <div className="relative w-full h-full bg-bg-start overflow-hidden font-sans">
-            {/* Top UI Elements - Hidden during active navigation for cleaner view */}
-            {!isNavigating && (
-                <>
-                    {/* Centered Top Search Bar */}
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-[60%] max-w-sm pointer-events-none">
-                        <div className="pointer-events-auto">
-                            {isLoaded && (
-                                <Autocomplete
-                                    onLoad={onLoad}
-                                    onPlaceChanged={onPlaceChanged}
-                                >
-                                    <div className="relative group">
-                                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                                            <span className="material-symbols-outlined text-primary !text-[20px] group-focus-within:scale-110 transition-transform">search</span>
-                                        </div>
-                                        <input
-                                            ref={searchInputRef}
-                                            type="text"
-                                            placeholder="Buscar locais..."
-                                            className="w-full h-12 pl-12 pr-4 bg-bg-start/80 backdrop-blur-xl border border-white/10 rounded-2xl text-white text-[11px] md:text-sm font-medium placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-2xl transition-all"
-                                        />
-                                    </div>
-                                </Autocomplete>
-                            )}
-                        </div>
-                    </div>
+            {/* Top Right Quick Actions - Always visible for accessibility */}
+            <div className="absolute top-6 right-4 z-[110] flex gap-2 pointer-events-auto">
+                {!isNavigating && (
+                    <button
+                        onClick={() => setMapTheme(prev => prev === 'night' ? 'waze' : 'night')}
+                        className={`size-12 rounded-[1.25rem] backdrop-blur-xl transition-all flex items-center justify-center shadow-2xl ${mapTheme === 'night'
+                            ? 'bg-amber-500/10 border border-amber-500/20 text-amber-500'
+                            : 'bg-primary/10 border border-primary/20 text-primary'
+                            }`}
+                    >
+                        <span className="material-symbols-outlined !text-[24px]">
+                            {mapTheme === 'night' ? 'light_mode' : 'dark_mode'}
+                        </span>
+                    </button>
+                )}
+                <button
+                    onClick={(e) => {
+                        console.log("🔘 Clique no botão de lixeira detectado");
+                        e.stopPropagation();
+                        handleClearRoute();
+                    }}
+                    className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-90 transition-all flex items-center justify-center shadow-2xl hover:bg-red-500/20 group"
+                    title="Limpar Rota"
+                >
+                    <span className="material-symbols-outlined !text-[24px] group-hover:scale-110 transition-transform">delete_sweep</span>
+                </button>
+            </div>
 
-                    {/* Top Right Quick Actions */}
-                    <div className="absolute top-6 right-4 z-20 flex gap-2 pointer-events-auto">
-                        <button
-                            onClick={() => setMapTheme(prev => prev === 'night' ? 'waze' : 'night')}
-                            className={`size-12 rounded-[1.25rem] backdrop-blur-xl transition-all flex items-center justify-center shadow-2xl ${mapTheme === 'night'
-                                ? 'bg-amber-500/10 border border-amber-500/20 text-amber-500'
-                                : 'bg-primary/10 border border-primary/20 text-primary'
-                                }`}
-                        >
-                            <span className="material-symbols-outlined !text-[24px]">
-                                {mapTheme === 'night' ? 'light_mode' : 'dark_mode'}
-                            </span>
-                        </button>
-                        <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center shadow-2xl">
-                            <span className="material-symbols-outlined !text-[24px]">delete_sweep</span>
-                        </button>
+            {/* Centered Top Search Bar - Hidden during active navigation */}
+            {!isNavigating && (
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-[60%] max-w-sm pointer-events-none">
+                    <div className="pointer-events-auto">
+                        {isLoaded && (
+                            <Autocomplete
+                                onLoad={onLoad}
+                                onPlaceChanged={onPlaceChanged}
+                            >
+                                <div className="relative group">
+                                    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                                        <span className="material-symbols-outlined text-primary !text-[20px] group-focus-within:scale-110 transition-transform">search</span>
+                                    </div>
+                                    <input
+                                        ref={searchInputRef}
+                                        type="text"
+                                        placeholder="Buscar locais..."
+                                        className="w-full h-12 pl-12 pr-4 bg-bg-start/80 backdrop-blur-xl border border-white/10 rounded-2xl text-white text-[11px] md:text-sm font-medium placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-2xl transition-all"
+                                    />
+                                </div>
+                            </Autocomplete>
+                        )}
                     </div>
-                </>
+                </div>
             )}
 
             {/* Main Content Area */}
@@ -387,7 +422,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                         <OverlayView position={currentPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}><CurrentMarker /></OverlayView>
                         {route.map((p, idx) => p.lat && p.lng && (
                             <OverlayView key={p.id} position={{ lat: p.lat, lng: p.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                                {p.isDelivered ? <DeliveredMarker /> : <NumberedMarker number={idx + 1} color={idx === 0 ? '#3B82F6' : '#475569'} />}
+                                {p.isDelivered ? <DeliveredMarker /> : <NumberedMarker number={idx + 1} />}
                             </OverlayView>
                         ))}
                     </GoogleMap>
