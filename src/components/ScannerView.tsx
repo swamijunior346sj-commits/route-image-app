@@ -14,6 +14,7 @@ import {
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
 import { LoadingOverlay } from './LoadingOverlay';
+import { NotificationsView } from './NotificationsView';
 
 interface ScannerProps {
     onNavigateToMap: () => void;
@@ -32,7 +33,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     // --- Functional State ---
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
-    const [viewMode, setViewMode] = useState<'dashboard' | 'confirm'>(initialViewMode === 'camera' ? 'dashboard' : initialViewMode as 'dashboard' | 'confirm');
+    const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm' | 'notifications'>(initialViewMode);
     const [cameraMode, setCameraMode] = useState<'register' | 'scan'>('scan');
     const [isCockpitOpen, setIsCockpitOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,7 +98,11 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     }, [loadDashboardData]);
 
     useEffect(() => {
-        if (initialViewMode) {
+        if (initialViewMode === 'camera') {
+            setViewMode('dashboard');
+            // Can't trigger native camera on mount due to browser security (needs direct user interaction)
+            // But we keep the mode for logic consistency and stay on dashboard
+        } else if (initialViewMode) {
             setViewMode(initialViewMode);
         }
     }, [initialViewMode]);
@@ -718,6 +723,11 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                         </span>
                     </button>
                 </div>
+            )}
+
+            {/* Notifications Content Overlay */}
+            {viewMode === 'notifications' && (
+                <NotificationsView onClose={() => setViewMode('dashboard')} />
             )}
 
             {/* notifications and overlays ... */}
