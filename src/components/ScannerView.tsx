@@ -391,14 +391,13 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                     />
                     <div className="absolute inset-0 camera-grid opacity-30" />
 
-                    {/* Viewfinder Overlay */}
+                    {/* Simple Viewfinder HUD */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-72 h-48 border-2 border-white/20 rounded-3xl scan-focus relative overflow-hidden">
-                            <div className="scanning-line" />
-                            <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-primary rounded-tl-lg" />
-                            <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-primary rounded-tr-lg" />
-                            <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-primary rounded-bl-lg" />
-                            <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-primary rounded-br-lg" />
+                        <div className="w-72 h-48 border border-white/5 rounded-3xl relative overflow-hidden">
+                            <div className="absolute top-4 left-4 w-4 h-4 border-t border-l border-white/10 rounded-tl" />
+                            <div className="absolute top-4 right-4 w-4 h-4 border-t border-r border-white/10 rounded-tr" />
+                            <div className="absolute bottom-4 left-4 w-4 h-4 border-b border-l border-white/10 rounded-bl" />
+                            <div className="absolute bottom-4 right-4 w-4 h-4 border-b border-r border-white/10 rounded-br" />
                         </div>
                     </div>
                 </div>
@@ -407,13 +406,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 <div
                     className="absolute inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none"
                 >
-                    {/* Viewfinder Only */}
-                    <div className="w-80 h-56 border border-white/10 rounded-[3rem] scan-focus relative overflow-hidden backdrop-blur-[2px]">
-                        <div className="scanning-line" />
-                        <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-primary rounded-tl-xl" />
-                        <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-primary rounded-tr-xl" />
-                        <div className="absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-primary rounded-bl-xl" />
-                        <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-primary rounded-br-xl" />
+                    {/* Viewfinder Only - Simplified */}
+                    <div className="w-80 h-56 border border-white/5 rounded-[3rem] relative overflow-hidden backdrop-blur-[1px]">
+                        <div className="absolute top-6 left-6 w-6 h-6 border-t border-l border-white/10 rounded-tl-xl" />
+                        <div className="absolute top-6 right-6 w-6 h-6 border-t border-r border-white/10 rounded-tr-xl" />
+                        <div className="absolute bottom-6 left-6 w-6 h-6 border-b border-l border-white/10 rounded-bl-xl" />
+                        <div className="absolute bottom-6 right-6 w-6 h-6 border-b border-r border-white/10 rounded-br-xl" />
                     </div>
 
                     {/* Interactive Area for Scan Mode */}

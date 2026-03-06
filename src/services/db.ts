@@ -256,16 +256,31 @@ export const getActiveRoute = async (): Promise<RoutePoint[]> => {
 
 
 export const addPointToActiveRoute = async (point: RoutePoint): Promise<RoutePoint[]> => {
-    await supabase.from('active_route').insert({
-        name: point.name,
-        lat: point.lat,
-        lng: point.lng,
-        notes: point.notes,
-        neighborhood: point.neighborhood,
-        city: point.city,
-        external_record_id: point.id === 'current' ? null : point.id
-    });
-    return await getActiveRoute();
+    const current = await getActiveRoute();
+    const updated = [...current, point];
+
+    // 1. Atualizar local imediatamente
+    const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' });
+    await store.setItem('route', updated);
+
+    // 2. Sincronizar com Supabase em background
+    setTimeout(async () => {
+        try {
+            await supabase.from('active_route').insert({
+                name: point.name,
+                lat: point.lat,
+                lng: point.lng,
+                notes: point.notes,
+                neighborhood: point.neighborhood,
+                city: point.city,
+                external_record_id: point.id === 'current' ? null : point.id
+            });
+        } catch (e) {
+            console.warn('Sync de ponto falhou em background', e);
+        }
+    }, 100);
+
+    return updated;
 };
 
 export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => {
@@ -278,8 +293,8 @@ export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => 
 
     // Tentar sincronizar com Supabase
     try {
-        // Limpar rota anterior
-        await supabase.from('active_route').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        // Limpar rota anterior de forma robusta
+        await supabase.from('active_route').delete().neq('name', '___FORCE_CLEAR_ALL_UNMATCHABLE_STRING___');
 
         const insertData = points.filter(p => p.id !== 'current').map(p => ({
             name: p.name,
@@ -305,8 +320,31 @@ export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => 
 };
 
 export const clearActiveRoute = async (): Promise<void> => {
-    await supabase.from('active_route').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).removeItem('route');
+    console.log("🗑️ Chamando clearActiveRoute no banco de dados...");
+    try {
+        // Tentativa de limpeza profunda usando filtros que abrangem UUIDs e strings
+        const { error } = await supabase
+            .from('active_route')
+            .delete()
+            .neq('name', '___FORCE_CLEAR_ALL_UNMATCHABLE_STRING___');
+
+        if (error) {
+            console.error("❌ Erro Supabase ao limpar rota:", error);
+            // Fallback para outro filtro se o primeiro falhar
+            await supabase.from('active_route').delete().not('id', 'is', null);
+        }
+    } catch (err) {
+        console.error("❌ Erro catastrófico ao limpar rota no Supabase:", err);
+    }
+
+    try {
+        const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' });
+        await store.removeItem('route');
+        await store.clear(); // Garantia extra: limpa todo o store de rota
+        console.log("✅ Armazenamento local de rota limpo.");
+    } catch (err) {
+        console.error("❌ Erro ao limpar localforage:", err);
+    }
 };
 
 // --- DAILY ROUTE (Rota do Dia) ---
