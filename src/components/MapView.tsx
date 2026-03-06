@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GoogleMap, useJsApiLoader, DirectionsRenderer, OverlayView, TrafficLayer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, DirectionsRenderer, OverlayView } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
 import confetti from 'canvas-confetti';
@@ -31,20 +31,24 @@ const getMapStyles = () => [
 
 // Custom Marker Components
 const NumberedMarker = ({ number, color }: { number: number, color: string }) => (
-    <div className="relative group" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
-        <div className="size-10 rounded-full border-[3px] border-white/20 shadow-2xl flex items-center justify-center relative z-10 active:scale-90 transition-transform backdrop-blur-md" style={{ backgroundColor: `${color}CC` }}>
-            <span className="text-white font-black text-xs italic">{number}</span>
+    <div className="relative group cursor-pointer" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
+        <div className="h-9 px-3 rounded-xl border-[2px] border-white/20 shadow-2xl flex items-center justify-center gap-1.5 relative z-10 active:scale-95 transition-transform backdrop-blur-md" style={{ backgroundColor: `${color}E6` }}>
+            <span className="material-symbols-outlined text-white/90 !text-[16px]" style={{ fontVariationSettings: "'wght' 300" }}>package_2</span>
+            <span className="text-white font-black text-xs">{number}</span>
         </div>
-        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 rotate-45 z-0" style={{ backgroundColor: `${color}CC`, borderRight: '2px solid rgba(255,255,255,0.1)', borderBottom: '2px solid rgba(255,255,255,0.1)' }}></div>
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 z-0" style={{ backgroundColor: `${color}E6`, borderRight: '2px solid rgba(255,255,255,0.1)', borderBottom: '2px solid rgba(255,255,255,0.1)' }}></div>
     </div>
 );
 
 const DeliveredMarker = () => (
-    <div className="relative" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
-        <div className="size-10 rounded-full bg-emerald-500/30 border-[3px] border-white/10 shadow-xl flex items-center justify-center relative z-10 transition-all scale-90 backdrop-blur-sm">
-            <span className="material-symbols-outlined text-white text-[18px]">check</span>
+    <div className="relative group" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
+        <div className="h-9 px-3 rounded-xl bg-emerald-500/80 border-[2px] border-white/20 shadow-xl flex items-center justify-center relative z-10 transition-all scale-95 backdrop-blur-md">
+            <span className="material-symbols-outlined text-white/90 !text-[18px]" style={{ fontVariationSettings: "'wght' 300" }}>package_2</span>
+            <div className="absolute -top-1.5 -right-1.5 size-4 bg-emerald-400 rounded-full flex items-center justify-center border-[2px] border-[#0F172A] shadow-lg">
+                <span className="material-symbols-outlined text-[#0F172A] !text-[10px] font-black">check</span>
+            </div>
         </div>
-        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 rotate-45 bg-emerald-500/30 z-0"></div>
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-emerald-500/80 z-0 border-r-2 border-b-2 border-white/10"></div>
     </div>
 );
 
@@ -69,8 +73,8 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     const [route, setRoute] = useState<RoutePoint[]>([]);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
     const [currentPos, setCurrentPos] = useState(defaultCenter);
+    const [mapCenter, setMapCenter] = useState(defaultCenter);
     const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
-    const [traffic, setTraffic] = useState(false);
     const [isNavigating, setIsNavigating] = useState(false);
     const [isHudMinimized, setIsHudMinimized] = useState(false);
 
@@ -79,7 +83,12 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     useEffect(() => {
         loadRoute();
         const watchId = navigator.geolocation.watchPosition(
-            pos => setCurrentPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            pos => {
+                const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                setCurrentPos(newPos);
+                // Set map center only on initial lock so user can drag freely afterwards
+                setMapCenter(prev => prev === defaultCenter ? newPos : prev);
+            },
             undefined,
             { enableHighAccuracy: true }
         );
@@ -153,9 +162,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                 <div></div>
 
                 <div className="flex gap-3 pointer-events-auto">
-                    <button onClick={() => setTraffic(!traffic)} className={`size-12 rounded-[1.25rem] flex items-center justify-center transition-all ${traffic ? 'bg-primary text-white shadow-premium' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}>
-                        <span className="material-symbols-outlined !text-[24px]">traffic</span>
-                    </button>
+
                     <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center">
                         <span className="material-symbols-outlined !text-[24px]">delete_sweep</span>
                     </button>
@@ -167,11 +174,10 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                 {activeTab === 'map' ? (
                     <GoogleMap
                         mapContainerStyle={mapContainerStyle}
-                        center={currentPos}
+                        center={mapCenter}
                         zoom={15}
                         options={{ ...mapOptions, styles: getMapStyles() }}
                     >
-                        {traffic && <TrafficLayer />}
                         {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true, polylineOptions: { strokeColor: '#3B82F6', strokeWeight: 6, strokeOpacity: 0.8 } }} />}
                         <OverlayView position={currentPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}><CurrentMarker /></OverlayView>
                         {route.map((p, idx) => p.lat && p.lng && (
@@ -259,17 +265,25 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
             )}
 
             {/* Tab Bar - Repositioned to left, smaller size */}
-            <div className="absolute bottom-32 left-4 z-20 flex flex-col gap-3">
+            <div className="absolute bottom-40 left-4 z-20 flex flex-col gap-3 items-start">
+                {activeTab === 'map' && (
+                    <button
+                        onClick={() => setMapCenter({ ...currentPos })}
+                        className="size-10 rounded-xl flex items-center justify-center bg-bg-start/80 backdrop-blur-md border border-white/10 text-primary hover:text-white shadow-[0_10px_20px_rgba(0,0,0,0.8)] transition-all active:scale-95 mb-1"
+                    >
+                        <span className="material-symbols-outlined !text-[20px]">my_location</span>
+                    </button>
+                )}
                 <button
                     onClick={() => setActiveTab('map')}
-                    className={`h-10 px-4 rounded-xl flex items-center w-full gap-2 font-bold text-[10px] uppercase tracking-wider transition-all ${activeTab === 'map' ? 'bg-white text-bg-start shadow-lg' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white'}`}
+                    className={`h-10 px-4 rounded-xl flex items-center w-full min-w-[120px] gap-2 font-bold text-[10px] uppercase tracking-wider transition-all shadow-[0_10px_20px_rgba(0,0,0,0.5)] ${activeTab === 'map' ? 'bg-white text-bg-start' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white'}`}
                 >
                     <span className="material-symbols-outlined !text-[16px]">satellite_alt</span>
                     <span className="flex-1 text-left">SATÉLITE</span>
                 </button>
                 <button
                     onClick={() => setActiveTab('list')}
-                    className={`h-10 px-4 rounded-xl flex items-center w-full gap-2 font-bold text-[10px] uppercase tracking-wider transition-all ${activeTab === 'list' ? 'bg-white text-bg-start shadow-lg' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white'}`}
+                    className={`h-10 px-4 rounded-xl flex items-center w-full min-w-[120px] gap-2 font-bold text-[10px] uppercase tracking-wider transition-all shadow-[0_10px_20px_rgba(0,0,0,0.5)] ${activeTab === 'list' ? 'bg-white text-bg-start' : 'bg-bg-start/80 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white'}`}
                 >
                     <span className="material-symbols-outlined !text-[16px]">list_alt</span>
                     <span className="flex-1 text-left">LISTAGEM</span>
