@@ -39,6 +39,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [cameraMode, setCameraMode] = useState<'register' | 'scan'>('scan');
     const [isCockpitOpen, setIsCockpitOpen] = useState(false);
     const [torch, setTorch] = useState(false);
+    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
 
     // Registering/Confirmation State
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -120,10 +121,51 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
         const video = webcamRef.current.video as HTMLVideoElement | null;
         if (!video || video.readyState !== 4) return null;
 
+        // Ensure we are focused before capturing
+        const track = videoTrackRef.current;
+        if (track && track.applyConstraints) {
+            try {
+                // Toggle focus to force a re-calculation before capture
+                await track.applyConstraints({
+                    advanced: [{ focusMode: 'continuous' }, { exposureMode: 'continuous' }] as any
+                });
+            } catch (e) { console.warn('Pre-capture focus failed', e); }
+        }
+
         const features = await extractFeatures(video);
         const imageSrc = webcamRef.current.getScreenshot() || '';
         return { imageSrc, features };
     }, []);
+
+    const handleCameraLoad = useCallback(() => {
+        if (!webcamRef.current) return;
+        const video = webcamRef.current.video;
+        if (video && video.srcObject instanceof MediaStream) {
+            const track = video.srcObject.getVideoTracks()[0];
+            videoTrackRef.current = track;
+
+            // Initial aggressive focus
+            if (track.applyConstraints) {
+                track.applyConstraints({
+                    advanced: [
+                        { torch },
+                        { focusMode: 'continuous' },
+                        { pointsOfInterest: [{ x: 0.5, y: 0.5 }] },
+                        { whiteBalanceMode: 'continuous' },
+                        { exposureMode: 'continuous' }
+                    ] as any
+                }).catch(e => console.warn('Initial focus failed', e));
+            }
+        }
+    }, [torch]);
+
+    useEffect(() => {
+        if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
+            videoTrackRef.current.applyConstraints({
+                advanced: [{ torch }] as any
+            }).catch(e => console.warn('Torch update failed', e));
+        }
+    }, [torch]);
 
     const runAiWithAnimation = async (imageSrc: string): Promise<void> => {
         setIsAiAnalyzing(true);
@@ -331,11 +373,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                         ref={webcamRef}
                         audio={false}
                         screenshotFormat="image/jpeg"
+                        onUserMedia={handleCameraLoad}
                         videoConstraints={{
                             facingMode,
                             width: { ideal: 4096 },
                             height: { ideal: 2160 },
-                            // @ts-ignore - Mobile camera constraints (torch, focusMode) are not in standard types
+                            // @ts-ignore
                             advanced: [
                                 { torch },
                                 { focusMode: 'continuous' },
@@ -362,9 +405,21 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 {/* Minimalist Reader View */}
                 <div
                     className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-auto cursor-pointer"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                         // Only capture if we didn't click a button
                         if ((e.target as HTMLElement).tagName !== 'BUTTON' && !(e.target as HTMLElement).closest('button')) {
+                            // Visual feedback for focus
+                            if (navigator.vibrate) navigator.vibrate(20);
+
+                            // Re-trigger hardware focus on tap before capturing
+                            if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
+                                try {
+                                    await videoTrackRef.current.applyConstraints({
+                                        advanced: [{ focusMode: 'continuous' }] as any
+                                    });
+                                } catch (e) { /* ignore */ }
+                            }
+
                             handleCapture();
                         }
                     }}
