@@ -1,5 +1,4 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import Webcam from 'react-webcam';
 import {
     getRecords,
     saveRecord,
@@ -32,14 +31,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [recentRecords, setRecentRecords] = useState<LocationRecord[]>([]);
 
     // --- Functional State ---
-    const webcamRef = useRef<Webcam>(null);
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
     const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm' | 'notifications'>(initialViewMode);
     const [cameraMode, setCameraMode] = useState<'register' | 'scan'>('scan');
     const [isCockpitOpen, setIsCockpitOpen] = useState(false);
-    const [torch, setTorch] = useState(false);
-    const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Registering/Confirmation State
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -170,6 +167,73 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
         }
     }, [torch]);
 
+    // --- Auto Scanning Loop ---
+    useEffect(() => {
+        let scanInterval: NodeJS.Timeout;
+
+        if (viewMode === 'camera' && cameraMode === 'scan' && !loading && !isSendingToRoute) {
+            scanInterval = setInterval(async () => {
+                // Focus re-trigger for auto-scan
+                if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
+                    try {
+                        await videoTrackRef.current.applyConstraints({
+                            advanced: [{ focusMode: 'continuous' }] as any
+                        });
+                    } catch (e) { /* ignore */ }
+                }
+
+                const capture = await captureAndExtract();
+                if (capture) {
+                    const records = await getRecords();
+                    let bestMatch: LocationRecord | null = null;
+                    let highestSim = 0;
+
+                    for (const rec of records) {
+                        const sim = cosineSimilarity(capture.features, rec.featureVector);
+                        if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
+                        if (rec.additionalImages) {
+                            for (const addView of rec.additionalImages) {
+                                const simAdd = cosineSimilarity(capture.features, addView.features);
+                                if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
+                            }
+                        }
+                    }
+
+                    if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
+                        clearInterval(scanInterval);
+                        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+                        // Check usage before finalize
+                        const usage = await checkAndUpdateUsage();
+                        if (usage.allowed) {
+                            await addPointToActiveRoute({
+                                id: bestMatch.id!,
+                                name: bestMatch.name,
+                                lat: bestMatch.lat,
+                                lng: bestMatch.lng,
+                                scannedAt: Date.now(),
+                                notes: bestMatch.notes,
+                                neighborhood: bestMatch.neighborhood,
+                                city: bestMatch.city,
+                                isRecent: true
+                            });
+
+                            setIsSendingToRoute(true);
+                            setTimeout(() => {
+                                setIsSendingToRoute(false);
+                                onNavigateToDailyRoute();
+                            }, 2000);
+                        }
+                    }
+                }
+            }, 1500); // Scan every 1.5s
+        }
+
+        return () => {
+            if (scanInterval) clearInterval(scanInterval);
+        };
+    }, [viewMode, cameraMode, loading, isSendingToRoute, captureAndExtract, checkAndUpdateUsage, onNavigateToDailyRoute]);
+
     const runAiWithAnimation = async (imageSrc: string): Promise<void> => {
         setIsAiAnalyzing(true);
         setAiStatus('Iniciando leitura de IA...');
@@ -210,8 +274,61 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const handleStartCamera = (mode: 'register' | 'scan') => {
         if (navigator.vibrate) navigator.vibrate(50);
         setCameraMode(mode);
-        setViewMode('camera');
+        // Both modes now use native system camera
+        fileInputRef.current?.click();
         setIsCockpitOpen(false);
+    };
+
+    const handleNativeCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setLoading(true);
+        try {
+            // Check usage for free users
+            const usage = await checkAndUpdateUsage();
+            if (!usage.allowed) {
+                if (onShowPaywall) onShowPaywall();
+                else alert("Limite diário de 5 escaneamentos atingido! Faça o upgrade para o plano PRO.");
+                setLoading(false);
+                return;
+            }
+
+            // Convert to base64 for display
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const base64 = event.target?.result as string;
+                if (!base64) return;
+
+                // Load to an image element to extract features
+                const img = new Image();
+                img.onload = async () => {
+                    const features = await extractFeatures(img);
+                    setCapturedImage(base64);
+                    setCapturedFeatures(features);
+                    setViewMode('confirm');
+
+                    if ('geolocation' in navigator) {
+                        navigator.geolocation.getCurrentPosition(
+                            (pos) => {
+                                setLatInput(pos.coords.latitude.toString());
+                                setLngInput(pos.coords.longitude.toString());
+                            },
+                            undefined,
+                            { enableHighAccuracy: true, timeout: 10000 }
+                        );
+                    }
+
+                    await runAiWithAnimation(base64);
+                    setLoading(false);
+                };
+                img.src = base64;
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.error('Native capture failed:', err);
+            setLoading(false);
+        }
     };
 
     const handleCapture = async () => {
@@ -439,36 +556,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                         <span className="material-symbols-outlined">{torch ? 'flash_on' : 'flash_off'}</span>
                     </button>
 
-                    {/* Shutter Button for Register Mode */}
-                    {cameraMode === 'register' && (
-                        <div className="absolute bottom-10 inset-x-0 flex flex-col items-center gap-6 pointer-events-auto">
-                            <button
-                                onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (navigator.vibrate) navigator.vibrate([30, 10, 30]);
-
-                                    if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
-                                        try {
-                                            await videoTrackRef.current.applyConstraints({
-                                                advanced: [{ focusMode: 'continuous' }] as any
-                                            });
-                                        } catch (e) { /* ignore */ }
-                                    }
-                                    handleCapture();
-                                }}
-                                className="size-20 rounded-full border-4 border-white/20 p-1 flex items-center justify-center active:scale-95 transition-all shadow-premium"
-                            >
-                                <div className="size-full rounded-full bg-white shadow-[0_0_25px_rgba(255,255,255,0.4)]"></div>
-                            </button>
-                        </div>
-                    )}
-
                     <div className="absolute bottom-32 left-1/2 -translate-x-1/2 text-center">
                         <p className="text-[10px] font-black uppercase tracking-[0.5em] text-primary mb-2 animate-pulse">
                             {cameraMode === 'register' ? 'Novo Registro' : 'Escanear Endereço'}
                         </p>
                         <p className="text-[14px] font-bold text-white/40">
-                            {cameraMode === 'register' ? 'Pressione o botão para registrar' : 'Toque na tela para ler agora'}
+                            {cameraMode === 'register' ? 'Aguarde a câmera...' : 'Toque na tela para ler agora'}
                         </p>
                     </div>
                 </div>
@@ -844,10 +937,17 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 </div>
             )}
 
-            {/* Notifications View Overlay */}
-            {viewMode === 'notifications' && (
-                <NotificationsView onBack={() => setViewMode('dashboard')} />
-            )}
+            {/* notifications and overlays ... */}
+
+            {/* Hidden Native Camera Input */}
+            <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                ref={fileInputRef}
+                onChange={handleNativeCapture}
+                className="hidden"
+            />
         </div>
     );
 };
