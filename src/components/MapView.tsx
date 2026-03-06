@@ -1,156 +1,89 @@
-import { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet-rotate';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { GoogleMap, useJsApiLoader, DirectionsRenderer, Circle, OverlayView } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
 import { Navigation, Trash2, LocateFixed, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-// ── Custom Leaflet Icons ──
-const createIcon = (color: string, size: number = 32) => L.divIcon({
-    className: '',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    popupAnchor: [0, -size],
-    html: `<div style="
-        position: relative;
-        width:${size}px;height:${size}px;
-        background:${color};
-        border:2px solid white;
-        border-radius:50% 50% 50% 0;
-        transform:rotate(-45deg);
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
-    ">
-        <div style="
-            position: absolute;
-            top: 50%; left: 50%;
-            width: ${size * 0.35}px; height: ${size * 0.35}px;
-            background: white;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
-        "></div>
-    </div>`
-});
-const createNumberedIcon = (color: string, number: number, size: number = 28) => L.divIcon({
-    className: '',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    popupAnchor: [0, -size],
-    html: `<div style="
-        position: relative;
-        width:${size}px;height:${size}px;
-        background:${color};
-        border:2px solid white;
-        border-radius:50% 50% 50% 0;
-        transform:rotate(-45deg);
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
-        display:flex;
-        align-items:center;
-        justify-content:center;
-    ">
-        <div style="transform: rotate(45deg); font-weight: 900; font-size: ${size * 0.45}px; color: white;">${number}</div>
-    </div>`
-});
+const libraries: ("places" | "geometry")[] = ['places', 'geometry'];
 
-const deliveredIcon = createIcon('#22c55e');
-const currentIcon = L.divIcon({
-    className: '',
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
-    html: `<div style="
-        width:22px;height:22px;
-        background:#3b82f6;
-        border:3px solid white;
-        border-radius:50%;
-        box-shadow: 0 0 15px rgba(59,130,246,0.9), inset 0 2px 5px rgba(0,0,0,0.3);
-    "></div>`
-});
+const defaultCenter = { lat: -20.143196, lng: -44.2174965 };
 
-// ── Map Controller (reacts to state changes) ──
-const MapController = ({ center, zoom, routePoints, isNavigating, userLocation }: { center: [number, number] | null, zoom: number | null, routePoints: RoutePoint[], isNavigating: boolean, userLocation: { lat: number, lng: number } | null }) => {
-    const map = useMap();
+const mapContainerStyle = { width: '100%', height: '100%' };
 
-    useEffect(() => {
-        if (isNavigating && userLocation) {
-            // When navigating, tightly track user
-            map.flyTo([userLocation.lat, userLocation.lng], 18, { animate: true, duration: 1.5 });
-            return;
-        }
+// Custom HTML Marker components (replacing Leaflet DivIcons)
+const NumberedMarker = ({ number, color }: { number: number, color: string }) => (
+    <div style={{
+        position: 'absolute',
+        transform: 'translate(-50%, -100%)',
+        width: '28px', height: '28px',
+        background: color,
+        border: '2px solid white',
+        borderRadius: '50% 50% 50% 0',
+        rotate: '-45deg',
+        boxShadow: '2px 2px 10px rgba(0,0,0,0.4)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer'
+    }}>
+        <div style={{ transform: 'rotate(45deg)', fontWeight: 900, fontSize: '13px', color: 'white' }}>{number}</div>
+    </div>
+);
 
-        if (center && zoom) {
-            map.setView(center, zoom);
-        }
-    }, [center, zoom, map, isNavigating, userLocation]);
+const DeliveredMarker = () => (
+    <div style={{
+        position: 'absolute',
+        transform: 'translate(-50%, -100%)',
+        width: '32px', height: '32px',
+        background: '#22c55e',
+        border: '2px solid white',
+        borderRadius: '50% 50% 50% 0',
+        rotate: '-45deg',
+        boxShadow: '2px 2px 10px rgba(0,0,0,0.4)',
+        cursor: 'pointer'
+    }}>
+        <div style={{
+            position: 'absolute',
+            top: '50%', left: '50%',
+            width: '12px', height: '12px',
+            background: 'white',
+            borderRadius: '50%',
+            transform: 'translate(-50%, -50%)',
+            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
+        }}></div>
+    </div>
+);
 
-    useEffect(() => {
-        if (isNavigating) return; // Ignore global bounds when focused on navigating
-        const validPoints = routePoints.filter(p => p.lat !== null && p.lng !== null);
-        if (validPoints.length > 1) {
-            const bounds = L.latLngBounds(validPoints.map(p => [p.lat!, p.lng!]));
-            map.fitBounds(bounds, { padding: [50, 50] });
-        }
-    }, [routePoints.length, map, isNavigating]);
-
-    return null;
-};
-
-const defaultCenter: [number, number] = [-20.143196, -44.2174965];
+const CurrentMarker = () => (
+    <div style={{
+        position: 'absolute',
+        transform: 'translate(-50%, -50%)',
+        width: '22px', height: '22px',
+        background: '#3b82f6',
+        border: '3px solid white',
+        borderRadius: '50%',
+        boxShadow: '0 0 15px rgba(59,130,246,0.9), inset 0 2px 5px rgba(0,0,0,0.3)'
+    }}></div>
+);
 
 export const MapView = () => {
-    const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
+    // Carregamento da API do Google
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+        libraries,
+    });
 
+    const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
+    const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
+
+    const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
 
-    // Replaced static straight lines with real road trajectories via OSRM API
-    const [routeLine, setRouteLine] = useState<[number, number][]>([]);
-
-    useEffect(() => {
-        const waypoints: [number, number][] = [];
-        if (userLocation) {
-            waypoints.push([userLocation.lat, userLocation.lng]);
-        }
-        routePoints.forEach(p => {
-            if (p.id !== 'current' && !p.isDelivered && p.lat !== null && p.lng !== null) {
-                waypoints.push([p.lat, p.lng]);
-            }
-        });
-
-        if (waypoints.length < 2) {
-            setRouteLine([]);
-            return;
-        }
-
-        // Delay to prevent spamming OSRM Public API
-        const timer = setTimeout(async () => {
-            try {
-                // Max 100 waypoints per request in OSRM public API
-                const chunk = waypoints.slice(0, 100);
-                const coordsString = chunk.map(wp => `${wp[1]},${wp[0]}`).join(';');
-                const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`);
-                if (!response.ok) throw new Error('OSRM Fetch failed');
-                const data = await response.json();
-
-                if (data.routes && data.routes[0] && data.routes[0].geometry) {
-                    // OSRM returns [lon, lat], Leaflet wants [lat, lon]
-                    const decoded = data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]] as [number, number]);
-                    setRouteLine(decoded);
-                } else {
-                    setRouteLine(waypoints); // Fallback to straight lines
-                }
-            } catch (err) {
-                console.warn('Real routing failed, using fallback lines.', err);
-                setRouteLine(waypoints);
-            }
-        }, 1200);
-
-        return () => clearTimeout(timer);
-    }, [routePoints, userLocation]);
     const [isNavigating, setIsNavigating] = useState(false);
     const [navigationIndex, setNavigationIndex] = useState(0);
     const [showCelebration, setShowCelebration] = useState(false);
@@ -161,10 +94,8 @@ export const MapView = () => {
     const [sheetExpanded, setSheetExpanded] = useState(false);
     const [undoTimeout, setUndoTimeout] = useState<any>(null);
     const [lastActionPointId, setLastActionPointId] = useState<string | null>(null);
-    const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
-    const [mapZoom, setMapZoom] = useState<number | null>(null);
 
-    // Marker edit panel
+    // Edit Panel State
     const [editingPoint, setEditingPoint] = useState<RoutePoint | null>(null);
     const [editName, setEditName] = useState('');
     const [editNeighborhood, setEditNeighborhood] = useState('');
@@ -173,8 +104,65 @@ export const MapView = () => {
     const [editLng, setEditLng] = useState('');
 
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
     const sheetTouchStartY = useRef<number | null>(null);
+
+    // Auto Pan / Zoom na Navegação Profissional
+    useEffect(() => {
+        if (!mapRef) return;
+        if (isNavigating && userLocation) {
+            mapRef.panTo(userLocation);
+            mapRef.setZoom(18); // Zoom máximo 
+            mapRef.setHeading(mapRef.getHeading() || 0);
+        } else if (!isNavigating && routePoints.length > 0) {
+            const bounds = new window.google.maps.LatLngBounds();
+            routePoints.forEach(p => {
+                if (p.lat !== null && p.lng !== null) bounds.extend({ lat: p.lat, lng: p.lng });
+            });
+            if (userLocation) bounds.extend(userLocation);
+            mapRef.fitBounds(bounds, { bottom: 300 }); // Padding botom pra gaveta
+        }
+    }, [isNavigating, userLocation, mapRef, routePoints.length]);
+
+    // Calcular Directions do Google Maps
+    useEffect(() => {
+        if (!isLoaded || !window.google) return;
+        const waypoints: google.maps.LatLngLiteral[] = [];
+        if (userLocation) {
+            waypoints.push(userLocation);
+        }
+        routePoints.forEach(p => {
+            if (p.id !== 'current' && !p.isDelivered && p.lat !== null && p.lng !== null) {
+                waypoints.push({ lat: p.lat, lng: p.lng });
+            }
+        });
+
+        if (waypoints.length < 2) {
+            setDirectionsResponse(null);
+            return;
+        }
+
+        const directionsService = new window.google.maps.DirectionsService();
+        const origin = waypoints[0];
+        const destination = waypoints[waypoints.length - 1];
+        const waypts = waypoints.slice(1, -1).map(wp => ({ location: wp, stopover: true }));
+
+        directionsService.route(
+            {
+                origin,
+                destination,
+                waypoints: waypts,
+                travelMode: window.google.maps.TravelMode.DRIVING,
+                optimizeWaypoints: false, // Mantem ordem desejada do app
+            },
+            (result, status) => {
+                if (status === window.google.maps.DirectionsStatus.OK && result) {
+                    setDirectionsResponse(result);
+                } else {
+                    console.warn(`Trajeto não encontrado, status: ${status}`);
+                }
+            }
+        );
+    }, [routePoints, userLocation, isLoaded]);
 
     const handleSheetTouchStart = (e: React.TouchEvent) => {
         sheetTouchStartY.current = e.touches[0].clientY;
@@ -194,9 +182,7 @@ export const MapView = () => {
         else if (deltaY > 50) { setSheetExpanded(false); sheetTouchStartY.current = null; }
     };
 
-    const handleSheetTouchEnd = () => {
-        sheetTouchStartY.current = null;
-    };
+    const handleSheetTouchEnd = () => { sheetTouchStartY.current = null; };
 
     const openEditPanel = (p: RoutePoint) => {
         if (p.id === 'current') return;
@@ -214,45 +200,27 @@ export const MapView = () => {
             const lat = parseFloat(editLat);
             const lng = parseFloat(editLng);
             const updated = routePoints.map(p =>
-                p.id === editingPoint.id
-                    ? {
-                        ...p,
-                        name: editName,
-                        neighborhood: editNeighborhood,
-                        notes: editNotes,
-                        lat: isNaN(lat) ? p.lat : lat,
-                        lng: isNaN(lng) ? p.lng : lng
-                    }
-                    : p
+                p.id === editingPoint.id ? { ...p, name: editName, neighborhood: editNeighborhood, notes: editNotes, lat: isNaN(lat) ? p.lat : lat, lng: isNaN(lng) ? p.lng : lng } : p
             );
             await updateActiveRoute(updated);
             setRoutePoints(updated);
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) { console.error(err); }
     };
 
     const handleCloseEdit = () => {
-        // final auto-save before closing
         handleSavePointEdit();
         setEditingPoint(null);
     };
 
     const handleDeletePoint = async (id: string) => {
         if (!confirm("Remover este ponto da rota?")) return;
-        try {
-            const updated = routePoints.filter(p => p.id !== id);
-            await updateActiveRoute(updated);
-            setRoutePoints(updated);
-        } catch (err) {
-            console.error(err);
-        }
+        const updated = routePoints.filter(p => p.id !== id);
+        await updateActiveRoute(updated);
+        setRoutePoints(updated);
     };
 
     useEffect(() => {
         let watchId: number | null = null;
-        let orientationHandler: ((e: DeviceOrientationEvent) => void) | null = null;
-
         if ('geolocation' in navigator) {
             watchId = navigator.geolocation.watchPosition(
                 (pos) => {
@@ -270,14 +238,8 @@ export const MapView = () => {
             );
         }
 
-        // Add compass orientation mapping if possible (Optional rotation sync could be handled here or inside leaflet-rotate)
-
         loadRoute();
-
-        return () => {
-            if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-            if (orientationHandler) window.removeEventListener('deviceorientationabsolute', orientationHandler);
-        };
+        return () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
     }, []);
 
     const loadRoute = async () => {
@@ -286,65 +248,6 @@ export const MapView = () => {
         if (points.length === 0) handleLocateMe(true);
     };
 
-    // Geocode points without coordinates using Nominatim
-    const geocodedIdsRef = useRef<Set<string>>(new Set());
-
-    useEffect(() => {
-        const pointsToGeocode = routePoints.filter(p =>
-            (p.lat === null || p.lng === null || p.lat === 0 || p.lng === 0) &&
-            p.name &&
-            p.id !== 'current' &&
-            !geocodedIdsRef.current.has(p.id)
-        );
-
-        if (pointsToGeocode.length === 0) return;
-
-        // Mark as being processed to avoid duplicate requests
-        pointsToGeocode.forEach(p => geocodedIdsRef.current.add(p.id));
-
-        const geocodeSequentially = async () => {
-            let updated = false;
-            let currentPoints = [...routePoints];
-
-            for (let i = 0; i < pointsToGeocode.length; i++) {
-                const p = pointsToGeocode[i];
-                const query = [p.name, p.neighborhood, p.city].filter(Boolean).join(', ');
-                try {
-                    // Add delay between requests to respect Nominatim rate limits (1 req/sec)
-                    if (i > 0) await new Promise(r => setTimeout(r, 1100));
-
-                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=br`);
-                    const data = await res.json();
-                    if (data && data.length > 0) {
-                        const lat = parseFloat(data[0].lat);
-                        const lng = parseFloat(data[0].lon);
-                        currentPoints = currentPoints.map(item =>
-                            item.id === p.id ? { ...item, lat, lng } : item
-                        );
-                        updated = true;
-                    }
-                } catch (err) {
-                    console.warn('Geocoding failed for', query, err);
-                    // Remove from set so it can be retried
-                    geocodedIdsRef.current.delete(p.id);
-                }
-            }
-
-            if (updated) {
-                setRoutePoints(currentPoints);
-                // Persist geocoded coordinates to DB
-                try {
-                    await updateActiveRoute(currentPoints.filter(p => p.id !== 'current'));
-                } catch (err) {
-                    console.warn('Failed to persist geocoded coordinates:', err);
-                }
-            }
-        };
-
-        geocodeSequentially();
-    }, [routePoints]);
-
-
     const handleLocateMe = (silent = false) => {
         if ('geolocation' in navigator) {
             navigator.geolocation.getCurrentPosition(
@@ -352,17 +255,9 @@ export const MapView = () => {
                     const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                     setUserLocation(coords);
                     setAccuracy(pos.coords.accuracy);
-                    setMapCenter([coords.lat, coords.lng]);
-                    setMapZoom(17);
-
-                    setRoutePoints(prev => {
-                        const filtered = prev.filter(p => p.id !== 'current');
-                        return [...filtered, { id: 'current', name: 'Você está aqui', ...coords, scannedAt: Date.now() }];
-                    });
+                    if (mapRef) { mapRef.panTo(coords); mapRef.setZoom(17); }
                 },
-                () => {
-                    if (!silent) alert('GPS indisponível.');
-                },
+                () => { if (!silent) alert('GPS indisponível.'); },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }
@@ -374,7 +269,6 @@ export const MapView = () => {
             setRoutePoints([]);
         }
     };
-
 
     const handleCompleteStop = async (delivered: boolean) => {
         const dests = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
@@ -399,15 +293,10 @@ export const MapView = () => {
             } else {
                 setIsNavigating(false);
                 setShowCelebration(true);
-                confetti({
-                    particleCount: 150,
-                    spread: 70,
-                    origin: { y: 0.6 }
-                });
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
                 setTimeout(() => setShowCelebration(false), 5000);
             }
         }, 3000);
-
         setUndoTimeout(timeout);
     };
 
@@ -415,7 +304,6 @@ export const MapView = () => {
         if (undoTimeout) {
             clearTimeout(undoTimeout);
             setUndoTimeout(null);
-
             if (lastActionPointId) {
                 setRoutePoints(prev => prev.map(p => p.id === lastActionPointId ? { ...p, isDelivered: false } : p));
             }
@@ -423,91 +311,97 @@ export const MapView = () => {
         }
     };
 
-    // Search using Nominatim
+    // Google Places Autocomplete Service Search
     useEffect(() => {
         if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-
-        if (searchQuery.trim().length > 2) {
-            searchTimeoutRef.current = setTimeout(async () => {
+        if (searchQuery.trim().length > 2 && isLoaded && window.google) {
+            searchTimeoutRef.current = setTimeout(() => {
                 setIsSearching(true);
-                try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5&addressdetails=1`);
-                    const data = await res.json();
-                    setSearchResults(data || []);
-                } catch {
-                    setSearchResults([]);
-                } finally {
+                const service = new window.google.maps.places.AutocompleteService();
+                service.getPlacePredictions({ input: searchQuery, componentRestrictions: { country: 'br' } }, (predictions, status) => {
                     setIsSearching(false);
-                }
+                    if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
+                        setSearchResults(predictions);
+                    } else {
+                        setSearchResults([]);
+                    }
+                });
             }, 500);
         } else {
             setSearchResults([]);
         }
+        return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+    }, [searchQuery, isLoaded]);
 
-        return () => {
-            if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-        };
-    }, [searchQuery]);
-
-    const selectSearchResult = async (result: any) => {
-        const lat = parseFloat(result.lat);
-        const lng = parseFloat(result.lon);
-        const addr = result.address || {};
-        const newPoint: RoutePoint = {
-            id: Date.now().toString(),
-            name: result.display_name?.split(',')[0] || result.name || 'Endereço',
-            lat,
-            lng,
-            scannedAt: Date.now(),
-            neighborhood: addr.suburb || addr.neighbourhood || '',
-            city: addr.city || addr.town || addr.village || '',
-        };
-        const updated = [...routePoints.filter(p => p.id !== 'current'), newPoint];
-        await updateActiveRoute(updated);
-        setRoutePoints([...updated, ...(userLocation ? [{ id: 'current', name: 'Você está aqui', ...userLocation, scannedAt: Date.now() }] : [])]);
-        setSearchQuery('');
-        setSearchResults([]);
-        setMapCenter([lat, lng]);
-        setMapZoom(15);
+    const selectSearchResult = async (prediction: google.maps.places.AutocompletePrediction) => {
+        if (!window.google || !mapRef) return;
+        const placesService = new window.google.maps.places.PlacesService(mapRef);
+        placesService.getDetails({ placeId: prediction.place_id }, async (place, status) => {
+            if (status === window.google.maps.places.PlacesServiceStatus.OK && place && place.geometry && place.geometry.location) {
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                const newPoint: RoutePoint = {
+                    id: Date.now().toString(),
+                    name: place.name || prediction.structured_formatting.main_text || 'Endereço',
+                    lat, lng, scannedAt: Date.now(),
+                    neighborhood: prediction.structured_formatting.secondary_text || '',
+                };
+                const updated = [...routePoints.filter(p => p.id !== 'current'), newPoint];
+                await updateActiveRoute(updated);
+                setRoutePoints([...updated, ...(userLocation ? [{ id: 'current', name: 'Você está aqui', ...userLocation, scannedAt: Date.now() }] : [])]);
+                setSearchQuery('');
+                setSearchResults([]);
+                mapRef.panTo({ lat, lng });
+                mapRef.setZoom(16);
+            } else {
+                alert("Não foi possível buscar as coordenadas deste endereço.");
+            }
+        });
     };
 
-    const initialCenter: [number, number] = userLocation ? [userLocation.lat, userLocation.lng] : defaultCenter;
+    const onLoadMap = useCallback((map: google.maps.Map) => {
+        setMapRef(map);
+    }, []);
+
+    const onUnmountMap = useCallback(() => {
+        setMapRef(null);
+    }, []);
 
     return (
-        <div className="relative w-full h-full bg-black overflow-hidden">
+        <div className="relative w-full h-full bg-black overflow-hidden flex flex-col">
             {/* SEARCH HUD */}
             <div className={`absolute top-10 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-lg px-6 transition-all duration-700 ${isNavigating ? '-translate-y-32' : ''}`}>
                 <div className="relative group">
-                    <form onSubmit={e => e.preventDefault()} className="relative bg-white border-2 border-zinc-200 rounded-[2rem] p-4 flex items-center gap-4 shadow-[0_20px_40px_rgba(0,0,0,0.1)] focus-within:border-blue-500">
-                        <Search size={20} className="text-zinc-400 ml-2" />
+                    <form onSubmit={e => e.preventDefault()} className="relative bg-white/90 backdrop-blur-md border border-zinc-200/50 rounded-[2rem] p-4 flex items-center gap-4 shadow-[0_20px_40px_rgba(0,0,0,0.1)] focus-within:border-blue-500">
+                        <Search size={20} className="text-zinc-500 ml-2" />
                         <input
-                            placeholder="Pesquisar endereço..."
-                            className="bg-transparent flex-1 outline-none text-zinc-900 text-sm font-bold placeholder:text-zinc-400"
+                            placeholder="Pesquisar endereço com Google..."
+                            className="bg-transparent flex-1 outline-none text-zinc-900 text-sm font-bold placeholder:text-zinc-500"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                         />
                         {isSearching && <Loader2 size={18} className="animate-spin text-blue-500" />}
                         {searchQuery && (
-                            <button type="button" onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="p-2 hover:bg-zinc-100 rounded-full text-zinc-400">
+                            <button type="button" onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="p-2 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all">
                                 <X size={16} />
                             </button>
                         )}
                     </form>
                 </div>
                 {searchResults.length > 0 && (
-                    <div className="mt-4 bg-white border border-zinc-100 rounded-[2.5rem] overflow-hidden shadow-2xl p-3 flex flex-col gap-1 max-h-[60vh] overflow-y-auto">
-                        {searchResults.map((res: any) => (
+                    <div className="mt-4 bg-white/95 backdrop-blur-xl border border-zinc-100 rounded-[2.5rem] overflow-hidden shadow-2xl p-3 flex flex-col gap-1 max-h-[60vh] overflow-y-auto">
+                        {searchResults.map((res: google.maps.places.AutocompletePrediction) => (
                             <div key={res.place_id} className="flex gap-2">
                                 <button
                                     onClick={() => selectSearchResult(res)}
-                                    className="flex-1 flex items-center gap-4 p-5 hover:bg-zinc-50 rounded-[1.8rem] transition-all text-left"
+                                    className="flex-1 flex items-center gap-4 p-5 hover:bg-zinc-100 rounded-[1.8rem] transition-all text-left"
                                 >
-                                    <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
-                                        <MapPin size={18} className="text-zinc-400" />
+                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                        <MapPin size={18} />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[12px] font-black text-zinc-900 truncate">{res.display_name?.split(',')[0]}</p>
-                                        <p className="text-[9px] text-zinc-500 truncate">{res.display_name?.split(',').slice(1).join(',')}</p>
+                                        <p className="text-[12px] font-black text-zinc-900 truncate">{res.structured_formatting.main_text}</p>
+                                        <p className="text-[9px] text-zinc-500 truncate mt-1">{res.structured_formatting.secondary_text}</p>
                                     </div>
                                 </button>
                                 <button
@@ -522,85 +416,97 @@ export const MapView = () => {
                 )}
             </div>
 
-            {/* LEAFLET MAP */}
-            <MapContainer
-                center={initialCenter}
-                zoom={14}
-                style={{ width: '100%', height: '100%' }}
-                zoomControl={false}
-                attributionControl={false}
-                {...({ rotate: true, touchRotate: true, rotateControl: { closeOnZeroBearing: false, position: 'bottomright' }, bearing: 0 } as any)}
-            >
-                {/* Light themed OSM basemap (Positron) */}
-                <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                />
-                <MapController center={mapCenter} zoom={mapZoom} routePoints={routePoints} isNavigating={isNavigating} userLocation={userLocation} />
-
-                {routePoints.map((p, i) => {
-                    const isCurrent = p.id === 'current';
-                    // The idx logic to determine the stop number for numbered pins
-                    // We only number pending active stops relative to their execution order
-                    // `routePoints` includes delivered points + current point. 
-                    // Non-delivered points (excluding current) are what we route.
-                    const pendingList = routePoints.filter(rp => rp.id !== 'current' && !rp.isDelivered);
-                    const stopIndex = pendingList.findIndex(rp => rp.id === p.id);
-                    const markerIcon = isCurrent ? currentIcon : p.isDelivered ? deliveredIcon : createNumberedIcon('#3b82f6', stopIndex + 1);
-
-                    return p.lat !== null && p.lng !== null && (
-                        <Marker
-                            key={`${p.id}-${i}`}
-                            position={[p.lat, p.lng]}
-                            icon={markerIcon}
-                            eventHandlers={{ click: () => openEditPanel(p) }}
-                        >
-                            <Popup>
-                                <div className="text-xs font-bold">{p.name}</div>
-                                {p.neighborhood && <div className="text-[10px] text-gray-500">{p.neighborhood}</div>}
-                            </Popup>
-                        </Marker>
-                    );
-                })}
-
-                {userLocation && accuracy && (
-                    <Circle
-                        center={[userLocation.lat, userLocation.lng]}
-                        radius={accuracy}
-                        pathOptions={{
-                            fillColor: '#3b82f6',
-                            fillOpacity: 0.1,
-                            color: '#3b82f6',
-                            weight: 1,
-                            opacity: 0.3
+            {/* GOOGLE MAPS INSTANCE */}
+            <div className="absolute inset-0 z-0">
+                {!isLoaded ? (
+                    <div className="w-full h-full flex items-center justify-center bg-zinc-50">
+                        <Loader2 className="animate-spin text-blue-500 w-10 h-10" />
+                    </div>
+                ) : (
+                    <GoogleMap
+                        mapContainerStyle={mapContainerStyle}
+                        center={defaultCenter}
+                        zoom={14}
+                        onLoad={onLoadMap}
+                        onUnmount={onUnmountMap}
+                        options={{
+                            disableDefaultUI: true,
+                            gestureHandling: 'greedy',
+                            tilt: isNavigating ? 45 : 0,
+                            mapId: import.meta.env.VITE_GOOGLE_MAPS_ID || undefined,
+                            styles: [
+                                {
+                                    featureType: 'poi',
+                                    stylers: [{ visibility: 'off' }]
+                                }
+                            ]
                         }}
-                    />
-                )}
+                    >
+                        {/* Rendering Trajetories as Real Routes */}
+                        {directionsResponse && (
+                            <DirectionsRenderer
+                                options={{
+                                    directions: directionsResponse,
+                                    suppressMarkers: true,
+                                    polylineOptions: {
+                                        strokeColor: '#2563eb',
+                                        strokeWeight: 6,
+                                        strokeOpacity: 0.9,
+                                        zIndex: 50
+                                    }
+                                }}
+                            />
+                        )}
 
-                {routeLine.length > 0 && (
-                    <Polyline
-                        positions={routeLine}
-                        pathOptions={{
-                            color: '#2563eb', // Emphasized blue color for active path
-                            weight: 6,
-                            opacity: 0.9,
-                            dashArray: '10, 10', // Styling similar to a planned route path
-                            lineCap: 'round',
-                            lineJoin: 'round'
-                        }}
-                    />
+                        {/* Rendering Custom HTML Markers via OverlayView */}
+                        {routePoints.map((p, i) => {
+                            if (p.lat === null || p.lng === null) return null;
+                            const isCurrent = p.id === 'current';
+
+                            const pendingList = routePoints.filter(rp => rp.id !== 'current' && !rp.isDelivered);
+                            const stopIndex = pendingList.findIndex(rp => rp.id === p.id);
+
+                            return (
+                                <OverlayView
+                                    key={`${p.id}-${i}`}
+                                    position={{ lat: p.lat, lng: p.lng }}
+                                    mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                                >
+                                    <div onClick={() => openEditPanel(p)} style={{ cursor: 'pointer' }}>
+                                        {isCurrent ? <CurrentMarker /> : p.isDelivered ? <DeliveredMarker /> : <NumberedMarker number={stopIndex + 1} color="#3b82f6" />}
+                                    </div>
+                                </OverlayView>
+                            );
+                        })}
+
+                        {/* Rendering GPS Accuracy Circle */}
+                        {userLocation && accuracy && (
+                            <Circle
+                                center={userLocation}
+                                radius={accuracy}
+                                options={{
+                                    fillColor: '#3b82f6',
+                                    fillOpacity: 0.1,
+                                    strokeColor: '#3b82f6',
+                                    strokeWeight: 1,
+                                    strokeOpacity: 0.3,
+                                }}
+                            />
+                        )}
+                    </GoogleMap>
                 )}
-            </MapContainer>
+            </div>
 
             {/* Float Actions */}
             <div className="absolute top-40 right-6 z-[1000] flex flex-col gap-3">
-                <button onClick={() => setIsNavigating(prev => !prev)} className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-white border border-zinc-200 shadow-xl transition-all ${isNavigating ? 'text-blue-600' : 'text-zinc-500'}`}>
+                <button onClick={() => setIsNavigating(prev => !prev)} className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-white border border-zinc-200 shadow-xl transition-all ${isNavigating ? 'text-blue-600 bg-blue-50' : 'text-zinc-500'}`}>
                     <Navigation size={24} />
                 </button>
-                <button onClick={() => handleLocateMe()} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-emerald-600 flex items-center justify-center shadow-xl">
+                <button onClick={() => handleLocateMe(false)} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-emerald-600 flex items-center justify-center shadow-xl">
                     <LocateFixed size={24} />
                 </button>
                 {routePoints.filter(p => p.id !== 'current').length > 0 && (
-                    <button onClick={handleClear} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-red-400 flex items-center justify-center shadow-xl">
+                    <button onClick={handleClear} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-red-500 flex items-center justify-center shadow-xl">
                         <Trash2 size={24} />
                     </button>
                 )}
@@ -626,30 +532,18 @@ export const MapView = () => {
                                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Bairro</label>
                                     <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 focus:border-blue-500 outline-none" placeholder="Bairro..." />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Latitude GPS</label>
-                                        <input value={editLat} onChange={e => setEditLat(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 text-xs font-mono" placeholder="-20.000..." />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Longitude GPS</label>
-                                        <input value={editLng} onChange={e => setEditLng(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 text-xs font-mono" placeholder="-44.000..." />
-                                    </div>
-                                </div>
                                 <button
                                     onClick={() => {
                                         if ('geolocation' in navigator) {
                                             navigator.geolocation.getCurrentPosition(pos => {
                                                 setEditLat(String(pos.coords.latitude));
                                                 setEditLng(String(pos.coords.longitude));
-                                                // We don't save immediately here as the handler expects state changes to flush first, 
-                                                // but the user will blur or close later which will save it. You could handle auto-save directly too.
                                             });
                                         }
                                     }}
                                     className="w-full bg-blue-50 text-blue-600 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-blue-100 active:scale-95 transition-all shadow-sm shadow-blue-500/10"
                                 >
-                                    <LocateFixed size={14} /> Sincronizar GPS Atual
+                                    <LocateFixed size={14} /> Sincronizar Coodenadas pelo GPS
                                 </button>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Observações Adicionais</label>

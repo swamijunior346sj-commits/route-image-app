@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -16,8 +16,7 @@ export const analyzeAddressImage = async (base64Image: string): Promise<GeminiAd
         return null;
     }
 
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
 
     // Remove the data:image/jpeg;base64, part if present
     const base64Data = base64Image.split(',')[1] || base64Image;
@@ -37,23 +36,22 @@ export const analyzeAddressImage = async (base64Image: string): Promise<GeminiAd
     `;
 
     try {
-        const result = await model.generateContent([
-            prompt,
-            {
-                inlineData: {
-                    data: base64Data,
-                    mimeType: "image/jpeg",
-                },
-            },
-        ]);
+        const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: [
+                prompt,
+                { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
+            ]
+        });
 
-        const response = await result.response;
-        const text = response.text();
+        const text = response.text;
 
         // Try to parse JSON from the text
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+        if (text) {
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
+            }
         }
         return null;
     } catch (error) {
