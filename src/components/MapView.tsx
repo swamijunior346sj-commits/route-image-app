@@ -86,7 +86,6 @@ export const MapView = () => {
     const [showCheckAnimation, setShowCheckAnimation] = useState(false);
     const [showRouteConfirmation, setShowRouteConfirmation] = useState(false);
     const [manifestExpanded, setManifestExpanded] = useState(false);
-    const [editExpanded, setEditExpanded] = useState(false);
     const [sheetExpanded, setSheetExpanded] = useState(false);
     const [undoTimeout, setUndoTimeout] = useState<any>(null);
     const [lastActionPointId, setLastActionPointId] = useState<string | null>(null);
@@ -107,13 +106,6 @@ export const MapView = () => {
 
     const handleSheetTouchStart = (e: React.TouchEvent) => {
         sheetTouchStartY.current = e.touches[0].clientY;
-    };
-
-    const handleEditSheetTouchMove = (e: React.TouchEvent) => {
-        if (!sheetTouchStartY.current) return;
-        const deltaY = e.touches[0].clientY - sheetTouchStartY.current;
-        if (deltaY < -50) { setEditExpanded(true); sheetTouchStartY.current = null; }
-        else if (deltaY > 50) { setEditExpanded(false); sheetTouchStartY.current = null; }
     };
 
     const handleManifestSheetTouchMove = (e: React.TouchEvent) => {
@@ -156,10 +148,15 @@ export const MapView = () => {
             );
             await updateActiveRoute(updated);
             setRoutePoints(updated);
-            setEditingPoint(null);
         } catch (err) {
             console.error(err);
         }
+    };
+
+    const handleCloseEdit = () => {
+        // final auto-save before closing
+        handleSavePointEdit();
+        setEditingPoint(null);
     };
 
     const handleDeletePoint = async (id: string) => {
@@ -512,40 +509,34 @@ export const MapView = () => {
                 )}
             </div>
 
-            {/* EDIT PANEL (Standardized Bottom Sheet) */}
+            {/* EDIT PANEL (Independent Pop-up) */}
             {editingPoint && (
-                <div className="absolute inset-0 z-[1100] flex flex-col justify-end bg-black/40 backdrop-blur-sm pointer-events-none">
-                    <div className={`w-full bg-white border-t-2 border-zinc-100 rounded-t-[3.5rem] shadow-2xl transition-all duration-500 pointer-events-auto ${editExpanded ? 'h-[85vh]' : 'h-[500px]'}`}>
-                        <div
-                            onClick={() => setEditExpanded(!editExpanded)}
-                            onTouchStart={handleSheetTouchStart}
-                            onTouchMove={handleEditSheetTouchMove}
-                            onTouchEnd={handleSheetTouchEnd}
-                            className="py-4 flex flex-col items-center gap-1 cursor-pointer"
-                        >
-                            <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
-                            <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${editExpanded ? 'rotate-180' : ''}`} />
-                        </div>
+                <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={handleCloseEdit}></div>
+                    <div className="w-full max-w-xl bg-white rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.4)] transition-all duration-500 relative z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 fade-in duration-300">
+                        <div className="px-8 pb-10 pt-8 h-full overflow-y-auto custom-scrollbar">
+                            <div className="flex items-center justify-between mb-8">
+                                <h3 className="text-2xl font-black italic uppercase text-zinc-900">Modificar Ponto</h3>
+                                <button onClick={handleCloseEdit} className="p-3 bg-zinc-100 rounded-full text-zinc-500 hover:text-zinc-900 transition-all"><X size={20} /></button>
+                            </div>
 
-                        <div className="px-8 pb-12 h-full overflow-y-auto custom-scrollbar">
-                            <h3 className="text-2xl font-black italic uppercase text-zinc-900 mb-6">Modificar Ponto</h3>
                             <div className="space-y-5 mb-8">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Identificação</label>
-                                    <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 font-bold focus:border-blue-500 outline-none" placeholder="Nome..." />
+                                    <input value={editName} onChange={e => setEditName(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 font-bold focus:border-blue-500 outline-none" placeholder="Nome..." />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Bairro</label>
-                                    <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 focus:border-blue-500 outline-none" placeholder="Bairro..." />
+                                    <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 focus:border-blue-500 outline-none" placeholder="Bairro..." />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Latitude GPS</label>
-                                        <input value={editLat} onChange={e => setEditLat(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 text-xs font-mono" placeholder="-20.000..." />
+                                        <input value={editLat} onChange={e => setEditLat(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 text-xs font-mono" placeholder="-20.000..." />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Longitude GPS</label>
-                                        <input value={editLng} onChange={e => setEditLng(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 text-xs font-mono" placeholder="-44.000..." />
+                                        <input value={editLng} onChange={e => setEditLng(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 text-xs font-mono" placeholder="-44.000..." />
                                     </div>
                                 </div>
                                 <button
@@ -554,6 +545,8 @@ export const MapView = () => {
                                             navigator.geolocation.getCurrentPosition(pos => {
                                                 setEditLat(String(pos.coords.latitude));
                                                 setEditLng(String(pos.coords.longitude));
+                                                // We don't save immediately here as the handler expects state changes to flush first, 
+                                                // but the user will blur or close later which will save it. You could handle auto-save directly too.
                                             });
                                         }
                                     }}
@@ -563,12 +556,11 @@ export const MapView = () => {
                                 </button>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Observações Adicionais</label>
-                                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 h-28 text-sm outline-none focus:border-blue-500" placeholder="Informações extras..." />
+                                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 h-28 text-sm outline-none focus:border-blue-500" placeholder="Informações extras..." />
                                 </div>
                             </div>
                             <div className="flex flex-col gap-3">
-                                <button onClick={handleSavePointEdit} className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-xl shadow-blue-500/20 active:scale-95 transition-all">Salvar Alterações</button>
-                                <button onClick={() => { setEditingPoint(null); setEditExpanded(false); }} className="w-full py-4 text-zinc-400 font-extrabold uppercase text-[10px] tracking-[0.3em]">Cancelar Operação</button>
+                                <button onClick={handleCloseEdit} className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-xl shadow-blue-500/20 active:scale-95 transition-all">Pronto</button>
                             </div>
                         </div>
                     </div>

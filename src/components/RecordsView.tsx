@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
-import { Download, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, FileText, FileSpreadsheet, FileJson, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, FileText, FileSpreadsheet, FileJson, ChevronDown } from 'lucide-react';
 import { exportAsCSV, exportAsJSON, exportAsXLS, exportAsPDF } from '../services/importExport';
 import { extractFeatures } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
