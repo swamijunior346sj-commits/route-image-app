@@ -8,33 +8,44 @@ import { Navigation, Trash2, LocateFixed, Search, X, CheckCircle2, Plus, MapPin,
 import confetti from 'canvas-confetti';
 
 // ── Custom Leaflet Icons ──
-const createIcon = (color: string, size: number = 28) => L.divIcon({
+const createIcon = (color: string, size: number = 32) => L.divIcon({
     className: '',
     iconSize: [size, size],
     iconAnchor: [size / 2, size],
     popupAnchor: [0, -size],
     html: `<div style="
+        position: relative;
         width:${size}px;height:${size}px;
         background:${color};
         border:2px solid white;
         border-radius:50% 50% 50% 0;
         transform:rotate(-45deg);
-        box-shadow:0 4px 12px rgba(0,0,0,0.3);
-    "></div>`
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
+    ">
+        <div style="
+            position: absolute;
+            top: 50%; left: 50%;
+            width: ${size * 0.35}px; height: ${size * 0.35}px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        "></div>
+    </div>`
 });
 
 const routeIcon = createIcon('#3b82f6');
 const deliveredIcon = createIcon('#22c55e');
 const currentIcon = L.divIcon({
     className: '',
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
     html: `<div style="
-        width:18px;height:18px;
+        width:22px;height:22px;
         background:#3b82f6;
         border:3px solid white;
         border-radius:50%;
-        box-shadow:0 0 12px rgba(59,130,246,0.8);
+        box-shadow: 0 0 15px rgba(59,130,246,0.9), inset 0 2px 5px rgba(0,0,0,0.3);
     "></div>`
 });
 

@@ -180,7 +180,6 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
         setEditNotes(record.notes || '');
         setEditNeighborhood(record.neighborhood || '');
         setEditCity(record.city || '');
-        setSheetExpandedEdit(false); // Reset to collapsed state
     };
 
     const openCreate = () => {
@@ -207,7 +206,6 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
         setEditNotes('');
         setEditNeighborhood('');
         setEditCity('');
-        setSheetExpandedEdit(false); // Reset to collapsed state
     };
 
     const handleSaveEdit = async () => {
@@ -404,7 +402,7 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                             <div className="flex items-center gap-3">
                                 <button onClick={handleSendToMap} className="flex flex-col items-center justify-center gap-1 px-3 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl hover:bg-emerald-500/20 transition-all shadow-[0_0_20px_rgba(16,185,129,0.1)]">
                                     <MapPinned size={20} />
-                                    <span className="text-[8px] font-black uppercase tracking-wider">Roteirizar</span>
+                                    <span className="text-[8px] font-black uppercase tracking-wider text-center">Enviar<br />ao Mapa</span>
                                 </button>
                                 <button onClick={toggleSelectAll} className="flex flex-col items-center justify-center gap-1 px-3 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-2xl hover:bg-blue-500/20 transition-all">
                                     {selectedIds.size === displayRecords.length ? <CheckSquare size={20} /> : <Square size={20} />}
