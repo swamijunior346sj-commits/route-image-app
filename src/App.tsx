@@ -21,7 +21,7 @@ import { ScannerView } from './components/ScannerView';
 import { MapView } from './components/MapView';
 import { RecordsView } from './components/RecordsView';
 import { DailyRouteView } from './components/DailyRouteView';
-import { BottomNav } from './components/BottomNav';
+import { SideNav } from './components/SideNav';
 import { AuthView } from './components/AuthView';
 import { ProfileView } from './components/ProfileView';
 import { loadModel } from './services/imageProcessing';
@@ -42,6 +42,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [scannerInitialMode, setScannerInitialMode] = useState<'dashboard' | 'camera'>('dashboard');
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [isSideNavOpen, setIsSideNavOpen] = useState(false);
 
   // Use localStorage to pretend we have a real session active
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -191,6 +192,15 @@ export default function App() {
 
   return (
     <div className="w-full h-screen bg-black text-white overflow-hidden flex flex-col font-sans">
+
+      {/* Top Left Navigation Menu Toggle */}
+      <button
+        onClick={() => setIsSideNavOpen(true)}
+        className="absolute top-6 left-6 z-[100] size-12 glass-card rounded-xl flex items-center justify-center shadow-lg border-white/10 active:scale-95 transition-all group"
+      >
+        <span className="material-symbols-outlined !text-[28px] text-white/90">menu</span>
+      </button>
+
       <div className="flex-1 w-full h-full relative">
         {currentTab === 'scanner' && (
           <ScannerView
@@ -241,7 +251,15 @@ export default function App() {
           />
         )}
       </div>
-      <BottomNav currentTab={currentTab} setTab={changeTab} />
+
+      <SideNav
+        isOpen={isSideNavOpen}
+        onClose={() => setIsSideNavOpen(false)}
+        currentTab={currentTab}
+        setTab={changeTab}
+        userEmail={user?.email}
+        isPro={settings?.subscriptionPlan !== 'free'}
+      />
 
       {isSubscriptionOpen && (
         <SubscriptionView

@@ -37,24 +37,18 @@ const SILVER_MAP_STYLE = [
 
 // Custom Marker Components
 const NumberedMarker = ({ number, color }: { number: number, color: string }) => (
-    <div className="relative group cursor-pointer" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
-        <div className="h-9 px-3 rounded-xl border-[2px] border-white/20 shadow-2xl flex items-center justify-center gap-1.5 relative z-10 active:scale-95 transition-transform backdrop-blur-md" style={{ backgroundColor: `${color}E6` }}>
-            <span className="material-symbols-outlined text-white/90 !text-[16px]" style={{ fontVariationSettings: "'wght' 300" }}>package_2</span>
-            <span className="text-white font-black text-xs">{number}</span>
+    <div className="relative cursor-pointer" style={{ position: 'absolute', transform: 'translate(-50%, -50%)' }}>
+        <div className="size-6 rounded-full border-[1.5px] border-white shadow-md flex items-center justify-center relative z-10 backdrop-blur-md" style={{ backgroundColor: `${color}E6` }}>
+            <span className="text-white font-black text-[11px] leading-none tracking-tighter" style={{ marginTop: '1px' }}>{number}</span>
         </div>
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 z-0" style={{ backgroundColor: `${color}E6`, borderRight: '2px solid rgba(255,255,255,0.1)', borderBottom: '2px solid rgba(255,255,255,0.1)' }}></div>
     </div>
 );
 
 const DeliveredMarker = () => (
-    <div className="relative group" style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
-        <div className="h-9 px-3 rounded-xl bg-emerald-500/80 border-[2px] border-white/20 shadow-xl flex items-center justify-center relative z-10 transition-all scale-95 backdrop-blur-md">
-            <span className="material-symbols-outlined text-white/90 !text-[18px]" style={{ fontVariationSettings: "'wght' 300" }}>package_2</span>
-            <div className="absolute -top-1.5 -right-1.5 size-4 bg-emerald-400 rounded-full flex items-center justify-center border-[2px] border-[#0F172A] shadow-lg">
-                <span className="material-symbols-outlined text-[#0F172A] !text-[10px] font-black">check</span>
-            </div>
+    <div className="relative group" style={{ position: 'absolute', transform: 'translate(-50%, -50%)' }}>
+        <div className="size-4 rounded-full bg-slate-500/80 border-[1px] border-white/20 flex items-center justify-center relative z-10 backdrop-blur-md">
+            <span className="material-symbols-outlined text-white/80 !text-[10px] font-black">check</span>
         </div>
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-emerald-500/80 z-0 border-r-2 border-b-2 border-white/10"></div>
     </div>
 );
 
@@ -63,25 +57,20 @@ const CurrentMarker = () => (
         <div className="relative flex items-center justify-center">
             {/* The Beam (Farol Aceso) - Animate glow */}
             <div
-                className="absolute w-[80px] h-[80px] bg-gradient-to-t from-primary/30 to-transparent animate-pulse"
+                className="absolute w-[40px] h-[40px] bg-gradient-to-t from-primary/30 to-transparent animate-pulse"
                 style={{
-                    clipPath: 'polygon(50% 100%, 10% 0%, 90% 0%)',
+                    clipPath: 'polygon(50% 100%, 15% 0%, 85% 0%)',
                     transform: 'translateY(-40%)',
-                    filter: 'blur(8px)',
-                    opacity: 0.6
+                    filter: 'blur(4px)',
+                    opacity: 0.8
                 }}
             />
             {/* Pulsing Outer Halo */}
-            <div className="absolute inset-0 size-8 bg-primary/20 rounded-full animate-ping scale-150"></div>
+            <div className="absolute inset-0 size-6 bg-primary/20 rounded-full animate-ping scale-[1.2]"></div>
 
             {/* Driver "Blue Bullet" Dot */}
-            <div className="relative size-6 bg-primary rounded-full border-[3px] border-white shadow-[0_0_20px_rgba(59,130,246,0.8)] z-10 overflow-hidden flex items-center justify-center">
-                {/* Visual Glass Refraction effect */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent"></div>
+            <div className="relative size-4 bg-primary rounded-full border-[2px] border-white shadow-[0_0_10px_rgba(59,130,246,0.8)] z-10 flex items-center justify-center">
             </div>
-
-            {/* Internal Core Shine */}
-            <div className="absolute size-2 bg-white rounded-full z-20 shadow-[0_0_10px_white]"></div>
         </div>
     </div>
 );
@@ -208,6 +197,14 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
         await updateActiveRoute(updated);
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#3B82F6', '#60A5FA', '#FFFFFF'] });
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    };
+
+    const handleNotDelivered = async (pointId: string) => {
+        // Marcamos como entregue para remover da lista pendente, mas com uma tag de falha
+        const updated = route.map(p => p.id === pointId ? { ...p, isDelivered: true, status: 'FAILED' } as any : p);
+        setRoute(updated);
+        await updateActiveRoute(updated);
+        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
     };
 
     const handleClearRoute = async () => {
@@ -421,51 +418,79 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
 
             {/* Navigation HUD */}
             {activeTab === 'map' && activePoint && isNavigating && !isHudMinimized && (
-                <div className="absolute bottom-56 inset-x-6 z-20 animate-slide-up">
-                    <div className="glass-card rounded-[2.5rem] p-6 shadow-2xl border-white/10 relative overflow-hidden group">
-                        <button onClick={() => setIsHudMinimized(true)} className="absolute top-6 right-6 z-20 text-slate-500 hover:text-white transition-colors">
-                            <span className="material-symbols-outlined !text-[20px]">close</span>
+                <div className="absolute bottom-6 inset-x-4 z-30 flex flex-col gap-3 animate-slide-up">
+                    <div className="bg-bg-start/95 backdrop-blur-xl rounded-[2rem] p-5 shadow-2xl border border-white/10 relative overflow-hidden flex flex-col gap-4">
+                        <button onClick={() => setIsHudMinimized(true)} className="absolute top-4 right-4 z-20 size-8 flex items-center justify-center bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors">
+                            <span className="material-symbols-outlined !text-[18px]">expand_more</span>
                         </button>
-                        <div className="flex justify-between items-start mb-5 relative z-10">
-                            <div>
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-1 block">Próximo Alvo</span>
-                                <h2 className="text-xl font-black text-white italic tracking-tight uppercase leading-tight">{activePoint.name}</h2>
+
+                        <div className="flex items-center gap-3 pr-10">
+                            <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
+                                <span className="material-symbols-outlined text-primary !text-[20px]">location_on</span>
                             </div>
-                            <div className="text-right">
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-1 block">Estimativa</span>
-                                <p className="text-lg font-black text-white italic">14 min</p>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-primary truncate mb-0.5">
+                                    Entregar Agora <span className="text-white/40 ml-1">ID: {activePoint.id.substring(activePoint.id.length - 6).toUpperCase()}</span>
+                                </p>
+                                <h2 className="text-base font-bold text-white truncate">{activePoint.name}</h2>
+                                <p className="text-[11px] text-slate-400 truncate mt-0.5">{activePoint.neighborhood} {activePoint.city && `- ${activePoint.city}`}</p>
+                                {activePoint.notes && (
+                                    <p className="text-[11px] text-amber-400/90 font-medium truncate mt-1.5 border-l-[3px] border-amber-400/50 pl-2">
+                                        Obs: {activePoint.notes}
+                                    </p>
+                                )}
                             </div>
                         </div>
-                        <div className="flex gap-3 relative z-10">
-                            <button className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-all group"
-                                onClick={() => { if (activePoint.lat && activePoint.lng) window.open(`https://waze.com/ul?ll=${activePoint.lat},${activePoint.lng}&navigate=yes`, '_blank'); }}
-                            >
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_icon.svg" className="size-7 opacity-60 group-hover:opacity-100 transition-opacity" alt="Waze" />
-                            </button>
-                            <button className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-all">
-                                <span className="material-symbols-outlined !text-[24px]">phone</span>
-                            </button>
-                            <button onClick={() => handleComplete(activePoint.id)} className="flex-1 h-14 bg-emerald-500 shadow-premium text-white font-black italic uppercase tracking-[0.2em] rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all group/btn">
-                                <span className="material-symbols-outlined group-hover:rotate-12 transition-transform">verified</span>
-                                CONFIRMAR
-                            </button>
+
+                        <div className="flex justify-between gap-2 mt-2">
+                            <div className="flex gap-2">
+                                <button className="size-12 shrink-0 rounded-2xl bg-[#1E293B] border border-white/5 flex items-center justify-center text-white active:scale-95 transition-all group"
+                                    onClick={() => { if (activePoint.lat && activePoint.lng) window.open(`https://waze.com/ul?ll=${activePoint.lat},${activePoint.lng}&navigate=yes`, '_blank'); }}
+                                >
+                                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_icon.svg" className="size-5 opacity-80 group-hover:opacity-100 transition-opacity" alt="Waze" />
+                                </button>
+                                <button className="size-12 shrink-0 rounded-2xl bg-[#1E293B] border border-white/5 flex items-center justify-center text-[#25D366] active:scale-95 transition-all"
+                                    onClick={() => {
+                                        const phoneMatch = activePoint.notes?.match(/\d{10,14}/);
+                                        const phone = phoneMatch ? phoneMatch[0] : '5511000000000'; // Fallback simulado
+                                        window.open(`https://wa.me/${phone}`, '_blank');
+                                    }}
+                                >
+                                    <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
+                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.489-1.761-1.663-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="flex gap-2 flex-1 min-w-0">
+                                <button onClick={() => handleNotDelivered(activePoint.id)} className="flex-1 h-12 bg-red-500 shadow-premium text-white font-black text-[11px] uppercase tracking-widest rounded-2xl flex flex-col items-center justify-center -gap-1 active:scale-95 transition-all">
+                                    <span className="material-symbols-outlined !text-[16px]">package_2</span>
+                                    FALHA
+                                </button>
+                                <button onClick={() => handleComplete(activePoint.id)} className="flex-1 h-12 bg-emerald-500 shadow-premium text-white font-black text-[11px] uppercase tracking-widest rounded-2xl flex flex-col items-center justify-center -gap-1 active:scale-95 transition-all">
+                                    <span className="material-symbols-outlined !text-[16px]">package_2</span>
+                                    FEITO
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
 
             {activeTab === 'map' && activePoint && (!isNavigating || isHudMinimized) && (
-                <button onClick={() => { setIsNavigating(true); setIsHudMinimized(false); }} className="absolute bottom-56 right-6 z-20 h-16 px-6 rounded-2xl glass-card flex items-center gap-3 text-primary shadow-2xl animate-fade-in active:scale-95 transition-all">
-                    <span className="material-symbols-outlined !text-[28px] animate-pulse">navigation</span>
-                    <div className="flex flex-col items-start leading-none">
-                        <span className="text-[10px] font-black uppercase tracking-widest">Iniciar</span>
-                        <span className="text-[8px] font-bold text-slate-500 uppercase mt-1">Navegação</span>
-                    </div>
-                </button>
+                <div className="absolute bottom-6 inset-x-4 z-30 flex justify-between gap-3">
+                    <button onClick={() => { setIsNavigating(true); setIsHudMinimized(false); }} className="flex-1 h-14 px-5 rounded-2xl bg-primary shadow-premium flex justify-between items-center text-white animate-in slide-in-from-bottom active:scale-95 transition-all">
+                        <div className="flex flex-col items-start leading-none text-left min-w-0 pr-2">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-white/70 truncate w-full">Próxima Parada</span>
+                            <span className="text-[14px] font-bold truncate w-full mt-1.5">{activePoint.name}</span>
+                        </div>
+                        <span className="material-symbols-outlined !text-[24px]">navigation</span>
+                    </button>
+                </div>
             )}
 
             {/* Tab Bar - Repositioned to left, smaller size */}
-            <div className="absolute bottom-40 left-4 z-20 flex flex-col gap-3 items-start">
+            <div className="absolute top-24 right-4 z-20 flex flex-col gap-3 items-end">
                 {activeTab === 'map' && (
                     <button
                         onClick={() => setMapCenter({ ...currentPos })}
