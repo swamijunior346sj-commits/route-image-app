@@ -5,7 +5,6 @@ import { Download, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, 
 import { exportAsCSV, exportAsJSON, exportAsXLS, exportAsPDF } from '../services/importExport';
 import { extractFeatures } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
-import { LoadingOverlay } from './LoadingOverlay';
 
 interface RecordsViewProps {
     onNavigateToMap?: () => void;
@@ -32,7 +31,6 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [sheetExpandedDetail, setSheetExpandedDetail] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
-    const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
 
     // AI/Vision Loading states
     const [isExtracting, setIsExtracting] = useState(false);
@@ -61,6 +59,29 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                 return next;
             });
         }
+    };
+
+    const handleSyncLocation = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    await updateRecord(id, { lat, lng });
+                    loadRecords();
+                },
+                (err) => alert('Erro ao obter GPS: ' + err.message),
+                { enableHighAccuracy: true }
+            );
+        } else {
+            alert('Geolocalização não suportada no seu dispositivo.');
+        }
+    };
+
+    const handleQuickNotesSave = async (id: string, newNotes: string) => {
+        await updateRecord(id, { notes: newNotes });
+        loadRecords();
     };
 
     const handleBulkDelete = async () => {
@@ -529,40 +550,57 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                                     </p>
                                 </div>
 
-                                <div className="mt-auto space-y-3">
-                                    {record.notes && (
-                                        <div
-                                            className="bg-zinc-900/50 p-3 rounded-2xl border border-white/5 space-y-2 cursor-pointer hover:bg-zinc-900/80 transition-all"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setExpandedNoteId(expandedNoteId === record.id ? null : record.id);
+                                <div className="mt-auto space-y-4">
+                                    {/* Inline Editable Notes */}
+                                    <div
+                                        className="bg-zinc-900/50 p-3 rounded-2xl border border-white/5 space-y-2 relative group-focus-within:border-blue-500/40 transition-all"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                <FileText size={12} />
+                                                Observações Rápidas
+                                            </span>
+                                        </div>
+                                        <textarea
+                                            defaultValue={record.notes || ''}
+                                            onBlur={(e) => {
+                                                if (e.target.value !== record.notes) {
+                                                    handleQuickNotesSave(record.id, e.target.value);
+                                                }
                                             }}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <FileText size={12} />
-                                                    Observações
+                                            className="w-full bg-transparent text-sm text-zinc-300 italic focus:outline-none resize-none placeholder:text-zinc-600 custom-scrollbar mt-1"
+                                            rows={2}
+                                            placeholder="Adicione notas ou referências do endereço aqui..."
+                                        />
+                                    </div>
+
+                                    {/* Full Coordinates & Sync Button */}
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 bg-white/[0.03] px-4 py-2.5 rounded-xl border border-white/5 flex items-center justify-between gap-2 overflow-hidden shadow-inner">
+                                            <div className="flex flex-col max-w-[45%]">
+                                                <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-widest hidden sm:block">Latitude</span>
+                                                <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-widest sm:hidden">LAT</span>
+                                                <span className="text-[10px] sm:text-xs font-mono font-bold text-zinc-300 truncate transition-colors group-hover:text-white">
+                                                    {record.lat ?? '---'}
                                                 </span>
-                                                <ChevronDown size={14} className={`text-zinc-500 transition-transform ${expandedNoteId === record.id ? 'rotate-180' : ''}`} />
                                             </div>
-                                            <p className={`text-xs text-zinc-400 italic transition-all duration-300 ${expandedNoteId === record.id ? 'line-clamp-none border-t border-white/5 pt-2 mt-2 leading-relaxed' : 'line-clamp-1'}`}>
-                                                {record.notes}
-                                            </p>
+                                            <div className="w-[1px] h-6 bg-white/10 shrink-0"></div>
+                                            <div className="flex flex-col max-w-[45%]">
+                                                <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-widest hidden sm:block">Longitude</span>
+                                                <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-widest sm:hidden">LNG</span>
+                                                <span className="text-[10px] sm:text-xs font-mono font-bold text-zinc-300 truncate transition-colors group-hover:text-white">
+                                                    {record.lng ?? '---'}
+                                                </span>
+                                            </div>
                                         </div>
-                                    )}
-                                    <div className="flex gap-2">
-                                        <div className="bg-white/[0.03] px-2.5 py-1 rounded-xl border border-white/5 flex items-center gap-2">
-                                            <span className="text-[7px] font-black text-blue-500/50">LAT</span>
-                                            <span className="text-[9px] font-bold text-zinc-400 group-hover:text-white transition-colors">
-                                                {record.lat ? record.lat.toFixed(3) : '---'}
-                                            </span>
-                                        </div>
-                                        <div className="bg-white/[0.03] px-2.5 py-1 rounded-xl border border-white/5 flex items-center gap-2">
-                                            <span className="text-[7px] font-black text-blue-500/50">LNG</span>
-                                            <span className="text-[9px] font-bold text-zinc-400 group-hover:text-white transition-colors">
-                                                {record.lng ? record.lng.toFixed(3) : '---'}
-                                            </span>
-                                        </div>
+                                        <button
+                                            onClick={(e) => handleSyncLocation(record.id, e)}
+                                            className="w-12 h-12 shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 hover:bg-blue-500 hover:text-white transition-all shadow-md active:scale-95"
+                                            title="Sincronizar Coordenadas Atuais"
+                                        >
+                                            <LocateFixed size={18} />
+                                        </button>
                                     </div>
                                 </div>
                             </div>
