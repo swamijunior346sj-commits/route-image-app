@@ -97,7 +97,10 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
     const [currentPos, setCurrentPos] = useState(defaultCenter);
     const [mapCenter, setMapCenter] = useState(defaultCenter);
+    const [fullDirections, setFullDirections] = useState<google.maps.DirectionsResult | null>(null);
     const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
+    const [zoom, setZoom] = useState(15);
+    const mapRef = useRef<google.maps.Map | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [isHudMinimized, setIsHudMinimized] = useState(false);
     const [mapTheme, setMapTheme] = useState<'night' | 'silver'>('night');
@@ -110,13 +113,19 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
         loadRoute();
         const watchId = navigator.geolocation.watchPosition(
             pos => {
+                // Ignore very imprecise locations (often IP-based city jumps)
+                if (pos.coords.accuracy > 1500) {
+                    console.warn('Ignoring imprecise location update:', pos.coords.accuracy);
+                    return;
+                }
+
                 const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                 setCurrentPos(newPos);
                 // Set map center only on initial lock so user can drag freely afterwards
                 setMapCenter(prev => prev === defaultCenter ? newPos : prev);
             },
             undefined,
-            { enableHighAccuracy: true }
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
         return () => navigator.geolocation.clearWatch(watchId);
     }, []);
@@ -126,8 +135,9 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
         setRoute(data);
     };
 
+    // Active Leg Highlight (Current Position -> Next Point)
     useEffect(() => {
-        if (isLoaded && activePoint && currentPos && isNavigating && activePoint.lat !== null && activePoint.lng !== null) {
+        if (isLoaded && activePoint && currentPos && activePoint.lat !== null && activePoint.lng !== null) {
             const directionsService = new google.maps.DirectionsService();
             directionsService.route(
                 {
@@ -141,10 +151,56 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                     }
                 }
             );
-        } else if (!isNavigating) {
+        } else {
             setDirections(null);
         }
-    }, [isLoaded, activePoint, currentPos, isNavigating]);
+    }, [isLoaded, activePoint, currentPos]);
+
+    // Full Optimized Path (Current Position -> Next Point -> ... -> Final Point)
+    useEffect(() => {
+        if (!isLoaded || !currentPos || route.length === 0) {
+            setFullDirections(null);
+            return;
+        }
+
+        const pending = route.filter(p => !p.isDelivered && p.lat !== null && p.lng !== null);
+        if (pending.length < 1) {
+            setFullDirections(null);
+            return;
+        }
+
+        const directionsService = new google.maps.DirectionsService();
+
+        // Destination is the final point in the pending segment
+        const finalPoint = pending[pending.length - 1];
+        const destination = { lat: finalPoint.lat!, lng: finalPoint.lng! };
+
+        // Waypoints are all pending points between the CURRENT position and the final point
+        // excluding the final point itself (which is the destination)
+        // We include the next point (activePoint) in the waypoints if it's not the final point
+        const waypoints = pending.slice(0, -1).map(p => ({
+            location: { lat: p.lat!, lng: p.lng! },
+            stopover: true
+        }));
+
+        directionsService.route(
+            {
+                origin: currentPos,
+                destination: destination,
+                waypoints: waypoints.slice(0, 23), // Google limit (approx 25)
+                travelMode: google.maps.TravelMode.DRIVING,
+                optimizeWaypoints: false, // Already optimized by our algorithm
+            },
+            (result, status) => {
+                if (status === google.maps.DirectionsStatus.OK) {
+                    setFullDirections(result);
+                } else {
+                    console.warn('Full path directions failed:', status);
+                    setFullDirections(null);
+                }
+            }
+        );
+    }, [isLoaded, route, currentPos]);
 
     const handleComplete = async (pointId: string) => {
         const updated = route.map(p => p.id === pointId ? { ...p, isDelivered: true } : p);
@@ -177,9 +233,24 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                     lng: place.geometry.location.lng()
                 };
                 setMapCenter(newPos);
+                setZoom(17); // Focus on searched place
                 // Optional: Clear search after selection to keep UI clean
                 if (searchInputRef.current) searchInputRef.current.value = '';
             }
+        }
+    };
+
+    const onIdle = () => {
+        if (!mapRef.current) return;
+        const newCenter = mapRef.current.getCenter();
+        const newZoom = mapRef.current.getZoom();
+        if (newCenter) {
+            const centerObj = { lat: newCenter.lat(), lng: newCenter.lng() };
+            // Update state so it doesn't snap back on next re-render
+            setMapCenter(centerObj);
+        }
+        if (newZoom !== undefined) {
+            setZoom(newZoom);
         }
     };
 
@@ -247,9 +318,11 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
             <div className="absolute inset-0 z-0">
                 {activeTab === 'map' ? (
                     <GoogleMap
+                        onLoad={(map) => { mapRef.current = map; }}
+                        onIdle={onIdle}
                         mapContainerStyle={mapContainerStyle}
                         center={mapCenter}
-                        zoom={15}
+                        zoom={zoom}
                         options={{
                             disableDefaultUI: true,
                             zoomControl: false,
@@ -257,10 +330,43 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                             streetViewControl: false,
                             fullscreenControl: false,
                             clickableIcons: false,
+                            gestureHandling: 'greedy', // Better for mobile touch
                             styles: mapTheme === 'night' ? NIGHT_MAP_STYLE : SILVER_MAP_STYLE
                         }}
                     >
-                        {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true, polylineOptions: { strokeColor: '#3B82F6', strokeWeight: 6, strokeOpacity: 0.8 } }} />}
+                        {/* Full Route Outline (Subtle Background Path) */}
+                        {fullDirections && (
+                            <DirectionsRenderer
+                                directions={fullDirections}
+                                options={{
+                                    suppressMarkers: true,
+                                    preserveViewport: true, // Crucial: Stop auto-zoom out on route change
+                                    polylineOptions: {
+                                        strokeColor: '#3B82F6',
+                                        strokeWeight: 4,
+                                        strokeOpacity: 0.3,
+                                        zIndex: 1
+                                    }
+                                }}
+                            />
+                        )}
+
+                        {/* Active Leg Highlight (Vibrant Glowing Path to Next Stop) */}
+                        {directions && (
+                            <DirectionsRenderer
+                                directions={directions}
+                                options={{
+                                    suppressMarkers: true,
+                                    preserveViewport: true, // Crucial: Stop auto-zoom out on route change
+                                    polylineOptions: {
+                                        strokeColor: '#60A5FA',
+                                        strokeWeight: 7,
+                                        strokeOpacity: 1,
+                                        zIndex: 10
+                                    }
+                                }}
+                            />
+                        )}
                         <OverlayView position={currentPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}><CurrentMarker /></OverlayView>
                         {route.map((p, idx) => p.lat && p.lng && (
                             <OverlayView key={p.id} position={{ lat: p.lat, lng: p.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
