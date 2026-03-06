@@ -50,7 +50,7 @@ export const AdminView = ({ onBack }: AdminViewProps) => {
                     )
                 `);
 
-            if (profiles) setUsers(profiles as any);
+            setUsers((profiles as any) || []);
 
             // Generate realistic logs
             const mockLogs: AdminLog[] = [
@@ -62,8 +62,9 @@ export const AdminView = ({ onBack }: AdminViewProps) => {
             ];
             setLogs(mockLogs);
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error fetching admin data:", err);
+            alert("Erro ao buscar dados do Admin: " + (err.message || String(err)));
         } finally {
             setIsLoading(false);
         }
