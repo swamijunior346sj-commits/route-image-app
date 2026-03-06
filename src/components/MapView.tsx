@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, DirectionsRenderer, Circle, OverlayView } from '@react-google-maps/api';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
-import { Navigation, Trash2, LocateFixed, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp, Loader2 } from 'lucide-react';
+import { LocateFixed, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const libraries: ("places" | "geometry")[] = ['places', 'geometry'];
@@ -25,7 +25,8 @@ const NumberedMarker = ({ number, color }: { number: number, color: string }) =>
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: 'pointer'
+        cursor: 'pointer',
+        zIndex: 100
     }}>
         <div style={{ transform: 'rotate(45deg)', fontWeight: 900, fontSize: '13px', color: 'white' }}>{number}</div>
     </div>
@@ -41,7 +42,8 @@ const DeliveredMarker = () => (
         borderRadius: '50% 50% 50% 0',
         rotate: '-45deg',
         boxShadow: '2px 2px 10px rgba(0,0,0,0.4)',
-        cursor: 'pointer'
+        cursor: 'pointer',
+        zIndex: 90
     }}>
         <div style={{
             position: 'absolute',
@@ -60,12 +62,65 @@ const CurrentMarker = () => (
         position: 'absolute',
         transform: 'translate(-50%, -50%)',
         width: '22px', height: '22px',
-        background: '#3b82f6',
+        background: '#137fec',
         border: '3px solid white',
         borderRadius: '50%',
-        boxShadow: '0 0 15px rgba(59,130,246,0.9), inset 0 2px 5px rgba(0,0,0,0.3)'
+        boxShadow: '0 0 15px rgba(19,127,236,0.9), inset 0 2px 5px rgba(0,0,0,0.3)',
+        zIndex: 110
     }}></div>
 );
+
+// Map Styles: Professional Dark
+const darkMapStyles = [
+    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+    {
+        featureType: "administrative.locality",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#d59563" }],
+    },
+    {
+        featureType: "poi",
+        elementType: "labels",
+        stylers: [{ visibility: "off" }],
+    },
+    {
+        featureType: "road",
+        elementType: "geometry",
+        stylers: [{ color: "#38414e" }],
+    },
+    {
+        featureType: "road",
+        elementType: "geometry.stroke",
+        stylers: [{ color: "#212a37" }],
+    },
+    {
+        featureType: "road",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#9ca5b3" }],
+    },
+    {
+        featureType: "road.highway",
+        elementType: "geometry",
+        stylers: [{ color: "#746855" }],
+    },
+    {
+        featureType: "water",
+        elementType: "geometry",
+        stylers: [{ color: "#17263c" }],
+    },
+    {
+        featureType: "water",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#515c6d" }],
+    },
+    {
+        featureType: "water",
+        elementType: "labels.text.stroke",
+        stylers: [{ color: "#17263c" }],
+    },
+];
 
 export const MapView = () => {
     // Carregamento da API do Google
@@ -367,60 +422,92 @@ export const MapView = () => {
         setMapRef(null);
     }, []);
 
+    // Extract navigation metrics from the current leg
+    const currentLeg = directionsResponse?.routes[0].legs[navigationIndex];
+    const durationText = currentLeg?.duration?.text || '--';
+    const distanceText = currentLeg?.distance?.text || '--';
+    const arrivalTime = currentLeg && userLocation ? new Date(Date.now() + currentLeg.duration!.value * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+
+    const pendingStops = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
+    const destinationStop = pendingStops[navigationIndex];
+
     return (
-        <div className="relative w-full h-full bg-black overflow-hidden flex flex-col">
-            {/* SEARCH HUD */}
-            <div className={`absolute top-10 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-lg px-6 transition-all duration-700 ${isNavigating ? '-translate-y-32' : ''}`}>
-                <div className="relative group">
-                    <form onSubmit={e => e.preventDefault()} className="relative bg-white/90 backdrop-blur-md border border-zinc-200/50 rounded-[2rem] p-4 flex items-center gap-4 shadow-[0_20px_40px_rgba(0,0,0,0.1)] focus-within:border-blue-500">
-                        <Search size={20} className="text-zinc-500 ml-2" />
-                        <input
-                            placeholder="Pesquisar endereço com Google..."
-                            className="bg-transparent flex-1 outline-none text-zinc-900 text-sm font-bold placeholder:text-zinc-500"
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                        />
-                        {isSearching && <Loader2 size={18} className="animate-spin text-blue-500" />}
-                        {searchQuery && (
-                            <button type="button" onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="p-2 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all">
-                                <X size={16} />
-                            </button>
-                        )}
-                    </form>
-                </div>
-                {searchResults.length > 0 && (
-                    <div className="mt-4 bg-white/95 backdrop-blur-xl border border-zinc-100 rounded-[2.5rem] overflow-hidden shadow-2xl p-3 flex flex-col gap-1 max-h-[60vh] overflow-y-auto">
-                        {searchResults.map((res: google.maps.places.AutocompletePrediction) => (
-                            <div key={res.place_id} className="flex gap-2">
-                                <button
-                                    onClick={() => selectSearchResult(res)}
-                                    className="flex-1 flex items-center gap-4 p-5 hover:bg-zinc-100 rounded-[1.8rem] transition-all text-left"
-                                >
-                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                        <MapPin size={18} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-[12px] font-black text-zinc-900 truncate">{res.structured_formatting.main_text}</p>
-                                        <p className="text-[9px] text-zinc-500 truncate mt-1">{res.structured_formatting.secondary_text}</p>
-                                    </div>
+        <div className="relative w-full h-full bg-background-dark overflow-hidden flex flex-col font-display antialiased">
+            {/* SEARCH HUD - Only show when NOT navigating or when expanded */}
+            {!isNavigating && (
+                <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-lg px-6 transition-all duration-700">
+                    <div className="relative group">
+                        <form onSubmit={e => e.preventDefault()} className="relative bg-slate-900/90 backdrop-blur-md border border-white/10 rounded-[2rem] p-4 flex items-center gap-4 shadow-[0_20px_40px_rgba(0,0,0,0.4)] focus-within:border-primary transition-all">
+                            <span className="material-symbols-outlined text-slate-400 ml-2">search</span>
+                            <input
+                                placeholder="Pesquisar ponto..."
+                                className="bg-transparent flex-1 outline-none text-white text-sm font-bold placeholder:text-slate-500"
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                            />
+                            {isSearching && <Loader2 size={18} className="animate-spin text-primary" />}
+                            {searchQuery && (
+                                <button type="button" onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="p-2 hover:bg-slate-800 rounded-full text-zinc-500 transition-all">
+                                    <X size={16} />
                                 </button>
-                                <button
-                                    onClick={() => selectSearchResult(res)}
-                                    className="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90"
-                                >
-                                    <Plus size={24} />
-                                </button>
-                            </div>
-                        ))}
+                            )}
+                        </form>
                     </div>
-                )}
-            </div>
+                    {searchResults.length > 0 && (
+                        <div className="mt-4 bg-slate-900 border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl p-3 flex flex-col gap-1 max-h-[60vh] overflow-y-auto no-scrollbar">
+                            {searchResults.map((res: google.maps.places.AutocompletePrediction) => (
+                                <div key={res.place_id} className="flex gap-2">
+                                    <button
+                                        onClick={() => selectSearchResult(res)}
+                                        className="flex-1 flex items-center gap-4 p-5 hover:bg-slate-800 rounded-[1.8rem] transition-all text-left"
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined filled-icon text-[20px]">map_pin</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[12px] font-black text-white truncate">{res.structured_formatting.main_text}</p>
+                                            <p className="text-[9px] text-slate-400 truncate mt-1">{res.structured_formatting.secondary_text}</p>
+                                        </div>
+                                    </button>
+                                    <button
+                                        onClick={() => selectSearchResult(res)}
+                                        className="w-14 h-14 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+                                    >
+                                        <Plus size={24} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* NAVIGATION HEADER - Inspired by the new design */}
+            {isNavigating && (
+                <div className="relative z-30 mx-4 mt-12 flex items-center gap-3 animate-in fade-in slide-in-from-top-10 duration-700">
+                    <button
+                        onClick={() => setIsNavigating(false)}
+                        className="flex size-11 flex-shrink-0 items-center justify-center rounded-full bg-slate-900/90 backdrop-blur-md shadow-lg text-white border border-white/10 active:scale-90 transition-transform"
+                    >
+                        <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+                    </button>
+                    <div className="flex-1 bg-danger px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-xl">
+                        <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined filled-icon text-white animate-bounce">traffic</span>
+                            <span className="text-white text-sm font-bold tracking-tight uppercase">Jornada Ativa</span>
+                        </div>
+                        <div className="bg-black/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                            <span className="text-white text-xs font-black">{navigationIndex + 1}/{pendingStops.length}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* GOOGLE MAPS INSTANCE */}
             <div className="absolute inset-0 z-0">
                 {!isLoaded ? (
-                    <div className="w-full h-full flex items-center justify-center bg-zinc-50">
-                        <Loader2 className="animate-spin text-blue-500 w-10 h-10" />
+                    <div className="w-full h-full flex items-center justify-center bg-background-dark">
+                        <Loader2 className="animate-spin text-primary w-10 h-10" />
                     </div>
                 ) : (
                     <GoogleMap
@@ -434,12 +521,7 @@ export const MapView = () => {
                             gestureHandling: 'greedy',
                             tilt: isNavigating ? 45 : 0,
                             mapId: import.meta.env.VITE_GOOGLE_MAPS_ID || undefined,
-                            styles: [
-                                {
-                                    featureType: 'poi',
-                                    stylers: [{ visibility: 'off' }]
-                                }
-                            ]
+                            styles: darkMapStyles
                         }}
                     >
                         {/* Rendering Trajetories as Real Routes */}
@@ -449,7 +531,7 @@ export const MapView = () => {
                                     directions: directionsResponse,
                                     suppressMarkers: true,
                                     polylineOptions: {
-                                        strokeColor: '#2563eb',
+                                        strokeColor: '#137fec',
                                         strokeWeight: 6,
                                         strokeOpacity: 0.9,
                                         zIndex: 50
@@ -473,7 +555,7 @@ export const MapView = () => {
                                     mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                                 >
                                     <div onClick={() => openEditPanel(p)} style={{ cursor: 'pointer' }}>
-                                        {isCurrent ? <CurrentMarker /> : p.isDelivered ? <DeliveredMarker /> : <NumberedMarker number={stopIndex + 1} color="#3b82f6" />}
+                                        {isCurrent ? <CurrentMarker /> : p.isDelivered ? <DeliveredMarker /> : <NumberedMarker number={stopIndex + 1} color="#137fec" />}
                                     </div>
                                 </OverlayView>
                             );
@@ -485,11 +567,11 @@ export const MapView = () => {
                                 center={userLocation}
                                 radius={accuracy}
                                 options={{
-                                    fillColor: '#3b82f6',
-                                    fillOpacity: 0.1,
-                                    strokeColor: '#3b82f6',
+                                    fillColor: '#137fec',
+                                    fillOpacity: 0.05,
+                                    strokeColor: '#137fec',
                                     strokeWeight: 1,
-                                    strokeOpacity: 0.3,
+                                    strokeOpacity: 0.2,
                                 }}
                             />
                         )}
@@ -497,40 +579,141 @@ export const MapView = () => {
                 )}
             </div>
 
-            {/* Float Actions */}
-            <div className="absolute top-40 right-6 z-[1000] flex flex-col gap-3">
-                <button onClick={() => setIsNavigating(prev => !prev)} className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-white border border-zinc-200 shadow-xl transition-all ${isNavigating ? 'text-blue-600 bg-blue-50' : 'text-zinc-500'}`}>
-                    <Navigation size={24} />
+            {/* Float Actions - Repositioned to Right Middle as per new design */}
+            <div className="absolute right-4 top-1/2 -translate-y-12 flex flex-col gap-3 z-10 transition-all duration-500">
+                <button
+                    onClick={() => { if (mapRef) mapRef.setMapTypeId(mapRef.getMapTypeId() === 'roadmap' ? 'hybrid' : 'roadmap') }}
+                    className="flex size-11 items-center justify-center rounded-2xl bg-slate-900/90 backdrop-blur-md shadow-lg text-slate-100 border border-white/10 active:scale-95 translate-x-0"
+                >
+                    <span className="material-symbols-outlined text-[20px]">layers</span>
                 </button>
-                <button onClick={() => handleLocateMe(false)} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-emerald-600 flex items-center justify-center shadow-xl">
-                    <LocateFixed size={24} />
+                <button
+                    onClick={() => handleLocateMe(false)}
+                    className="flex size-11 items-center justify-center rounded-2xl bg-slate-900/90 backdrop-blur-md shadow-lg text-primary border border-white/10 active:scale-95"
+                >
+                    <span className="material-symbols-outlined filled-icon text-[20px]">my_location</span>
                 </button>
-                {routePoints.filter(p => p.id !== 'current').length > 0 && (
-                    <button onClick={handleClear} className="w-14 h-14 bg-white border border-zinc-200 rounded-2xl text-red-500 flex items-center justify-center shadow-xl">
-                        <Trash2 size={24} />
+                {!isNavigating && routePoints.filter(p => p.id !== 'current').length > 0 && (
+                    <button
+                        onClick={handleClear}
+                        className="flex size-11 items-center justify-center rounded-2xl bg-slate-900/90 backdrop-blur-md shadow-lg text-danger border border-white/10 active:scale-95"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">delete</span>
                     </button>
+                )}
+                {!isNavigating && routePoints.filter(p => p.id !== 'current').length > 0 && (
+                    <button
+                        onClick={() => setShowRouteConfirmation(true)}
+                        className="flex size-11 items-center justify-center rounded-2xl bg-primary shadow-lg text-white border border-white/10 active:scale-95"
+                    >
+                        <span className="material-symbols-outlined filled-icon text-[20px]">checklist</span>
+                    </button>
+                )}
+            </div>
+
+            {/* BOTTOM NAV / NAVIGATION UI - The core of the new design */}
+            <div className="mt-auto relative z-20 transition-all duration-500">
+                {isNavigating && destinationStop ? (
+                    <div className="bg-slate-900 rounded-t-[32px] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] border-t border-white/5 flex flex-col pb-safe animate-in slide-in-from-bottom-20 duration-500">
+                        <div className="flex justify-center p-3 cursor-pointer" onClick={() => setSheetExpanded(!sheetExpanded)}>
+                            <div className="w-12 h-1.5 bg-slate-700 rounded-full"></div>
+                        </div>
+
+                        <div className="px-6 pb-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="min-w-0 pr-4">
+                                    <span className="text-primary text-[10px] font-black uppercase tracking-widest mb-1 block">PRÓXIMA PARADA</span>
+                                    <h3 className="text-white text-xl font-extrabold leading-tight truncate">{destinationStop.name}</h3>
+                                </div>
+                                <div className="flex flex-col items-end shrink-0">
+                                    <span className="text-slate-400 text-[10px] font-bold uppercase mb-1">CHEGADA</span>
+                                    <span className="text-white font-black text-lg">{arrivalTime}</span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                <div className="bg-slate-800/50 border border-white/5 rounded-2xl p-3 flex items-center gap-3">
+                                    <div className="size-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-green-500 text-[20px]">schedule</span>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter">Tempo</p>
+                                        <p className="text-white font-bold text-sm tracking-tight">{durationText}</p>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-800/50 border border-white/5 rounded-2xl p-3 flex items-center gap-3">
+                                    <div className="size-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-blue-500 text-[20px]">distance</span>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter">Distância</p>
+                                        <p className="text-white font-bold text-sm tracking-tight">{distanceText}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Additional controls inside expanded sheet */}
+                            <div className={`transition-all duration-500 overflow-hidden ${sheetExpanded ? 'max-h-[300px] mb-6 opacity-100' : 'max-h-0 opacity-0'}`}>
+                                <div className="bg-slate-800/30 rounded-[2rem] p-4 border border-white/5 mb-4">
+                                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-[12px]">description</span> Notas do Endereço
+                                    </p>
+                                    <p className="text-slate-200 text-xs font-medium italic">{destinationStop.notes || 'Sem observações cadastradas para este local.'}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationStop.lat},${destinationStop.lng}`, '_blank')} className="py-3 bg-slate-800 rounded-xl text-primary text-[10px] font-black uppercase flex items-center justify-center gap-2 border border-white/5 transition-all">
+                                        <span className="material-symbols-outlined text-[16px]">directions</span> Rota Externa
+                                    </button>
+                                    <button onClick={() => openEditPanel(destinationStop)} className="py-3 bg-slate-800 rounded-xl text-slate-300 text-[10px] font-black uppercase flex items-center justify-center gap-2 border border-white/5 transition-all">
+                                        <span className="material-symbols-outlined text-[16px]">edit</span> Editar Ponto
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => handleCompleteStop(true)}
+                                    className="flex-1 flex items-center justify-center rounded-2xl h-14 bg-primary text-white gap-2 text-sm font-black shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all"
+                                >
+                                    <span className="material-symbols-outlined filled-icon">check_circle</span>
+                                    <span>CONCLUÍDO</span>
+                                </button>
+                                <button
+                                    onClick={() => handleCompleteStop(false)}
+                                    className="px-6 flex items-center justify-center rounded-2xl h-14 bg-slate-800 text-danger border border-white/5 font-black hover:bg-slate-700 active:scale-90 transition-all shadow-lg"
+                                >
+                                    <span className="material-symbols-outlined">block</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    /* Default state before navigating or after arriving */
+                    <div className="pointer-events-none pb-12">
+                        {/* This space can be used for other alerts if needed */}
+                    </div>
                 )}
             </div>
 
             {/* EDIT PANEL (Independent Pop-up) */}
             {editingPoint && (
                 <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={handleCloseEdit}></div>
-                    <div className="w-full max-w-xl bg-white rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.4)] transition-all duration-500 relative z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 fade-in duration-300">
-                        <div className="px-8 pb-10 pt-8 h-full overflow-y-auto custom-scrollbar">
+                    <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" onClick={handleCloseEdit}></div>
+                    <div className="w-full max-w-xl bg-slate-900 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.8)] border border-white/10 transition-all duration-500 relative z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 fade-in duration-300">
+                        <div className="px-8 pb-10 pt-8 h-full overflow-y-auto no-scrollbar">
                             <div className="flex items-center justify-between mb-8">
-                                <h3 className="text-2xl font-black italic uppercase text-zinc-900">Modificar Ponto</h3>
-                                <button onClick={handleCloseEdit} className="p-3 bg-zinc-100 rounded-full text-zinc-500 hover:text-zinc-900 transition-all"><X size={20} /></button>
+                                <h3 className="text-2xl font-black italic uppercase text-white tracking-tight">Modificar Ponto</h3>
+                                <button onClick={handleCloseEdit} className="p-3 bg-slate-800 rounded-full text-zinc-400 hover:text-white transition-all"><X size={20} /></button>
                             </div>
 
                             <div className="space-y-5 mb-8">
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Identificação</label>
-                                    <input value={editName} onChange={e => setEditName(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 font-bold focus:border-blue-500 outline-none" placeholder="Nome..." />
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Identificação</label>
+                                    <input value={editName} onChange={e => setEditName(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-slate-800 border border-white/5 rounded-3xl p-5 text-white font-bold focus:border-primary outline-none transition-all" placeholder="Nome..." />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Bairro</label>
-                                    <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 focus:border-blue-500 outline-none" placeholder="Bairro..." />
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Bairro</label>
+                                    <input value={editNeighborhood} onChange={e => setEditNeighborhood(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-slate-800 border border-white/5 rounded-3xl p-5 text-white focus:border-primary outline-none transition-all" placeholder="Bairro..." />
                                 </div>
                                 <button
                                     onClick={() => {
@@ -541,17 +724,17 @@ export const MapView = () => {
                                             });
                                         }
                                     }}
-                                    className="w-full bg-blue-50 text-blue-600 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-blue-100 active:scale-95 transition-all shadow-sm shadow-blue-500/10"
+                                    className="w-full bg-primary/10 text-primary py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-primary/20 active:scale-95 transition-all shadow-sm border border-primary/20"
                                 >
-                                    <LocateFixed size={14} /> Sincronizar Coodenadas pelo GPS
+                                    <span className="material-symbols-outlined text-[16px] filled-icon">my_location</span> Sincronizar Coodenadas pelo GPS
                                 </button>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-2">Observações Adicionais</label>
-                                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-zinc-50 border border-zinc-200 rounded-3xl p-5 text-zinc-900 h-28 text-sm outline-none focus:border-blue-500" placeholder="Informações extras..." />
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Observações Adicionais</label>
+                                    <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} onBlur={handleSavePointEdit} className="w-full bg-slate-800 border border-white/5 rounded-3xl p-5 text-white h-28 text-sm outline-none focus:border-primary transition-all" placeholder="Informações extras..." />
                                 </div>
                             </div>
                             <div className="flex flex-col gap-3">
-                                <button onClick={handleCloseEdit} className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-xl shadow-blue-500/20 active:scale-95 transition-all">Pronto</button>
+                                <button onClick={handleCloseEdit} className="w-full bg-primary py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-2xl shadow-primary/30 active:scale-95 transition-all">Salvar Alterações</button>
                             </div>
                         </div>
                     </div>
@@ -560,35 +743,34 @@ export const MapView = () => {
 
             {/* ROUTE CONFIRMATION (Standardized Bottom Sheet) */}
             {showRouteConfirmation && (
-                <div className="absolute inset-0 z-[1100] flex flex-col justify-end bg-black/20 backdrop-blur-sm pointer-events-none">
-                    <div className={`bg-white border-t-2 border-zinc-100 rounded-t-[3.5rem] pointer-events-auto shadow-2xl transition-all duration-500 ${manifestExpanded ? 'h-[85vh]' : 'h-[550px]'}`}>
+                <div className="absolute inset-0 z-[1100] flex flex-col justify-end bg-black/60 backdrop-blur-sm pointer-events-auto animate-in fade-in duration-300">
+                    <div className="absolute inset-0" onClick={() => setShowRouteConfirmation(false)} />
+                    <div className={`relative bg-slate-900 border-t border-white/10 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] transition-all duration-500 ${manifestExpanded ? 'h-[85vh]' : 'h-[550px]'}`}>
                         <div
                             onClick={() => setManifestExpanded(!manifestExpanded)}
                             onTouchStart={handleSheetTouchStart}
-                            onTouchMove={handleManifestSheetTouchMove}
-                            onTouchEnd={handleSheetTouchEnd}
-                            className="py-4 flex flex-col items-center gap-1 cursor-pointer"
+                            className="py-6 flex flex-col items-center gap-1 cursor-pointer"
                         >
-                            <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
-                            <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${manifestExpanded ? 'rotate-180' : ''}`} />
+                            <div className="w-12 h-1.5 bg-slate-700 rounded-full" />
+                            <ChevronUp size={20} className={`text-slate-500 transition-transform duration-500 ${manifestExpanded ? 'rotate-180' : ''}`} />
                         </div>
 
                         <div className="px-8 pb-12 flex flex-col h-full overflow-hidden">
-                            <h2 className="text-2xl font-black italic text-zinc-900 uppercase mb-8">Manifesto de Rota</h2>
-                            <div className="flex-1 overflow-y-auto space-y-3 mb-8 custom-scrollbar bg-zinc-50/50 p-2 rounded-[2.5rem]">
+                            <h2 className="text-2xl font-black italic text-white uppercase mb-8 tracking-tight">Manifesto de Rota</h2>
+                            <div className="flex-1 overflow-y-auto space-y-3 mb-8 no-scrollbar bg-slate-800/20 p-2 rounded-[2.5rem] border border-white/5">
                                 {routePoints.filter(p => !p.isDelivered && p.id !== 'current').map((p, idx) => (
-                                    <div key={p.id} className="bg-white border border-zinc-100 p-5 rounded-3xl flex items-center gap-4 group/item relative shadow-sm">
-                                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black italic shrink-0">#{idx + 1}</div>
+                                    <div key={p.id} className="bg-slate-800/40 border border-white/5 p-5 rounded-3xl flex items-center gap-4 group/item relative shadow-lg">
+                                        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-black italic shrink-0">#{idx + 1}</div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-zinc-900 font-black uppercase text-[11px] truncate">{p.name}</p>
-                                            <p className="text-zinc-500 text-[9px] uppercase tracking-widest truncate">{p.neighborhood}</p>
+                                            <p className="text-white font-black uppercase text-[11px] truncate tracking-wide">{p.name}</p>
+                                            <p className="text-slate-500 text-[9px] uppercase tracking-widest truncate mt-0.5">{p.neighborhood}</p>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            {(!p.lat || !p.lng) && <div className="text-[7px] bg-red-50 text-red-600 px-2 py-1 rounded-full font-black uppercase whitespace-nowrap">Sem GPS</div>}
-                                            <button onClick={() => openEditPanel(p)} className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 text-zinc-400 hover:text-blue-500 transition-all shadow-sm active:scale-90">
+                                            {(!p.lat || !p.lng) && <div className="text-[7px] bg-danger/10 text-danger px-2 py-1 rounded-full font-black uppercase whitespace-nowrap border border-danger/20">Sem GPS</div>}
+                                            <button onClick={() => openEditPanel(p)} className="p-3 rounded-xl bg-slate-700/50 border border-white/5 text-slate-400 hover:text-primary transition-all active:scale-90">
                                                 <Pencil size={14} />
                                             </button>
-                                            <button onClick={() => handleDeletePoint(p.id)} className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 text-zinc-400 hover:text-red-500 transition-all shadow-sm active:scale-90">
+                                            <button onClick={() => handleDeletePoint(p.id)} className="p-3 rounded-xl bg-slate-700/50 border border-white/5 text-slate-400 hover:text-danger transition-all active:scale-90">
                                                 <Trash size={14} />
                                             </button>
                                         </div>
@@ -596,120 +778,18 @@ export const MapView = () => {
                                 ))}
                             </div>
                             <div className="flex flex-col gap-3">
-                                <button onClick={() => { setShowRouteConfirmation(false); setIsNavigating(true); setNavigationIndex(0); setManifestExpanded(false); }} className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-500/30 active:scale-95 transition-all">Iniciar Jornada</button>
-                                <button onClick={() => { setShowRouteConfirmation(false); setManifestExpanded(false); }} className="w-full py-4 text-zinc-400 font-extrabold uppercase text-[10px] tracking-[0.3em]">Recolher Manifesto</button>
+                                <button onClick={() => { setShowRouteConfirmation(false); setIsNavigating(true); setNavigationIndex(0); setManifestExpanded(false); }} className="w-full bg-primary py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-white shadow-[0_15px_30px_rgba(19,127,236,0.4)] active:scale-95 transition-all">Iniciar Jornada Ativa</button>
+                                <button onClick={() => { setShowRouteConfirmation(false); setManifestExpanded(false); }} className="w-full py-4 text-slate-500 font-extrabold uppercase text-[10px] tracking-[0.3em] hover:text-slate-300 transition-all">Cancelar</button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* NAV DRAWER */}
-            {isNavigating && (() => {
-                const pending = routePoints.filter(p => p.id !== 'current' && !p.isDelivered);
-                const currentStop = pending[navigationIndex];
-                if (!currentStop) return null;
-                return (
-                    <div className="absolute inset-x-0 bottom-0 z-[1100] pointer-events-none">
-                        {lastActionPointId && (
-                            <div className="absolute -top-20 left-1/2 -translate-x-1/2 bg-zinc-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full flex items-center gap-4 shadow-2xl animate-in slide-in-from-bottom-5 duration-300 pointer-events-auto">
-                                <span className="text-white font-black uppercase text-[10px] tracking-widest">Ação registrada!</span>
-                                <button onClick={handleUndoAction} className="flex items-center gap-2 text-blue-400 font-black uppercase text-[10px] hover:text-white transition-colors border-l border-white/10 pl-4">
-                                    <RotateCcw size={14} /> Desfazer
-                                </button>
-                            </div>
-                        )}
-
-                        <div className={`w-full bg-white border-t-2 border-zinc-100 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] transition-all duration-500 pointer-events-auto ${sheetExpanded ? 'h-[85vh]' : 'h-[360px]'}`}>
-                            <div className="w-full flex flex-col h-full">
-                                <div
-                                    onClick={() => setSheetExpanded(!sheetExpanded)}
-                                    onTouchStart={handleSheetTouchStart}
-                                    onTouchMove={handleNavSheetTouchMove}
-                                    onTouchEnd={handleSheetTouchEnd}
-                                    className="py-6 flex flex-col items-center gap-1 cursor-pointer"
-                                >
-                                    <div className="w-12 h-1.5 bg-zinc-200 rounded-full" />
-                                    <ChevronUp size={20} className={`text-zinc-300 transition-transform duration-500 ${sheetExpanded ? 'rotate-180' : ''}`} />
-                                </div>
-
-                                <div className="px-8 pb-10 flex-1 overflow-y-auto no-scrollbar">
-                                    <div className="flex items-start justify-between mb-6">
-                                        <div className="flex items-center gap-5">
-                                            <div className="w-16 h-16 rounded-[1.5rem] bg-blue-600 flex flex-col items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
-                                                <span className="text-[10px] font-black text-blue-200">#</span>
-                                                <span className="text-2xl font-black text-white">{navigationIndex + 1}</span>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">{currentStop.neighborhood || 'SETOR PENDENTE'}</p>
-                                                <h3 className="text-2xl font-black italic uppercase text-zinc-900 leading-tight truncate pr-4">{currentStop.name}</h3>
-                                            </div>
-                                        </div>
-                                        <button onClick={() => setIsNavigating(false)} className="p-3 bg-zinc-50 rounded-full text-zinc-400 hover:text-red-500 transition-all">
-                                            <X size={20} />
-                                        </button>
-                                    </div>
-
-                                    {/* Observation immediately below the address */}
-                                    {currentStop.notes && (
-                                        <div className="bg-orange-50/50 border border-orange-100 rounded-3xl p-5 mb-8">
-                                            <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                                <MapPin size={12} /> Observações da Entrega
-                                            </p>
-                                            <p className="text-zinc-700 text-sm font-medium leading-relaxed italic">{currentStop.notes}</p>
-                                        </div>
-                                    )}
-
-                                    <div className="grid grid-cols-2 gap-4 mb-8">
-                                        <button
-                                            onClick={() => handleCompleteStop(true)}
-                                            className="h-20 bg-emerald-500 rounded-3xl flex flex-col items-center justify-center gap-1 text-white shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
-                                        >
-                                            <PackageCheck size={28} />
-                                            <span className="text-[10px] font-black uppercase">Entregue</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleCompleteStop(false)}
-                                            className="h-20 bg-zinc-900 rounded-3xl flex flex-col items-center justify-center gap-1 text-white shadow-lg shadow-zinc-900/20 active:scale-95 transition-all"
-                                        >
-                                            <PackageX size={28} />
-                                            <span className="text-[10px] font-black uppercase">Falhou</span>
-                                        </button>
-                                    </div>
-
-                                    <button
-                                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentStop.lat},${currentStop.lng}`, '_blank')}
-                                        className="w-full bg-blue-50 border border-blue-100 py-6 rounded-[2.5rem] flex items-center justify-center gap-4 text-blue-600 hover:bg-blue-100 transition-all font-black uppercase tracking-widest text-xs"
-                                    >
-                                        <Navigation size={20} fill="currentColor" /> Rota Externa
-                                    </button>
-
-                                    {sheetExpanded && (
-                                        <div className="mt-10 animate-in fade-in slide-in-from-top-4 duration-500">
-                                            <h4 className="text-[10px] font-black uppercase text-zinc-400 mb-4 tracking-widest">Detalhes do Local</h4>
-                                            <div className="bg-zinc-50 rounded-3xl p-6 space-y-4">
-                                                <div>
-                                                    <p className="text-[9px] font-black text-zinc-400 uppercase">Cidade de Destino</p>
-                                                    <p className="text-zinc-900 font-bold">{currentStop.city || '-'}</p>
-                                                </div>
-                                                <div className="flex items-center justify-between border-t border-zinc-200 pt-4">
-                                                    <p className="text-[9px] font-black text-zinc-400 uppercase">Estado do Pedido</p>
-                                                    <span className="text-xs bg-blue-100 text-blue-600 px-3 py-1 rounded-full font-bold">Em Trânsito</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            })()}
-
             {/* CHECK ANIMATION */}
             {showCheckAnimation && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none">
-                    <div className="bg-emerald-500 w-32 h-32 rounded-full flex items-center justify-center animate-ping text-white">
+                    <div className="bg-primary w-32 h-32 rounded-full flex items-center justify-center animate-ping text-white">
                         <CheckCircle2 size={64} />
                     </div>
                 </div>
@@ -717,13 +797,13 @@ export const MapView = () => {
 
             {/* CELEBRATION OVERLAY */}
             {showCelebration && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none bg-blue-600/20 backdrop-blur-sm animate-in fade-in duration-500">
-                    <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl text-center scale-up-center">
-                        <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <CheckCircle2 size={48} className="text-emerald-500" />
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none bg-background-dark/80 backdrop-blur-md animate-in fade-in duration-500">
+                    <div className="bg-slate-900 p-12 rounded-[3.5rem] shadow-2xl text-center border border-white/10 animate-in zoom-in-90 duration-500">
+                        <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <span className="material-symbols-outlined text-green-500 text-[48px] filled-icon">verified</span>
                         </div>
-                        <h2 className="text-3xl font-black italic uppercase text-zinc-900 mb-2">Rota Concluída!</h2>
-                        <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Excelente trabalho hoje.</p>
+                        <h2 className="text-3xl font-black italic uppercase text-white mb-2 tracking-tight">Rota Concluída!</h2>
+                        <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em]">Excelente trabalho operacional.</p>
                     </div>
                 </div>
             )}

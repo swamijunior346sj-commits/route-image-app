@@ -1,16 +1,92 @@
 @import "tailwindcss";
 
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --card: #18181b;
-  --card-foreground: #fafafa;
-  --primary: #3b82f6;
-  --primary-glow: #60a5fa;
-  --primary-foreground: #ffffff;
-  --destructive: #ef4444;
+  --background: #0a0f1c;
+  /* bg-deep */
+  --foreground: rgba(255, 255, 255, 0.9);
+
+  --primary: #2563eb;
+  --accent: #60a5fa;
+  --bg-deep: #0a0f1c;
+  --bg-graphite: #161d2f;
+
+  /* Gradiente Fundo */
+  --bg-grad-start: #0f172a;
+  --bg-grad-end: #1e293b;
+
+  /* Neutrals - Slate */
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  /* Semantic */
+  --success: #22c55e;
+  --warning: #facc15;
+  --danger: #ef4444;
+
   /* Dynamic viewport height for mobile */
   --vh: 1vh;
+}
+
+@theme {
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-graphite: var(--bg-graphite);
+
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+  --color-slate-400: var(--slate-400);
+  --color-slate-500: var(--slate-500);
+  --color-slate-800: var(--slate-800);
+  --color-slate-900: var(--slate-900);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --radius-2xl: 2rem;
+  /* 32px - Card radius */
+  --radius-xl: 1.25rem;
+  /* 20px - Button radius */
+  --radius-lg: 1rem;
+  /* 16px - Input radius */
+
+  --font-display: "Plus Jakarta Sans", "sans-serif";
+  --font-sans: "Plus Jakarta Sans", "sans-serif";
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+}
+
+.filled-icon {
+  font-variation-settings: 'FILL' 1, 'wght' 200;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body {
+  background: linear-gradient(135deg, var(--bg-grad-start), var(--bg-grad-end));
+  background-attachment: fixed;
+  font-family: var(--font-display);
 }
 
 * {
