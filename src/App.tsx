@@ -9,15 +9,17 @@ import { ProfileView } from './components/ProfileView';
 import { loadModel } from './services/imageProcessing';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { AdminView } from './components/AdminView';
+import { supabase } from './services/supabase';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+const ADMIN_EMAIL = 'admin@admin.com';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute'>('map');
   const [modelLoading, setModelLoading] = useState(true);
   const [mapVersion, setMapVersion] = useState(0);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-
+  const [user, setUser] = useState<any>(null);
 
   // Use localStorage to pretend we have a real session active
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
@@ -28,6 +30,10 @@ export default function App() {
     const initApp = async () => {
       try {
         await loadModel();
+        // Get initial session
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user ?? null);
+        if (session) setIsAuthenticated(true);
       } catch (err) {
         console.error("Failed to load model", err);
       } finally {
@@ -36,16 +42,27 @@ export default function App() {
     };
     initApp();
 
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      const isAuth = !!session;
+      setIsAuthenticated(isAuth);
+      if (isAuth) localStorage.setItem('isAuthenticated', 'true');
+      else localStorage.removeItem('isAuthenticated');
+    });
+
     // Setup history for hardware back button navigation
-    window.history.replaceState({ tab: currentTab }, '');
     const handlePopState = (e: PopStateEvent) => {
       if (e.state && e.state.tab) {
         setCurrentTab(e.state.tab);
       }
     };
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []); // Intentionally leaving currentTab out of deps so it registers the initial handler
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   const changeTab = (tab: 'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute') => {
     if (tab === currentTab) return;
@@ -92,14 +109,18 @@ export default function App() {
             onBack={() => changeTab('map')}
           />
         )}
-        {currentTab === 'profile' && <ProfileView
-          onLogout={() => {
-            localStorage.removeItem('isAuthenticated');
-            setIsAuthenticated(false);
-          }}
-          onBack={() => changeTab('map')}
-          onNavigateToAdmin={() => setIsAdminOpen(true)}
-        />}
+        {currentTab === 'profile' && (
+          <ProfileView
+            onLogout={async () => {
+              await supabase.auth.signOut();
+              localStorage.removeItem('isAuthenticated');
+              setIsAuthenticated(false);
+            }}
+            onBack={() => changeTab('map')}
+            onNavigateToAdmin={user?.email === ADMIN_EMAIL ? () => setIsAdminOpen(true) : undefined}
+            isAdmin={user?.email === ADMIN_EMAIL}
+          />
+        )}
       </div>
       {!isAdminOpen && <BottomNav currentTab={currentTab} setTab={changeTab} />}
 
