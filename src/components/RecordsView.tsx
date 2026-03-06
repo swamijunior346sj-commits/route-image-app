@@ -29,7 +29,6 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
-    const [sheetExpandedDetail, setSheetExpandedDetail] = useState(false);
     const [showExportMenu, setShowExportMenu] = useState(false);
 
     // AI/Vision Loading states
@@ -133,8 +132,6 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
 
     const openDetail = (record: LocationRecord) => {
         setSelectedDetail(record);
-        // setIsDetailModalOpen(true); // No longer needed
-        setSheetExpandedDetail(false); // Reset to collapsed state
     };
 
     const openEdit = (record: LocationRecord, e?: React.MouseEvent) => {
@@ -800,30 +797,26 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                 </div>
             )}
 
-            {/* DETAIL PANEL (Standardized Bottom Sheet) */}
+            {/* DETAIL PANEL (Independent Pop-up) */}
             {selectedDetail && (
-                <div className="absolute inset-0 z-[150] flex flex-col justify-end bg-black/95 backdrop-blur-2xl pointer-events-none">
-                    <div className={`w-full bg-[#09090b] border-t border-white/10 rounded-t-[3.5rem] shadow-2xl transition-all duration-700 pointer-events-auto flex flex-col ${sheetExpandedDetail ? 'h-[90vh]' : 'h-[650px]'}`}>
-                        {/* Drag Handle */}
-                        <div onClick={() => setSheetExpandedDetail(!sheetExpandedDetail)} className="py-6 flex flex-col items-center gap-1 cursor-pointer">
-                            <div className="w-12 h-1.5 bg-zinc-800 rounded-full" />
-                            <ChevronUp size={20} className={`text-zinc-600 transition-transform duration-500 ${sheetExpandedDetail ? 'rotate-180' : ''}`} />
-                        </div>
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setSelectedDetail(null)}></div>
+                    <div className="w-full max-w-xl bg-[#09090b] border border-white/10 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.8)] transition-all duration-500 relative z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 fade-in duration-300">
+                        <div className="px-8 pb-10 pt-8 flex-1 overflow-y-auto custom-scrollbar">
+                            <div className="flex items-center justify-between mb-8">
+                                <h3 className="text-3xl font-black italic uppercase text-white tracking-tighter">Detalhes do Alvo</h3>
+                                <button onClick={() => setSelectedDetail(null)} className="p-3 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-all"><X size={20} /></button>
+                            </div>
 
-                        <div className="px-8 pb-12 flex-1 overflow-y-auto no-scrollbar">
-                            <div className="relative mb-10 group">
-                                <div className="absolute inset-x-0 -bottom-10 h-32 bg-gradient-to-t from-[#09090b] to-transparent z-10" />
-                                <div className="relative w-full aspect-[4/5] rounded-[3rem] overflow-hidden border border-white/5 shadow-2xl">
+                            <div className="relative mb-10 group rounded-[3rem] overflow-hidden">
+                                <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#09090b] to-transparent z-10" />
+                                <div className="relative w-full aspect-video md:aspect-[4/3] rounded-[3rem] overflow-hidden border border-white/5 shadow-2xl">
                                     {selectedDetail.imageThumbnail ? (
-                                        <img src={selectedDetail.imageThumbnail} className="w-full h-full object-cover grayscale brightness-75 transition-all duration-1000 group-hover:grayscale-0 group-hover:brightness-100 scale-110 group-hover:scale-100" />
+                                        <img src={selectedDetail.imageThumbnail} className="w-full h-full object-cover transition-all duration-1000 hover:scale-105" />
                                     ) : (
                                         <div className="w-full h-full bg-zinc-950 flex items-center justify-center"><Database size={64} className="text-zinc-900" /></div>
                                     )}
-                                    <div className="absolute top-8 right-8 z-20">
-                                        <button onClick={() => setSelectedDetail(null)} className="p-3 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white"><X size={20} /></button>
-                                    </div>
-                                    <div className="absolute bottom-12 left-8 right-8 z-20">
-                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-2">Alvo Identificado</p>
+                                    <div className="absolute bottom-8 left-8 right-8 z-20">
                                         <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white leading-[0.9]">{selectedDetail.name}</h2>
                                     </div>
                                 </div>
