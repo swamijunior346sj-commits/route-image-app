@@ -434,7 +434,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToRecords, onNavigateTo
                         ref={webcamRef}
                         audio={false}
                         screenshotFormat="image/jpeg"
-                        videoConstraints={{ facingMode }}
+                        videoConstraints={{
+                            facingMode,
+                            width: { ideal: 4096 },
+                            height: { ideal: 2160 },
+                            advanced: [{ focusMode: 'continuous' } as any]
+                        }}
                         className="absolute inset-0 w-full h-full object-cover"
                     />
                 )}

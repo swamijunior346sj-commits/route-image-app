@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-rotate';
 import { getActiveRoute, updateActiveRoute, clearActiveRoute } from '../services/db';
 import type { RoutePoint } from '../services/db';
 import { Navigation, Trash2, LocateFixed, Search, X, CheckCircle2, Plus, MapPin, Pencil, Trash, RotateCcw, PackageCheck, PackageX, ChevronUp, Loader2 } from 'lucide-react';
@@ -69,22 +70,29 @@ const currentIcon = L.divIcon({
 });
 
 // ── Map Controller (reacts to state changes) ──
-const MapController = ({ center, zoom, routePoints }: { center: [number, number] | null, zoom: number | null, routePoints: RoutePoint[] }) => {
+const MapController = ({ center, zoom, routePoints, isNavigating, userLocation }: { center: [number, number] | null, zoom: number | null, routePoints: RoutePoint[], isNavigating: boolean, userLocation: { lat: number, lng: number } | null }) => {
     const map = useMap();
 
     useEffect(() => {
+        if (isNavigating && userLocation) {
+            // When navigating, tightly track user
+            map.flyTo([userLocation.lat, userLocation.lng], 18, { animate: true, duration: 1.5 });
+            return;
+        }
+
         if (center && zoom) {
             map.setView(center, zoom);
         }
-    }, [center, zoom, map]);
+    }, [center, zoom, map, isNavigating, userLocation]);
 
     useEffect(() => {
+        if (isNavigating) return; // Ignore global bounds when focused on navigating
         const validPoints = routePoints.filter(p => p.lat !== null && p.lng !== null);
         if (validPoints.length > 1) {
             const bounds = L.latLngBounds(validPoints.map(p => [p.lat!, p.lng!]));
             map.fitBounds(bounds, { padding: [50, 50] });
         }
-    }, [routePoints.length, map]);
+    }, [routePoints.length, map, isNavigating]);
 
     return null;
 };
@@ -212,6 +220,7 @@ export const MapView = () => {
 
     useEffect(() => {
         let watchId: number | null = null;
+        let orientationHandler: ((e: DeviceOrientationEvent) => void) | null = null;
 
         if ('geolocation' in navigator) {
             watchId = navigator.geolocation.watchPosition(
@@ -229,10 +238,14 @@ export const MapView = () => {
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }
+
+        // Add compass orientation mapping if possible (Optional rotation sync could be handled here or inside leaflet-rotate)
+
         loadRoute();
 
         return () => {
             if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+            if (orientationHandler) window.removeEventListener('deviceorientationabsolute', orientationHandler);
         };
     }, []);
 
@@ -485,12 +498,13 @@ export const MapView = () => {
                 style={{ width: '100%', height: '100%' }}
                 zoomControl={false}
                 attributionControl={false}
+                {...({ rotate: true, touchRotate: true, rotateControl: { closeOnZeroBearing: false, position: 'bottomright' }, bearing: 0 } as any)}
             >
                 {/* Light themed OSM basemap (Positron) */}
                 <TileLayer
                     url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                 />
-                <MapController center={mapCenter} zoom={mapZoom} routePoints={routePoints} />
+                <MapController center={mapCenter} zoom={mapZoom} routePoints={routePoints} isNavigating={isNavigating} userLocation={userLocation} />
 
                 {routePoints.map((p, i) => {
                     const isCurrent = p.id === 'current';
