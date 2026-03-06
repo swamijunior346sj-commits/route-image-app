@@ -7,6 +7,7 @@ import {
     addToDailyRoute,
     getActiveRoute,
     getSettings,
+    checkAndUpdateUsage,
     type RoutePoint,
     type LocationRecord,
     type AppSettings
@@ -19,9 +20,11 @@ import { NotificationsView } from './NotificationsView';
 interface ScannerProps {
     onNavigateToMap: () => void;
     onNavigateToDailyRoute: () => void;
+    initialViewMode?: 'dashboard' | 'camera';
+    onShowPaywall?: () => void;
 }
 
-export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: ScannerProps) => {
+export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialViewMode = 'dashboard', onShowPaywall }: ScannerProps) => {
     // --- Dashboard State ---
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const [stats, setStats] = useState({ deliveries: 0, total: 0, earnings: 0 });
@@ -31,7 +34,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
     const webcamRef = useRef<Webcam>(null);
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
-    const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm' | 'notifications'>('dashboard');
+    const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm' | 'notifications'>(initialViewMode);
     const [torch, setTorch] = useState(false);
     const [lastCapturePreview, setLastCapturePreview] = useState<string | null>(null);
 
@@ -90,6 +93,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
     useEffect(() => {
         loadDashboardData();
     }, [loadDashboardData]);
+
+    useEffect(() => {
+        if (initialViewMode) {
+            setViewMode(initialViewMode);
+        }
+    }, [initialViewMode]);
 
     useEffect(() => {
         if (viewMode === 'dashboard') loadDashboardData();
@@ -157,6 +166,15 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
         if (loading) return;
         setLoading(true);
         try {
+            // Check usage for free users
+            const usage = await checkAndUpdateUsage();
+            if (!usage.allowed) {
+                if (onShowPaywall) onShowPaywall();
+                else alert("Limite diário de 5 escaneamentos atingido! Faça o upgrade para o plano PRO.");
+                setLoading(false);
+                return;
+            }
+
             const capture = await captureAndExtract();
             if (!capture) {
                 alert("Falha na captura.");
@@ -391,18 +409,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute }: Scanner
                 {/* Bottom UI Panel */}
                 <main className="fixed bottom-0 left-0 right-0 z-20 pb-12 pt-8 px-8 glass-ui rounded-t-[3rem] pointer-events-auto">
                     {/* Last Capture Small Preview */}
-                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-                        <div className="size-20 rounded-2xl border-2 border-white/20 overflow-hidden shadow-2xl p-1 bg-white/10 backdrop-blur-md">
-                            {lastCapturePreview ? (
-                                <img src={lastCapturePreview} className="w-full h-full object-cover rounded-xl" alt="Preview" />
-                            ) : (
-                                <div className="w-full h-full bg-white/5 rounded-xl flex items-center justify-center">
-                                    <span className="material-symbols-outlined text-white/10 !text-[24px]">location_on</span>
-                                </div>
-                            )}
-                        </div>
-                        <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Última Captura</span>
-                    </div>
 
                     <div className="flex items-center justify-between mt-8">
                         {/* Manual Trigger */}

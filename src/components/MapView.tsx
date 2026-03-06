@@ -18,13 +18,12 @@ const mapOptions = {
     clickableIcons: false,
 };
 
-const getMapStyles = (showPOIs: boolean) => [
+const getMapStyles = () => [
     { "elementType": "geometry", "stylers": [{ "color": "#0F172A" }] },
     { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0F172A" }] },
     { "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
     { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
-    { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": showPOIs ? "#64748b" : "transparent" }] },
-    { "featureType": "poi", "elementType": "labels.icon", "stylers": [{ "visibility": showPOIs ? "on" : "off" }] },
+    { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
     { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1E293B" }] },
     { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#3B82F6" }, { "lightness": -40 }] },
     { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#082f49" }] },
@@ -72,7 +71,6 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     const [currentPos, setCurrentPos] = useState(defaultCenter);
     const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
     const [traffic, setTraffic] = useState(false);
-    const [showPOIs, setShowPOIs] = useState(false);
     const [isNavigating, setIsNavigating] = useState(false);
     const [isHudMinimized, setIsHudMinimized] = useState(false);
 
@@ -142,17 +140,11 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
         <div className="relative w-full h-full bg-bg-start overflow-hidden font-sans">
             {/* Header */}
             <header className="absolute top-0 left-0 right-0 z-20 px-6 pt-14 pb-12 flex items-center justify-between pointer-events-none">
-                <div className="flex flex-col pointer-events-auto">
-                    <span className="text-[10px] font-black tracking-[0.3em] text-primary/80 uppercase">GPS Activo</span>
-                    <h1 className="text-white font-black text-2xl tracking-tighter italic">{activeTab === 'map' ? 'Navegação' : 'Itinerário'}</h1>
-                </div>
+                <div></div>
 
                 <div className="flex gap-3 pointer-events-auto">
                     <button onClick={() => setTraffic(!traffic)} className={`size-12 rounded-[1.25rem] flex items-center justify-center transition-all ${traffic ? 'bg-primary text-white shadow-premium' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}>
                         <span className="material-symbols-outlined !text-[24px]">traffic</span>
-                    </button>
-                    <button onClick={() => setShowPOIs(!showPOIs)} className={`size-12 rounded-[1.25rem] flex items-center justify-center transition-all ${!showPOIs ? 'bg-primary text-white shadow-premium' : 'bg-bg-start/80 backdrop-blur-xl border border-white/5 text-slate-400'}`}>
-                        <span className="material-symbols-outlined !text-[24px]">{showPOIs ? 'visibility' : 'visibility_off'}</span>
                     </button>
                     <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center">
                         <span className="material-symbols-outlined !text-[24px]">delete_sweep</span>
@@ -167,7 +159,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                         mapContainerStyle={mapContainerStyle}
                         center={currentPos}
                         zoom={15}
-                        options={{ ...mapOptions, styles: getMapStyles(showPOIs) }}
+                        options={{ ...mapOptions, styles: getMapStyles() }}
                     >
                         {traffic && <TrafficLayer />}
                         {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true, polylineOptions: { strokeColor: '#3B82F6', strokeWeight: 6, strokeOpacity: 0.8 } }} />}

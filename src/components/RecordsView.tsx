@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { getRecords, deleteRecord } from '../services/db';
+import { getRecords, deleteRecord, updateRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
 import { DeliveryDetailView } from './DeliveryDetailView';
+import { EditAddressView } from './EditAddressView';
 
 interface RecordsViewProps {
     onNavigateToMap?: () => void;
@@ -12,6 +13,7 @@ export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
     const [records, setRecords] = useState<LocationRecord[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedRecord, setSelectedRecord] = useState<LocationRecord | null>(null);
+    const [editingRecord, setEditingRecord] = useState<LocationRecord | null>(null);
     const [activeTab, setActiveTab] = useState<'all' | 'recent'>('all');
 
     useEffect(() => {
@@ -29,6 +31,20 @@ export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
             await deleteRecord(id);
             setRecords(records.filter(r => r.id !== id));
         }
+    };
+
+    const handleEdit = (record: LocationRecord, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingRecord(record);
+    };
+
+    const handleSaveEdit = async (updatedFields: Partial<LocationRecord>) => {
+        if (!editingRecord) return;
+        const updated = await updateRecord(editingRecord.id, updatedFields);
+        if (updated) {
+            setRecords(records.map(r => r.id === editingRecord.id ? updated : r));
+        }
+        setEditingRecord(null);
     };
 
     const filteredRecords = records.filter(r =>
@@ -57,6 +73,16 @@ export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
                     setSelectedRecord(null);
                     onNavigateToMap?.();
                 }}
+            />
+        );
+    }
+
+    if (editingRecord) {
+        return (
+            <EditAddressView
+                item={editingRecord}
+                onSave={handleSaveEdit}
+                onBack={() => setEditingRecord(null)}
             />
         );
     }
@@ -152,12 +178,20 @@ export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
                                             <h3 className="font-bold text-[17px] text-white/90 tracking-tight truncate pr-4">
                                                 {record.name}
                                             </h3>
-                                            <button
-                                                onClick={(e) => handleDelete(record.id, e)}
-                                                className="text-slate-600 hover:text-red-500 transition-colors"
-                                            >
-                                                <span className="material-symbols-outlined !text-[20px]">delete</span>
-                                            </button>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={(e) => handleEdit(record, e)}
+                                                    className="text-slate-600 hover:text-primary transition-colors"
+                                                >
+                                                    <span className="material-symbols-outlined !text-[20px]">edit</span>
+                                                </button>
+                                                <button
+                                                    onClick={(e) => handleDelete(record.id, e)}
+                                                    className="text-slate-600 hover:text-red-500 transition-colors"
+                                                >
+                                                    <span className="material-symbols-outlined !text-[20px]">delete</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-1.5 mt-1 opacity-60">
                                             <span className="material-symbols-outlined !text-[14px] text-primary">location_on</span>

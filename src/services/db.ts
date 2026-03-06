@@ -45,6 +45,7 @@ export interface AppSettings {
         showTraffic: boolean;
         autoCenter: boolean;
     };
+    subscriptionPlan: 'free' | 'pro' | 'enterprise';
 }
 
 const defaultSettings: AppSettings = {
@@ -64,7 +65,8 @@ const defaultSettings: AppSettings = {
         darkMode: true,
         showTraffic: false,
         autoCenter: true
-    }
+    },
+    subscriptionPlan: 'free'
 };
 
 // --- SYNC HELPERS (OFFLINE FIRST) ---
@@ -324,24 +326,96 @@ export const clearDailyRoute = async (): Promise<void> => {
 // --- SETTINGS ---
 
 export const getSettings = async (): Promise<AppSettings> => {
-    const { data, error } = await supabase.from('app_settings').select('*').single();
-    if (error || !data) return defaultSettings;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return defaultSettings;
+
+    const [settingsRes, profileRes] = await Promise.all([
+        supabase.from('app_settings').select('*').eq('id', session.user.id).single(),
+        supabase.from('profiles').select('subscription_plan').eq('id', session.user.id).single()
+    ]);
+
+    const data = settingsRes.data;
+    const profile = profileRes.data;
+
+    if (!data) {
+        // Create initial settings if missing
+        await supabase.from('app_settings').insert({
+            id: session.user.id,
+            personal_data: {
+                name: session.user.user_metadata?.full_name || 'Usuário',
+                email: session.user.email || '',
+                phone: '',
+                vehicle: ''
+            },
+            notifications: defaultSettings.notifications,
+            map_preferences: defaultSettings.mapPreferences
+        });
+        return { ...defaultSettings, subscriptionPlan: (profile?.subscription_plan as any) || 'free' };
+    }
+
     return {
         personalData: data.personal_data,
         notifications: data.notifications,
-        mapPreferences: data.map_preferences
+        mapPreferences: data.map_preferences,
+        subscriptionPlan: (profile?.subscription_plan as any) || 'free'
     };
 };
 
 export const updateSettings = async (updates: Partial<AppSettings>): Promise<AppSettings> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return defaultSettings;
+
     const current = await getSettings();
     const updated = { ...current, ...updates };
+
     await supabase.from('app_settings').update({
         personal_data: updated.personalData,
         notifications: updated.notifications,
         map_preferences: updated.mapPreferences
-    }).eq('id', '00000000-0000-0000-0000-000000000000');
+    }).eq('id', session.user.id);
+
     return updated;
+};
+
+export const checkAndUpdateUsage = async (): Promise<{ allowed: boolean; remaining: number }> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { allowed: false, remaining: 0 };
+
+    const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+    if (error || !profile) return { allowed: false, remaining: 0 };
+
+    if (profile.subscription_plan !== 'free') {
+        return { allowed: true, remaining: 999 };
+    }
+
+    // Reset counter if it's a new day
+    const lastReset = new Date(profile.last_scan_reset);
+    const now = new Date();
+    const isNewDay = now.toDateString() !== lastReset.toDateString();
+
+    let currentCount = isNewDay ? 0 : profile.daily_scan_count;
+    const limit = 5;
+
+    if (currentCount >= limit) {
+        return { allowed: false, remaining: 0 };
+    }
+
+    // Increment count
+    const nextCount = currentCount + 1;
+    await supabase
+        .from('profiles')
+        .update({
+            daily_scan_count: nextCount,
+            last_scan_reset: now.toISOString()
+        })
+        .eq('id', session.user.id);
+
+    return { allowed: true, remaining: limit - nextCount };
 };
 
 export const importRecords = async (records: LocationRecord[]) => {

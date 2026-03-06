@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { getSettings, updateSettings } from '../services/db';
+import { useState } from 'react';
+import { updateSettings } from '../services/db';
 import type { AppSettings } from '../services/db';
 import { LoadingOverlay } from './LoadingOverlay';
 
@@ -8,20 +8,12 @@ interface ProfileViewProps {
     onBack?: () => void;
     onNavigateToAdmin?: () => void;
     isAdmin?: boolean;
+    settings: AppSettings;
+    onUpdateSettings: (s: AppSettings) => void;
 }
 
-export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin }: ProfileViewProps) => {
-    const [settings, setSettings] = useState<AppSettings | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const load = async () => {
-            const s = await getSettings();
-            setSettings(s);
-            setLoading(false);
-        };
-        load();
-    }, []);
+export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin, settings, onUpdateSettings }: ProfileViewProps) => {
+    const [loading] = useState(false);
 
     const handleLogout = () => {
         if (confirm("Deseja realmente sair da sua conta?")) {
@@ -34,7 +26,7 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin }: Pr
         const categoryData = settings[category] as any;
         const newCat = { ...categoryData, [field]: !categoryData[field] };
         const updated = await updateSettings({ ...settings, [category]: newCat } as AppSettings);
-        setSettings(updated);
+        onUpdateSettings(updated);
         if (navigator.vibrate) navigator.vibrate(10);
     };
 
@@ -49,12 +41,12 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin }: Pr
                 ...settings,
                 personalData: { ...settings.personalData, avatar: base64 }
             });
-            setSettings(updated);
+            onUpdateSettings(updated);
         };
         reader.readAsDataURL(file);
     };
 
-    if (loading || !settings) return <LoadingOverlay title="Acessando Perfil" subtitle="Carregando dados biométricos..." />;
+    if (loading) return <LoadingOverlay title="Acessando Perfil" subtitle="Carregando dados biométricos..." />;
 
     return (
         <div className="relative w-full h-full bg-bg-start overflow-hidden flex flex-col font-sans">
@@ -102,9 +94,14 @@ export const ProfileView = ({ onLogout, onBack, onNavigateToAdmin, isAdmin }: Pr
                         </div>
 
                         <h2 className="text-2xl font-black text-white tracking-tight uppercase italic">{settings.personalData.name}</h2>
-                        <div className="flex items-center gap-2 mt-2 px-4 py-1.5 bg-white/5 rounded-full border border-white/5">
-                            <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                            <span className="text-[10px] uppercase font-bold text-white/50 tracking-widest">Status Activo</span>
+                        <div className="flex items-center gap-3 mt-4">
+                            <span className="px-3 py-1 bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest rounded-xl border border-primary/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                                Plano {settings.subscriptionPlan}
+                            </span>
+                            <div className="flex items-center gap-1.5 opacity-60">
+                                <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                <span className="text-[10px] uppercase font-bold text-white tracking-widest">Activo</span>
+                            </div>
                         </div>
                     </div>
                 </section>

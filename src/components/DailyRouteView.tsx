@@ -7,6 +7,7 @@ import {
     clearDailyRoute,
     type RoutePoint
 } from '../services/db';
+import { EditAddressView } from './EditAddressView';
 
 interface DailyRouteViewProps {
     onNavigateToMap?: () => void;
@@ -17,6 +18,7 @@ interface DailyRouteViewProps {
 export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }: DailyRouteViewProps) => {
     const [points, setPoints] = useState<RoutePoint[]>([]);
     const [isOptimizing, setIsOptimizing] = useState(false);
+    const [editingPoint, setEditingPoint] = useState<RoutePoint | null>(null);
 
     // Stats
     const [deliveredCount, setDeliveredCount] = useState(0);
@@ -60,13 +62,29 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
         setProgressPercent(updated.length > 0 ? Math.round((delivered / updated.length) * 100) : 0);
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
         const updated = await removeFromDailyRoute(id);
         setPoints(updated);
 
         const delivered = updated.filter(p => p.isDelivered).length;
         setDeliveredCount(delivered);
         setProgressPercent(updated.length > 0 ? Math.round((delivered / updated.length) * 100) : 0);
+    };
+
+    const handleEdit = (point: RoutePoint, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingPoint(point);
+    };
+
+    const handleSaveEdit = async (updatedFields: Partial<RoutePoint>) => {
+        if (!editingPoint) return;
+        const updatedPoints = points.map(p =>
+            p.id === editingPoint.id ? { ...p, ...updatedFields } : p
+        );
+        setPoints(updatedPoints);
+        await updateDailyRoute(updatedPoints);
+        setEditingPoint(null);
     };
 
     const handleSendToMap = async () => {
@@ -84,6 +102,16 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
 
     const firstPendingIndex = points.findIndex(p => !p.isDelivered);
     const [loading, setLoading] = useState(false);
+
+    if (editingPoint) {
+        return (
+            <EditAddressView
+                item={editingPoint}
+                onSave={handleSaveEdit}
+                onBack={() => setEditingPoint(null)}
+            />
+        );
+    }
 
     return (
         <div className="relative w-full h-full bg-bg-start overflow-hidden flex flex-col font-sans">
@@ -239,11 +267,14 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
                                             {isNext && (
                                                 <div className="bg-primary/20 px-2 py-0.5 rounded text-[8px] font-black text-primary uppercase tracking-widest animate-pulse">Prioridade IA</div>
                                             )}
-                                            {isDone && (
-                                                <button onClick={() => handleDelete(p.id)} className="text-red-500/40 hover:text-red-500 transition-colors">
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={(e) => handleEdit(p, e)} className="text-slate-500/60 hover:text-primary transition-colors">
+                                                    <span className="material-symbols-outlined !text-[18px]">edit</span>
+                                                </button>
+                                                <button onClick={(e) => handleDelete(p.id, e)} className="text-red-500/40 hover:text-red-500 transition-colors">
                                                     <span className="material-symbols-outlined !text-[18px]">delete</span>
                                                 </button>
-                                            )}
+                                            </div>
                                         </div>
 
                                         <h3 className={`font-bold text-lg tracking-tight ${isDone ? 'text-slate-400 line-through' : 'text-white/90'}`}>
