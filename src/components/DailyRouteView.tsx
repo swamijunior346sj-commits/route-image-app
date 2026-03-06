@@ -4,7 +4,6 @@ import {
     updateDailyRoute,
     updateActiveRoute,
     removeFromDailyRoute,
-    clearDailyRoute,
     type RoutePoint
 } from '../services/db';
 import { EditAddressView } from './EditAddressView';
@@ -134,13 +133,7 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
         loadData();
     }, [loadData]);
 
-    const handleClearAll = async () => {
-        if (!confirm('Limpar toda a sua rota atual?')) return;
-        await clearDailyRoute();
-        setPoints([]);
-        setDeliveredCount(0);
-        setProgressPercent(0);
-    };
+
 
     const handleOptimize = async () => {
         if (points.length < 2) return;
@@ -312,7 +305,7 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
                                         <h3 className="text-[12px] font-black tracking-widest uppercase text-primary">Recém Sincronizados</h3>
                                         <div className="h-[1px] flex-1 bg-primary/20"></div>
                                     </div>
-                                    {recentPoints.map((p, i) => (
+                                    {recentPoints.map((p) => (
                                         <RouteCard
                                             key={p.id}
                                             p={p}
@@ -335,7 +328,7 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
                                         <div className="h-[1px] flex-1 bg-white/5"></div>
                                     </div>
                                 )}
-                                {standardPoints.map((p, i) => (
+                                {standardPoints.map((p) => (
                                     <RouteCard
                                         key={p.id}
                                         p={p}

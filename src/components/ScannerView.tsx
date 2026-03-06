@@ -29,6 +29,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const [stats, setStats] = useState({ deliveries: 0, total: 0, earnings: 0 });
     const [nextStop, setNextStop] = useState<RoutePoint | null>(null);
+    const [recentRecords, setRecentRecords] = useState<LocationRecord[]>([]);
 
     // --- Functional State ---
     const webcamRef = useRef<Webcam>(null);
@@ -59,12 +60,14 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
 
     const loadDashboardData = useCallback(async () => {
         try {
-            const [appSettings, route] = await Promise.all([
+            const [appSettings, route, records] = await Promise.all([
                 getSettings(),
-                getActiveRoute()
+                getActiveRoute(),
+                getRecords()
             ]);
 
             setSettings(appSettings);
+            setRecentRecords(records.slice(-4).reverse());
 
             if (route.length > 0) {
                 const pending = route.filter(p => p.id !== 'current' && !p.isDelivered);
@@ -313,36 +316,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
         }
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            const imageSrc = event.target?.result as string;
-            if (!imageSrc) return;
-            setLoading(true);
-            try {
-                const img = new Image();
-                img.src = imageSrc;
-                await new Promise(r => { img.onload = r; });
-                const features = await extractFeatures(img);
-
-                // Setup for confirm mode
-                setCapturedImage(imageSrc);
-                setCapturedFeatures(features);
-                setViewMode('confirm');
-
-                if (navigator.vibrate) navigator.vibrate(50);
-                await runAiWithAnimation(imageSrc);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        reader.readAsDataURL(file);
-        e.target.value = '';
-    };
 
     // --- UI Helpers ---
 
@@ -640,98 +613,64 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                     )}
                 </section>
 
-                {/* Add Entry Section */}
+                {/* Histórico Recente Section */}
                 <section className="space-y-5">
                     <div className="flex justify-between items-center ml-1">
-                        <h3 className="text-[12px] font-bold tracking-widest uppercase text-slate-400 opacity-50">Adicionar Endereço</h3>
+                        <h3 className="text-[12px] font-bold tracking-widest uppercase text-slate-400 opacity-50">Histórico Recente</h3>
                         <div className="h-[1px] flex-1 mx-4 bg-white/5"></div>
                     </div>
 
                     <div className="space-y-4">
-                        <button
-                            onClick={onNavigateToDailyRoute}
-                            className="w-full relative group transition-all"
-                        >
-                            <div className="absolute inset-y-0 left-5 flex items-center text-slate-500 group-hover:text-primary transition-colors">
-                                <span className="material-symbols-outlined">search</span>
+                        {recentRecords.length > 0 ? (
+                            recentRecords.map((rec) => (
+                                <div key={rec.id} className="glass-card rounded-[2rem] p-4 flex items-center gap-4 border-white/5 group active:scale-[0.98] transition-all">
+                                    <div className="size-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary/60 border border-white/5">
+                                        <span className="material-symbols-outlined">location_on</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="text-sm font-bold text-white/90 truncate tracking-tight">{rec.name}</h4>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate opacity-60">
+                                            {rec.neighborhood || 'Bairro ñ identificado'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            await addPointToActiveRoute({
+                                                id: rec.id,
+                                                name: rec.name,
+                                                lat: rec.lat,
+                                                lng: rec.lng,
+                                                scannedAt: Date.now(),
+                                                neighborhood: rec.neighborhood,
+                                                city: rec.city,
+                                                isRecent: true
+                                            });
+                                            onNavigateToDailyRoute();
+                                        }}
+                                        className="size-11 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary/20 transition-all border border-primary/20"
+                                    >
+                                        <span className="material-symbols-outlined !text-[22px]">add</span>
+                                    </button>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="py-12 flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
+                                <span className="material-symbols-outlined !text-[32px] mb-2">history</span>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-center">Nenhum endereço<br />no histórico</p>
                             </div>
-                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-14 pr-5 text-left text-sm text-slate-500 font-medium">
-                                Pesquisar ou Listagem Diária
-                            </div>
-                        </button>
+                        )}
 
                         <button
-                            onClick={() => setIsCockpitOpen(true)}
-                            className="glass-card rounded-[2.5rem] p-10 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-5 cursor-pointer hover:border-primary/50 hover:bg-white/10 active:scale-[0.97] transition-all group"
+                            onClick={onNavigateToDailyRoute}
+                            className="w-full py-4 text-[11px] font-black uppercase text-slate-500 tracking-[0.4em] hover:text-primary transition-all active:scale-95"
                         >
-                            <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 shadow-lg transition-transform border border-primary/20">
-                                <span className="material-symbols-outlined !text-[36px]">rocket_launch</span>
-                            </div>
-                            <div className="text-center space-y-1">
-                                <p className="text-base font-bold text-white tracking-tight">Abrir Cockpit de Operações</p>
-                                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest opacity-60">Escolha o modo de captura</p>
-                            </div>
+                            Ver Protocolo Completo
                         </button>
                     </div>
                 </section>
             </main>
 
-            {/* Cockpit Menu Overlay */}
-            {isCockpitOpen && (
-                <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-2xl animate-in fade-in duration-300 flex items-end">
-                    <div
-                        className="absolute inset-0"
-                        onClick={() => setIsCockpitOpen(false)}
-                    />
-                    <div className="relative w-full bg-[#0F172A]/95 border-t border-white/10 rounded-t-[3rem] p-8 pb-14 animate-in slide-in-from-bottom duration-500 shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
-                        <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto mb-8" />
 
-                        <div className="space-y-6">
-                            <div className="flex flex-col mb-4">
-                                <span className="text-[10px] font-black text-primary uppercase tracking-[0.4em] mb-1">Operações RouteVision</span>
-                                <h3 className="text-xl font-black text-white italic tracking-tight">Cockpit de Captura</h3>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4">
-                                <button
-                                    onClick={() => handleStartCamera('register')}
-                                    className="w-full h-24 glass-card rounded-3xl flex items-center gap-6 p-6 border-white/5 active:scale-95 transition-all group"
-                                >
-                                    <div className="size-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20 shadow-lg shadow-amber-500/5 group-hover:scale-110 transition-transform">
-                                        <span className="material-symbols-outlined !text-[28px]">add_a_photo</span>
-                                    </div>
-                                    <div className="flex-1 text-left">
-                                        <p className="text-lg font-bold text-white tracking-tight">Novo Registro</p>
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Cadastro IA via Gemini™</p>
-                                    </div>
-                                    <span className="material-symbols-outlined text-slate-700">arrow_forward</span>
-                                </button>
-
-                                <button
-                                    onClick={() => handleStartCamera('scan')}
-                                    className="w-full h-24 glass-card rounded-3xl flex items-center gap-6 p-6 border-white/5 active:scale-95 transition-all group"
-                                >
-                                    <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-lg shadow-primary/5 group-hover:scale-110 transition-transform">
-                                        <span className="material-symbols-outlined !text-[28px]">barcode_scanner</span>
-                                    </div>
-                                    <div className="flex-1 text-left">
-                                        <p className="text-lg font-bold text-white tracking-tight">Escanear Entregas</p>
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Busca na Base de Dados</p>
-                                    </div>
-                                    <span className="material-symbols-outlined text-slate-700">arrow_forward</span>
-                                </button>
-                            </div>
-
-                            <button
-                                onClick={() => setIsCockpitOpen(false)}
-                                className="w-full py-4 text-[10px] font-black uppercase text-slate-500 tracking-[0.3em] mt-4"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
 
             {/* Nav Fade Overlay */}
@@ -753,15 +692,36 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 />
             )}
 
-            {/* FAB for Camera */}
+            {/* Cockpit Grouped FAB */}
             {viewMode === 'dashboard' && (
-                <div className="fixed bottom-32 right-6 z-50 animate-in fade-in zoom-in duration-500">
+                <div className="fixed bottom-32 right-6 z-50 flex flex-col items-center gap-4">
+                    {isCockpitOpen && (
+                        <>
+                            {/* Novo Registro Small FAB */}
+                            <button
+                                onClick={() => handleStartCamera('register')}
+                                className="size-12 rounded-full bg-amber-500 text-white shadow-fab flex items-center justify-center animate-in fade-in zoom-in slide-in-from-bottom-5 duration-300 active:scale-90 border border-white/20"
+                            >
+                                <span className="material-symbols-outlined !text-[22px]">add_a_photo</span>
+                            </button>
+                            {/* Escanear Small FAB */}
+                            <button
+                                onClick={() => handleStartCamera('scan')}
+                                className="size-12 rounded-full bg-primary text-white shadow-fab flex items-center justify-center animate-in fade-in zoom-in slide-in-from-bottom-3 duration-200 active:scale-90 border border-white/20"
+                            >
+                                <span className="material-symbols-outlined !text-[22px]">barcode_scanner</span>
+                            </button>
+                        </>
+                    )}
+
                     <button
-                        onClick={() => setIsCockpitOpen(true)}
-                        className="size-16 rounded-full bg-primary text-white shadow-fab flex items-center justify-center active:scale-90 transition-all border border-white/20 group relative overflow-hidden"
+                        onClick={() => setIsCockpitOpen(!isCockpitOpen)}
+                        className={`size-16 rounded-full ${isCockpitOpen ? 'bg-slate-800' : 'bg-primary'} text-white shadow-fab flex items-center justify-center active:scale-90 transition-all border border-white/20 group relative overflow-hidden`}
                     >
                         <div className="absolute inset-0 bg-gradient-to-tr from-primary via-accent to-white opacity-20 group-hover:opacity-40 transition-opacity"></div>
-                        <span className="material-symbols-outlined !text-[32px] group-hover:scale-110 transition-all duration-300">rocket_launch</span>
+                        <span className={`material-symbols-outlined !text-[32px] transition-transform duration-500 ${isCockpitOpen ? 'rotate-45' : ''}`}>
+                            {isCockpitOpen ? 'close' : 'rocket_launch'}
+                        </span>
                     </button>
                 </div>
             )}
