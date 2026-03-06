@@ -37,6 +37,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [cameraMode, setCameraMode] = useState<'register' | 'scan'>('scan');
     const [isCockpitOpen, setIsCockpitOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const importFileInputRef = useRef<HTMLInputElement>(null);
 
     // Registering/Confirmation State
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -111,128 +112,17 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     }, [isSendingToRoute, loadDashboardData]);
 
     // --- Camera Logic ---
-    const captureAndExtract = useCallback(async (): Promise<{ imageSrc: string, features: number[] } | null> => {
-        if (!webcamRef.current) return null;
-        // @ts-ignore - access to video element
-        const video = webcamRef.current.video as HTMLVideoElement | null;
-        if (!video || video.readyState !== 4) return null;
-
-        // Ensure we are focused before capturing
-        const track = videoTrackRef.current;
-        if (track && track.applyConstraints) {
-            try {
-                // Toggle focus to force a re-calculation before capture
-                await track.applyConstraints({
-                    advanced: [{ focusMode: 'continuous' }, { exposureMode: 'continuous' }] as any
-                });
-            } catch (e) { console.warn('Pre-capture focus failed', e); }
+    const captureAndAnalyze = useCallback(async (image: HTMLImageElement): Promise<{ features: number[] } | null> => {
+        try {
+            const features = await extractFeatures(image);
+            return { features };
+        } catch (err) {
+            console.error('Feature extraction failed:', err);
+            return null;
         }
-
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (!imageSrc) return null;
-
-        // Extract features for Visual ID in parallel or after capture
-        const features = await extractFeatures(video);
-        return { imageSrc, features };
     }, []);
 
-    const handleCameraLoad = useCallback(() => {
-        if (!webcamRef.current) return;
-        const video = webcamRef.current.video;
-        if (video && video.srcObject instanceof MediaStream) {
-            const track = video.srcObject.getVideoTracks()[0];
-            videoTrackRef.current = track;
-
-            // High resolution & Focus constraints
-            if (track.applyConstraints) {
-                track.applyConstraints({
-                    advanced: [
-                        { torch },
-                        { focusMode: 'continuous' },
-                        { exposureMode: 'continuous' },
-                        { whiteBalanceMode: 'continuous' },
-                        { width: { min: 1280, ideal: 3840, max: 7680 } },
-                        { height: { min: 720, ideal: 2160, max: 4320 } }
-                    ] as any
-                }).catch(e => console.warn('Constraints failed', e));
-            }
-        }
-    }, [torch]);
-
-    useEffect(() => {
-        if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
-            videoTrackRef.current.applyConstraints({
-                advanced: [{ torch }] as any
-            }).catch(e => console.warn('Torch update failed', e));
-        }
-    }, [torch]);
-
-    // --- Auto Scanning Loop ---
-    useEffect(() => {
-        let scanInterval: NodeJS.Timeout;
-
-        if (viewMode === 'camera' && cameraMode === 'scan' && !loading && !isSendingToRoute) {
-            scanInterval = setInterval(async () => {
-                // Focus re-trigger for auto-scan
-                if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
-                    try {
-                        await videoTrackRef.current.applyConstraints({
-                            advanced: [{ focusMode: 'continuous' }] as any
-                        });
-                    } catch (e) { /* ignore */ }
-                }
-
-                const capture = await captureAndExtract();
-                if (capture) {
-                    const records = await getRecords();
-                    let bestMatch: LocationRecord | null = null;
-                    let highestSim = 0;
-
-                    for (const rec of records) {
-                        const sim = cosineSimilarity(capture.features, rec.featureVector);
-                        if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
-                        if (rec.additionalImages) {
-                            for (const addView of rec.additionalImages) {
-                                const simAdd = cosineSimilarity(capture.features, addView.features);
-                                if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
-                            }
-                        }
-                    }
-
-                    if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
-                        clearInterval(scanInterval);
-                        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-
-                        // Check usage before finalize
-                        const usage = await checkAndUpdateUsage();
-                        if (usage.allowed) {
-                            await addPointToActiveRoute({
-                                id: bestMatch.id!,
-                                name: bestMatch.name,
-                                lat: bestMatch.lat,
-                                lng: bestMatch.lng,
-                                scannedAt: Date.now(),
-                                notes: bestMatch.notes,
-                                neighborhood: bestMatch.neighborhood,
-                                city: bestMatch.city,
-                                isRecent: true
-                            });
-
-                            setIsSendingToRoute(true);
-                            setTimeout(() => {
-                                setIsSendingToRoute(false);
-                                onNavigateToDailyRoute();
-                            }, 2000);
-                        }
-                    }
-                }
-            }, 1500); // Scan every 1.5s
-        }
-
-        return () => {
-            if (scanInterval) clearInterval(scanInterval);
-        };
-    }, [viewMode, cameraMode, loading, isSendingToRoute, captureAndExtract, checkAndUpdateUsage, onNavigateToDailyRoute]);
+    // Camera hooks and auto-scanning removed for native quality integration
 
     const runAiWithAnimation = async (imageSrc: string): Promise<void> => {
         setIsAiAnalyzing(true);
@@ -282,139 +172,109 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const handleNativeCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        await processImageData(file, cameraMode);
+    };
 
+    const handleImportImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        // Import mode always behaves like 'scan' (reads and matches)
+        await processImageData(file, 'scan');
+    };
+
+    const processImageData = async (file: File, mode: 'register' | 'scan') => {
         setLoading(true);
         try {
-            // Check usage for free users
             const usage = await checkAndUpdateUsage();
             if (!usage.allowed) {
                 if (onShowPaywall) onShowPaywall();
-                else alert("Limite diário de 5 escaneamentos atingido! Faça o upgrade para o plano PRO.");
+                else alert("Limite diário atingido! Faça o upgrade para o plano PRO.");
                 setLoading(false);
                 return;
             }
 
-            // Convert to base64 for display
             const reader = new FileReader();
             reader.onload = async (event) => {
                 const base64 = event.target?.result as string;
                 if (!base64) return;
 
-                // Load to an image element to extract features
                 const img = new Image();
                 img.onload = async () => {
-                    const features = await extractFeatures(img);
-                    setCapturedImage(base64);
-                    setCapturedFeatures(features);
-                    setViewMode('confirm');
-
-                    if ('geolocation' in navigator) {
-                        navigator.geolocation.getCurrentPosition(
-                            (pos) => {
-                                setLatInput(pos.coords.latitude.toString());
-                                setLngInput(pos.coords.longitude.toString());
-                            },
-                            undefined,
-                            { enableHighAccuracy: true, timeout: 10000 }
-                        );
+                    const result = await captureAndAnalyze(img);
+                    if (!result) {
+                        alert("Falha ao analisar a imagem.");
+                        setLoading(false);
+                        return;
                     }
 
-                    await runAiWithAnimation(base64);
-                    setLoading(false);
+                    if (mode === 'scan') {
+                        // Matching logic (Visual ID)
+                        const records = await getRecords();
+                        let bestMatch: LocationRecord | null = null;
+                        let highestSim = 0;
+
+                        for (const rec of records) {
+                            const sim = cosineSimilarity(result.features, rec.featureVector);
+                            if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
+                            if (rec.additionalImages) {
+                                for (const addView of rec.additionalImages) {
+                                    const simAdd = cosineSimilarity(result.features, addView.features);
+                                    if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
+                                }
+                            }
+                        }
+
+                        if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
+                            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                            await addPointToActiveRoute({
+                                id: bestMatch.id!,
+                                name: bestMatch.name,
+                                lat: bestMatch.lat,
+                                lng: bestMatch.lng,
+                                scannedAt: Date.now(),
+                                notes: bestMatch.notes,
+                                neighborhood: bestMatch.neighborhood,
+                                city: bestMatch.city,
+                                isRecent: true
+                            });
+
+                            setIsSendingToRoute(true);
+                            setTimeout(() => {
+                                setIsSendingToRoute(false);
+                                onNavigateToDailyRoute();
+                            }, 2000);
+                        } else {
+                            // If direct visual match fails, use AI to read and THEN maybe find?
+                            // For now, consistent with scan: alert and go to register if they want
+                            alert("Endereço não identificado no banco de dados.");
+                        }
+                        setLoading(false);
+                    } else {
+                        // Register mode
+                        setCapturedImage(base64);
+                        setCapturedFeatures(result.features);
+                        setViewMode('confirm');
+
+                        if ('geolocation' in navigator) {
+                            navigator.geolocation.getCurrentPosition(
+                                (pos) => {
+                                    setLatInput(pos.coords.latitude.toString());
+                                    setLngInput(pos.coords.longitude.toString());
+                                },
+                                undefined,
+                                { enableHighAccuracy: true, timeout: 10000 }
+                            );
+                        }
+
+                        await runAiWithAnimation(base64);
+                        setLoading(false);
+                    }
                 };
                 img.src = base64;
             };
             reader.readAsDataURL(file);
         } catch (err) {
-            console.error('Native capture failed:', err);
-            setLoading(false);
-        }
-    };
-
-    const handleCapture = async () => {
-        if (loading) return;
-        setLoading(true);
-        try {
-            // Check usage for free users
-            const usage = await checkAndUpdateUsage();
-            if (!usage.allowed) {
-                if (onShowPaywall) onShowPaywall();
-                else alert("Limite diário de 5 escaneamentos atingido! Faça o upgrade para o plano PRO.");
-                setLoading(false);
-                return;
-            }
-
-            const capture = await captureAndExtract();
-            if (!capture) {
-                console.error("Capture returned null");
-                alert("Falha ao capturar imagem da câmera. Verifique as permissões.");
-                setLoading(false);
-                return;
-            }
-
-            if (cameraMode === 'scan') {
-                // 1. Tentar reconhecimento offline primeiro (Scan funcional)
-                const records = await getRecords();
-                let bestMatch: LocationRecord | null = null;
-                let highestSim = 0;
-
-                for (const rec of records) {
-                    const sim = cosineSimilarity(capture.features, rec.featureVector);
-                    if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
-                    if (rec.additionalImages) {
-                        for (const addView of rec.additionalImages) {
-                            const simAdd = cosineSimilarity(capture.features, addView.features);
-                            if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
-                        }
-                    }
-                }
-
-                if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
-                    // Sucesso Scan Offline
-                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-                    await addPointToActiveRoute({
-                        id: bestMatch.id!,
-                        name: bestMatch.name,
-                        lat: bestMatch.lat,
-                        lng: bestMatch.lng,
-                        scannedAt: Date.now(),
-                        notes: bestMatch.notes,
-                        neighborhood: bestMatch.neighborhood,
-                        city: bestMatch.city,
-                        isRecent: true // Marker for the new section
-                    });
-
-                    setIsSendingToRoute(true);
-                    setTimeout(() => {
-                        setIsSendingToRoute(false);
-                        onNavigateToDailyRoute(); // Go to daily route to see the item
-                    }, 2000);
-                } else {
-                    alert("Endereço não encontrado na base de dados. Use 'Novo Registro' para cadastrá-lo.");
-                    setViewMode('dashboard');
-                }
-            } else {
-                // Modo Registro (Novo Registro) - Go straight to AI
-                setCapturedImage(capture.imageSrc);
-                setCapturedFeatures(capture.features);
-                setViewMode('confirm');
-
-                if ('geolocation' in navigator) {
-                    navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                            setLatInput(pos.coords.latitude.toString());
-                            setLngInput(pos.coords.longitude.toString());
-                        },
-                        undefined,
-                        { enableHighAccuracy: true, timeout: 10000 }
-                    );
-                }
-
-                await runAiWithAnimation(capture.imageSrc);
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
+            console.error('Processing failed:', err);
             setLoading(false);
         }
     };
@@ -486,89 +346,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
 
     // --- UI Helpers ---
 
-    if (viewMode === 'camera') {
-        return (
-            <div className="fixed inset-0 z-[11000] bg-black flex flex-col font-sans overflow-hidden">
-                {/* Camera Layer */}
-                <div className="absolute inset-0 z-0">
-                    <Webcam
-                        ref={webcamRef}
-                        audio={false}
-                        screenshotFormat="image/jpeg"
-                        onUserMedia={handleCameraLoad}
-                        videoConstraints={{
-                            facingMode: "environment",
-                            width: { ideal: 3840 },
-                            height: { ideal: 2160 },
-                            aspectRatio: 1.777777778,
-                            // @ts-ignore
-                            advanced: [
-                                { torch },
-                                { focusMode: 'continuous' },
-                                { sharpMode: 'on' },
-                                { iso: 100 }
-                            ] as any
-                        }}
-                        className="w-full h-full object-cover"
-                    />
-
-                    {/* Viewfinder removed to avoid obstructing image */}
-                </div>
-
-                {/* Minimalist Reader View */}
-                <div
-                    className="absolute inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none"
-                >
-                    {/* Full screen interactive area */}
-
-                    {/* Interactive Area for Scan Mode */}
-                    {cameraMode === 'scan' && (
-                        <div
-                            className="absolute inset-0 pointer-events-auto cursor-crosshair"
-                            onClick={async () => {
-                                if (navigator.vibrate) navigator.vibrate(20);
-
-                                if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
-                                    try {
-                                        await videoTrackRef.current.applyConstraints({
-                                            advanced: [{ focusMode: 'continuous' }] as any
-                                        });
-                                    } catch (e) { /* ignore */ }
-                                }
-                                handleCapture();
-                            }}
-                        />
-                    )}
-
-                    {/* Minimal Close Button */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setViewMode('dashboard'); }}
-                        className="absolute top-14 left-6 size-12 rounded-full glass-ui flex items-center justify-center text-white/40 active:scale-90 transition-all z-[110] pointer-events-auto"
-                    >
-                        <span className="material-symbols-outlined">close</span>
-                    </button>
-
-                    {/* Flash Toggle */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setTorch(!torch); }}
-                        className={`absolute top-14 right-6 size-12 rounded-full glass-ui flex items-center justify-center active:scale-90 transition-all z-[110] pointer-events-auto ${torch ? 'text-yellow-400' : 'text-white/40'}`}
-                    >
-                        <span className="material-symbols-outlined">{torch ? 'flash_on' : 'flash_off'}</span>
-                    </button>
-
-                    <div className="absolute bottom-32 left-1/2 -translate-x-1/2 text-center">
-                        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-primary mb-2 animate-pulse">
-                            {cameraMode === 'register' ? 'Novo Registro' : 'Escanear Endereço'}
-                        </p>
-                        <p className="text-[14px] font-bold text-white/40">
-                            {cameraMode === 'register' ? 'Aguarde a câmera...' : 'Toque na tela para ler agora'}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     if (viewMode === 'confirm') {
         const coordsValue = latInput && lngInput ? `${latInput}, ${lngInput}` : '';
 
@@ -577,12 +354,12 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 <header className="sticky top-0 z-50 backdrop-blur-xl bg-bg-start/60 border-b border-white/5 px-6 pt-10 pb-5">
                     <div className="flex items-center justify-between">
                         <button
-                            onClick={() => setViewMode('camera')}
+                            onClick={() => setViewMode('dashboard')}
                             className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 text-slate-300 active:scale-90 transition-transform"
                         >
                             <span className="material-symbols-outlined !text-[20px]">arrow_back_ios_new</span>
                         </button>
-                        <h1 className="text-lg font-bold tracking-tight text-white/90">Novo Endereço</h1>
+                        <h1 className="text-lg font-bold tracking-tight text-white/90">Confirmar Protocolo</h1>
                         <div className="size-10"></div>
                     </div>
                 </header>
@@ -922,6 +699,13 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                             >
                                 <span className="material-symbols-outlined !text-[22px]">barcode_scanner</span>
                             </button>
+                            {/* Importar Small FAB */}
+                            <button
+                                onClick={() => importFileInputRef.current?.click()}
+                                className="size-12 rounded-full bg-slate-700 text-white shadow-fab flex items-center justify-center animate-in fade-in zoom-in slide-in-from-bottom-2 duration-150 active:scale-90 border border-white/20"
+                            >
+                                <span className="material-symbols-outlined !text-[22px]">image</span>
+                            </button>
                         </>
                     )}
 
@@ -946,6 +730,14 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 capture="environment"
                 ref={fileInputRef}
                 onChange={handleNativeCapture}
+                className="hidden"
+            />
+            {/* Hidden Import Image Input */}
+            <input
+                type="file"
+                accept="image/*"
+                ref={importFileInputRef}
+                onChange={handleImportImage}
                 className="hidden"
             />
         </div>

@@ -214,20 +214,22 @@ export const updateRecord = async (id: string, updates: Partial<LocationRecord>)
 // --- ROUTE SESSION ---
 
 export const getActiveRoute = async (): Promise<RoutePoint[]> => {
-    // Prioritize localforage as it is the primary write target in updateActiveRoute
+    const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' });
+
+    // Prioritize localforage. If the value is [] (empty array), we SHOULD return it and NOT fallback.
     try {
-        const localData = await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).getItem<RoutePoint[]>('route');
-        if (localData && localData.length > 0) {
+        const localData = await store.getItem<RoutePoint[]>('route');
+        if (localData !== null) {
             return localData;
         }
     } catch (err) {
         console.warn('Failed to read route from localforage:', err);
     }
 
-    // Fallback to Supabase if localforage is empty
+    // Fallback to Supabase ONLY if localforage has NEVER been set (null)
     try {
         const { data, error } = await supabase.from('active_route').select('*').order('scanned_at', { ascending: true });
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
             const mapped = data.map(r => ({
                 id: r.id,
                 name: r.name,
@@ -241,10 +243,9 @@ export const getActiveRoute = async (): Promise<RoutePoint[]> => {
                 deadline: r.deadline,
                 isReturnPoint: r.is_return_point
             }));
-            // Also save to localforage for next time
-            try {
-                await localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' }).setItem('route', mapped);
-            } catch { /* ignore */ }
+
+            // Save to localforage to avoid future Supabase fallbacks if not needed
+            await store.setItem('route', mapped);
             return mapped;
         }
     } catch (err) {
@@ -321,13 +322,18 @@ export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => 
 
 export const clearActiveRoute = async (): Promise<void> => {
     console.log("🗑️ Chamando clearActiveRoute no banco de dados...");
-    try {
-        // Tentativa de limpeza profunda usando filtros que abrangem UUIDs e strings
-        const { error } = await supabase
-            .from('active_route')
-            .delete()
-            .neq('name', '___FORCE_CLEAR_ALL_UNMATCHABLE_STRING___');
+    const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' });
 
+    // 1. Limpar local IMEDIATAMENTE e setar para [] (não null) para o getActiveRoute saber que está vazio propositalmente
+    try {
+        await store.setItem('route', []);
+    } catch (err) {
+        console.error("❌ Erro ao limpar localforage:", err);
+    }
+
+    // 2. Limpar Supabase de forma agressiva
+    try {
+        const { error } = await supabase.from('active_route').delete().neq('name', '___FORCE_CLEAR_ALL_UNMATCHABLE_STRING___');
         if (error) {
             console.error("❌ Erro Supabase ao limpar rota:", error);
             // Fallback para outro filtro se o primeiro falhar
@@ -335,15 +341,6 @@ export const clearActiveRoute = async (): Promise<void> => {
         }
     } catch (err) {
         console.error("❌ Erro catastrófico ao limpar rota no Supabase:", err);
-    }
-
-    try {
-        const store = localforage.createInstance({ name: 'RouteImageApp', storeName: 'activeRoute' });
-        await store.removeItem('route');
-        await store.clear(); // Garantia extra: limpa todo o store de rota
-        console.log("✅ Armazenamento local de rota limpo.");
-    } catch (err) {
-        console.error("❌ Erro ao limpar localforage:", err);
     }
 };
 
