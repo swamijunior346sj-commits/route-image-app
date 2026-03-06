@@ -107,18 +107,49 @@ export const MapView = () => {
     const [isSearching, setIsSearching] = useState(false);
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
 
-    // Constant solid navigation line linking pending stops
-    const routeLine = useMemo(() => {
-        const line: [number, number][] = [];
+    // Replaced static straight lines with real road trajectories via OSRM API
+    const [routeLine, setRouteLine] = useState<[number, number][]>([]);
+
+    useEffect(() => {
+        const waypoints: [number, number][] = [];
         if (userLocation) {
-            line.push([userLocation.lat, userLocation.lng]);
+            waypoints.push([userLocation.lat, userLocation.lng]);
         }
         routePoints.forEach(p => {
             if (p.id !== 'current' && !p.isDelivered && p.lat !== null && p.lng !== null) {
-                line.push([p.lat, p.lng]);
+                waypoints.push([p.lat, p.lng]);
             }
         });
-        return line;
+
+        if (waypoints.length < 2) {
+            setRouteLine([]);
+            return;
+        }
+
+        // Delay to prevent spamming OSRM Public API
+        const timer = setTimeout(async () => {
+            try {
+                // Max 100 waypoints per request in OSRM public API
+                const chunk = waypoints.slice(0, 100);
+                const coordsString = chunk.map(wp => `${wp[1]},${wp[0]}`).join(';');
+                const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`);
+                if (!response.ok) throw new Error('OSRM Fetch failed');
+                const data = await response.json();
+
+                if (data.routes && data.routes[0] && data.routes[0].geometry) {
+                    // OSRM returns [lon, lat], Leaflet wants [lat, lon]
+                    const decoded = data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]] as [number, number]);
+                    setRouteLine(decoded);
+                } else {
+                    setRouteLine(waypoints); // Fallback to straight lines
+                }
+            } catch (err) {
+                console.warn('Real routing failed, using fallback lines.', err);
+                setRouteLine(waypoints);
+            }
+        }, 1200);
+
+        return () => clearTimeout(timer);
     }, [routePoints, userLocation]);
     const [isNavigating, setIsNavigating] = useState(false);
     const [navigationIndex, setNavigationIndex] = useState(0);
