@@ -25,6 +25,8 @@ export interface RoutePoint {
     isDelivered?: boolean;
     neighborhood?: string;
     city?: string;
+    deadline?: string;
+    isReturnPoint?: boolean;
 }
 
 export interface AppSettings {
@@ -44,6 +46,7 @@ export interface AppSettings {
         darkMode: boolean;
         showTraffic: boolean;
         autoCenter: boolean;
+        returnPointId?: string;
     };
     subscriptionPlan: 'free' | 'pro' | 'enterprise';
 }

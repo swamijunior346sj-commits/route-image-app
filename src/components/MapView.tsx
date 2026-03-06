@@ -241,6 +241,18 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Parada #{idx + 1}</span>
                                                 <h3 className="text-lg font-black text-white italic truncate uppercase">{p.name}</h3>
                                                 <p className="text-xs text-slate-500 font-bold uppercase mt-1">{p.neighborhood}</p>
+                                                {p.deadline && (
+                                                    <div className="mt-2 flex items-center gap-1.5 px-2 py-0.5 bg-red-500/10 border border-red-500/20 rounded w-fit">
+                                                        <span className="material-symbols-outlined !text-[12px] text-red-500">schedule</span>
+                                                        <span className="text-[9px] font-black text-red-400">ATÉ {p.deadline}</span>
+                                                    </div>
+                                                )}
+                                                {p.isReturnPoint && (
+                                                    <div className="mt-2 flex items-center gap-1.5 px-2 py-0.5 bg-primary/10 border border-primary/20 rounded w-fit">
+                                                        <span className="material-symbols-outlined !text-[12px] text-primary">warehouse</span>
+                                                        <span className="text-[9px] font-black text-primary">BASE DE RETORNO</span>
+                                                    </div>
+                                                )}
                                             </div>
                                             {p.isDelivered ? (
                                                 <span className="material-symbols-outlined text-emerald-500">check_circle</span>

@@ -15,6 +15,8 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
     const [lat, setLat] = useState(item.lat?.toString() || '');
     const [lng, setLng] = useState(item.lng?.toString() || '');
     const [notes, setNotes] = useState(item.notes || '');
+    const [deadline, setDeadline] = useState((item as RoutePoint).deadline || '');
+    const [isReturnPoint, setIsReturnPoint] = useState((item as RoutePoint).isReturnPoint || false);
     const [image, setImage] = useState((item as LocationRecord).imageThumbnail || '');
     const [additionalImages, setAdditionalImages] = useState<{ id: string; image: string; features: number[] }[]>((item as LocationRecord).additionalImages || []);
 
@@ -76,7 +78,9 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
             lng: lng ? parseFloat(lng) : null,
             notes,
             ...(image ? { imageThumbnail: image } : {}),
-            additionalImages
+            additionalImages,
+            deadline,
+            isReturnPoint
         });
     };
 
@@ -138,6 +142,40 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
                             value={city}
                             onChange={(e) => setCity(e.target.value)}
                         />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Janela de Tempo (DeadLine)</label>
+                        <div className="relative group/time">
+                            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                                <span className="material-symbols-outlined text-primary !text-[20px]">schedule</span>
+                            </div>
+                            <input
+                                className="glass-input pl-12"
+                                type="time"
+                                value={deadline}
+                                onChange={(e) => setDeadline(e.target.value)}
+                            />
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-medium px-1 italic">Defina o horário limite para priorização automática da IA</p>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 glass-card rounded-2xl border-white/5">
+                        <div className="flex items-center gap-3">
+                            <div className={`size-10 rounded-xl flex items-center justify-center transition-all ${isReturnPoint ? 'bg-primary/20 text-primary' : 'bg-white/5 text-slate-600'}`}>
+                                <span className="material-symbols-outlined !text-[20px]">warehouse</span>
+                            </div>
+                            <div className="leading-tight">
+                                <p className="text-xs font-black text-white italic uppercase">Retorno à Base</p>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Finalizar Rota Aqui</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setIsReturnPoint(!isReturnPoint)}
+                            className={`w-12 h-6 rounded-full transition-all relative ${isReturnPoint ? 'bg-primary' : 'bg-white/10'}`}
+                        >
+                            <div className={`absolute top-1 size-4 rounded-full bg-white transition-all ${isReturnPoint ? 'left-7' : 'left-1'}`} />
+                        </button>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

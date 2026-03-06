@@ -86,8 +86,22 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
                     duration: el.duration?.text || ''
                 }));
 
-                // Sort points based on distance
+                // Intelligent Sorting: Deadlines first, then Distance, keeping Return Point last
                 const sortedPoints = [...pointsToOptimize].sort((a, b) => {
+                    // 1. Always keep the return point at the end
+                    if (a.isReturnPoint) return 1;
+                    if (b.isReturnPoint) return -1;
+
+                    // 2. Prioritize entries with a deadline
+                    if (a.deadline && !b.deadline) return -1;
+                    if (!a.deadline && b.deadline) return 1;
+
+                    // 3. If both have deadlines, sort by the earliest deadline
+                    if (a.deadline && b.deadline) {
+                        return a.deadline.localeCompare(b.deadline);
+                    }
+
+                    // 4. Fallback to distance optimization
                     const distA = distances.find(d => pointsToOptimize[d.index].id === a.id)?.distance || 0;
                     const distB = distances.find(d => pointsToOptimize[d.index].id === b.id)?.distance || 0;
                     return distA - distB;
@@ -341,6 +355,20 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
                                         <p className="text-sm text-slate-400 mt-1 font-medium opacity-80">
                                             {p.neighborhood || 'Bairro ñ identificado'} • {p.city || 'Cidade ñ def.'}
                                         </p>
+
+                                        {p.deadline && (
+                                            <div className="mt-3 flex items-center gap-1.5 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full w-fit">
+                                                <span className="material-symbols-outlined !text-[14px] text-red-500">schedule</span>
+                                                <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">Entrega até {p.deadline}</span>
+                                            </div>
+                                        )}
+
+                                        {p.isReturnPoint && (
+                                            <div className="mt-3 flex items-center gap-1.5 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full w-fit">
+                                                <span className="material-symbols-outlined !text-[14px] text-primary">warehouse</span>
+                                                <span className="text-[10px] font-black text-primary uppercase tracking-widest">Ponto de Retorno (Base)</span>
+                                            </div>
+                                        )}
 
                                         {isNext && (
                                             <div className="mt-6 flex gap-3">
