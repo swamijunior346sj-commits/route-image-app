@@ -727,7 +727,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
 
             {/* Notifications Content Overlay */}
             {viewMode === 'notifications' && (
-                <NotificationsView onClose={() => setViewMode('dashboard')} />
+                <NotificationsView onBack={() => setViewMode('dashboard')} />
             )}
 
             {/* notifications and overlays ... */}
