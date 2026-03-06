@@ -33,6 +33,7 @@ export interface AppSettings {
         email: string;
         phone: string;
         vehicle: string;
+        avatar?: string;
     };
     notifications: {
         push: boolean;
@@ -51,7 +52,8 @@ const defaultSettings: AppSettings = {
         name: '',
         email: '',
         phone: '',
-        vehicle: ''
+        vehicle: '',
+        avatar: ''
     },
     notifications: {
         push: true,

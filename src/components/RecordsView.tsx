@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRecords, deleteRecord, updateRecord, getActiveRoute, updateActiveRoute, saveRecord } from '../services/db';
 import type { LocationRecord } from '../services/db';
-import { Download, Upload, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, FileText, FileSpreadsheet, FileJson, ChevronDown, ChevronUp } from 'lucide-react';
-import { exportAsCSV, exportAsJSON, exportAsXLS, exportAsPDF, importRecords as processImport } from '../services/importExport';
+import { Download, Trash2, Database, Image as ImageIcon, Edit2, LocateFixed, X, Camera, Trash, Search, CheckSquare, Square, CheckCircle2, MapPinned, Plus, FileText, FileSpreadsheet, FileJson, ChevronDown, ChevronUp } from 'lucide-react';
+import { exportAsCSV, exportAsJSON, exportAsXLS, exportAsPDF } from '../services/importExport';
 import { extractFeatures } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
 import { LoadingOverlay } from './LoadingOverlay';
@@ -36,7 +36,6 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
 
     // AI/Vision Loading states
     const [isExtracting, setIsExtracting] = useState(false);
-    const [isImporting, setIsImporting] = useState(false);
 
     const displayRecords = searchQuery.length >= 3
         ? records.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -105,56 +104,6 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
-    };
-
-
-    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-            setIsImporting(true);
-
-            // Capture existing record IDs before import
-            const existingRecords = await getRecords();
-            const existingIds = new Set(existingRecords.map(r => r.id));
-
-            // Import records to DB
-            await processImport(file);
-
-            // Reload and find newly imported records
-            const allRecords = await getRecords();
-            setRecords(allRecords);
-            const newRecords = allRecords.filter(r => !existingIds.has(r.id));
-
-            if (newRecords.length > 0) {
-                // Add all new records to the active route
-                const currentRoute = await getActiveRoute();
-                const newPoints = newRecords.map(r => ({
-                    id: r.id,
-                    name: r.name,
-                    lat: r.lat,
-                    lng: r.lng,
-                    scannedAt: Date.now(),
-                    notes: r.notes,
-                    neighborhood: r.neighborhood,
-                    city: r.city
-                }));
-
-                const finalRoute = [...currentRoute.filter(p => p.id !== 'current'), ...newPoints];
-                await updateActiveRoute(finalRoute);
-            }
-
-            setIsImporting(false);
-
-            // Navigate to map with cinema transition
-            if (onNavigateToMap) {
-                onNavigateToMap();
-            }
-        } catch (err: any) {
-            setIsImporting(false);
-            alert(`Erro ao importar: ${err?.message || err}`);
-        }
-        e.target.value = '';
     };
 
     const [selectedDetail, setSelectedDetail] = useState<LocationRecord | null>(null);
@@ -505,19 +454,11 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                             </div>
                         )}
                     </div>
-
-                    {/* IMPORT */}
-                    <label className="w-full bg-zinc-950/40 backdrop-blur-xl border border-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-white/[0.03] transition-all cursor-pointer group">
-                        <Upload size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black italic uppercase tracking-widest text-zinc-400 group-hover:text-white">Importar Endereços</span>
-                        <span className="text-[8px] text-zinc-700 font-black uppercase">.json .csv .xls .xlsx</span>
-                        <input type="file" accept=".json,.csv,.xlsx,.xls" className="hidden" onChange={handleImport} />
-                    </label>
                 </div>
             )}
 
-            {/* Grid display */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5 px-6 pb-20 mt-4">
+            {/* Grid display: 1 Card per line */}
+            <div className="flex flex-col gap-5 px-6 pb-20 mt-4">
                 {displayRecords.map(record => {
                     const isSelected = selectedIds.has(record.id);
                     const isSelectionMode = selectedIds.size > 0;
@@ -525,9 +466,9 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                     return (
                         <div
                             key={record.id}
-                            className={`relative group overflow-hidden rounded-[2rem] bg-zinc-950 border transition-all duration-500 cursor-pointer select-none aspect-square flex flex-col p-5 ${isSelected
-                                ? 'border-blue-500 shadow-[0_0_40px_rgba(59,130,246,0.3)] scale-[0.97]'
-                                : 'border-white/5 hover:border-white/10 shadow-2xl'
+                            className={`relative group overflow-hidden rounded-[2rem] bg-zinc-950 border transition-all duration-500 cursor-pointer select-none flex flex-col p-5 ${isSelected
+                                ? 'border-blue-500 shadow-[0_0_40px_rgba(59,130,246,0.3)] scale-[0.98]'
+                                : 'border-white/5 hover:border-white/10 shadow-lg'
                                 }`}
                             onTouchStart={() => handlePressStart(record.id)}
                             onTouchEnd={handlePressEnd}
@@ -892,13 +833,6 @@ export const RecordsView = ({ onNavigateToMap }: RecordsViewProps) => {
                 </div>
             )}
 
-            {/* IMPORTING ANIMATION */}
-            {isImporting && (
-                <LoadingOverlay
-                    title="Processando Dados"
-                    subtitle="Importando registros para o banco geográfico"
-                />
-            )}
         </div>
     );
 };

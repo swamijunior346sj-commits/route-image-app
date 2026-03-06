@@ -14,7 +14,7 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
     const [loading, setLoading] = useState(true);
 
     // Temp form state
-    const [personalForm, setPersonalForm] = useState({ name: '', email: '', phone: '', vehicle: '' });
+    const [personalForm, setPersonalForm] = useState({ name: '', email: '', phone: '', vehicle: '', avatar: '' });
     const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
     const [showPass, setShowPass] = useState(false);
 
@@ -22,7 +22,10 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
         const load = async () => {
             const s = await getSettings();
             setSettings(s);
-            setPersonalForm(s.personalData);
+            setPersonalForm({
+                ...s.personalData,
+                avatar: s.personalData.avatar || ''
+            });
             setLoading(false);
         };
         load();
@@ -41,6 +44,22 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
         setSettings(updated);
         setSubview('main');
         if (navigator.vibrate) navigator.vibrate(20);
+    };
+
+    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !settings) return;
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64 = reader.result as string;
+            const updated = await updateSettings({
+                ...settings,
+                personalData: { ...settings.personalData, avatar: base64 }
+            });
+            setSettings(updated);
+        };
+        reader.readAsDataURL(file);
     };
 
     const toggleSetting = async (category: 'notifications' | 'mapPreferences', field: string) => {
@@ -239,33 +258,37 @@ export const ProfileView = ({ onLogout }: ProfileViewProps) => {
             <div className="sticky top-0 z-20 w-full p-8 bg-black/40 backdrop-blur-2xl border-b border-white/5 animate-fade-in">
                 <div className="flex justify-between items-start mb-10">
                     <div className="space-y-1">
-                        <h1 className="text-3xl font-black italic tracking-tighter text-white uppercase italic">Central <span className="text-blue-500">Operacional</span></h1>
-                        <p className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em]">ID Agente: SV-2026-ALPHA</p>
-                    </div>
-                    <div className="bg-emerald-500/10 border border-emerald-500/20 px-4 py-1.5 rounded-full">
-                        <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Ativo</span>
+                        <h1 className="text-3xl font-black italic tracking-tighter text-white uppercase italic"><span className="text-blue-500">Contas</span></h1>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-8 px-2">
-                    <div className="relative group">
+                    <div className="relative group cursor-pointer">
+                        <label className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-[2.5rem] cursor-pointer">
+                            <User size={24} className="text-white mb-1" />
+                            <span className="text-[8px] font-black text-white uppercase tracking-widest">Alterar</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+                        </label>
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-[2.5rem] blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
                         <div className="relative w-24 h-24 rounded-[2.5rem] bg-zinc-950 border border-white/10 flex items-center justify-center p-1 overflow-hidden shadow-2xl">
                             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-                            <div className="w-full h-full rounded-[2rem] bg-zinc-900 flex items-center justify-center border border-white/5">
-                                <User size={40} className="text-blue-500/60" />
+                            <div className="w-full h-full rounded-[2rem] bg-zinc-900 flex items-center justify-center border border-white/5 overflow-hidden">
+                                {settings.personalData.avatar ? (
+                                    <img src={settings.personalData.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                    <User size={40} className="text-blue-500/60" />
+                                )}
                             </div>
                         </div>
                     </div>
                     <div className="flex flex-col space-y-1">
-                        <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter">{settings.personalData.name || 'Novo Agente'}</h2>
+                        <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter">{settings.personalData.name || 'Nome do Usuário'}</h2>
                         <div className="flex items-center gap-3">
                             <div className="flex gap-1">
                                 {[1, 2, 3, 4, 5].map(i => (
-                                    <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= 4 ? 'bg-blue-500' : 'bg-zinc-800'}`} />
+                                    <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= 3 ? 'bg-blue-500' : 'bg-zinc-800'}`} />
                                 ))}
                             </div>
-                            <span className="text-[10px] font-black text-blue-500/60 uppercase tracking-widest">Elite Operator</span>
                         </div>
                     </div>
                 </div>
