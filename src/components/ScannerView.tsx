@@ -40,7 +40,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [isCockpitOpen, setIsCockpitOpen] = useState(false);
     const [torch, setTorch] = useState(false);
     const videoTrackRef = useRef<MediaStreamTrack | null>(null);
-    const [isScannerReady, setIsScannerReady] = useState(false);
 
     // Registering/Confirmation State
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -56,7 +55,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
 
     const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
     const [aiStatus, setAiStatus] = useState('');
-    const [facingMode] = useState<'environment' | 'user'>('environment');
 
     const VALOR_POR_PACOTE = 2.25;
     const SIMILARITY_THRESHOLD = 0.80;
@@ -144,7 +142,6 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
         if (video && video.srcObject instanceof MediaStream) {
             const track = video.srcObject.getVideoTracks()[0];
             videoTrackRef.current = track;
-            setIsScannerReady(true);
 
             // High resolution & Focus constraints
             if (track.applyConstraints) {
@@ -421,11 +418,11 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
 
                     {/* Interactive Area for Scan Mode */}
                     {cameraMode === 'scan' && (
-                        <div 
+                        <div
                             className="absolute inset-0 pointer-events-auto cursor-crosshair"
                             onClick={async () => {
                                 if (navigator.vibrate) navigator.vibrate(20);
-                                
+
                                 if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
                                     try {
                                         await videoTrackRef.current.applyConstraints({
@@ -461,7 +458,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                                 onClick={async (e) => {
                                     e.stopPropagation();
                                     if (navigator.vibrate) navigator.vibrate([30, 10, 30]);
-                                    
+
                                     if (videoTrackRef.current && videoTrackRef.current.applyConstraints) {
                                         try {
                                             await videoTrackRef.current.applyConstraints({
