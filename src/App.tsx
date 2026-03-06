@@ -1,274 +1,175 @@
-import { useState, useEffect, Component } from 'react';
-import type { ReactNode } from 'react';
-
-class ErrorBoundary extends Component<{ children: ReactNode, fallback: (error: Error) => ReactNode }, { hasError: boolean, error: Error | null }> {
-  constructor(props: { children: ReactNode, fallback: (error: Error) => ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
-  componentDidCatch(error: Error, _info: any) {
-    console.error("Caught by ErrorBoundary:", error, _info);
-    alert("CRASH: " + error.message);
-  }
-  render() {
-    if (this.state.hasError && this.state.error) { return this.props.fallback(this.state.error); }
-    return this.props.children;
-  }
-}
-
-import { ScannerView } from './components/ScannerView';
-import { MapView } from './components/MapView';
-import { RecordsView } from './components/RecordsView';
-import { DailyRouteView } from './components/DailyRouteView';
-import { SideNav } from './components/SideNav';
-import { AuthView } from './components/AuthView';
-import { ProfileView } from './components/ProfileView';
+import { useState, useEffect } from 'react';
 import { loadModel } from './services/imageProcessing';
-import { LoadingOverlay } from './components/LoadingOverlay';
-import { AdminView } from './components/AdminView';
+import { ScannerView } from './components/ScannerView';
+import { SideNav } from './components/SideNav';
+import { DailyRouteView } from './components/DailyRouteView';
+import { RecordsView } from './components/RecordsView';
 import { SubscriptionView } from './components/SubscriptionView';
+import { AdminView } from './components/AdminView';
+import { LoadingOverlay } from './components/LoadingOverlay';
+import { AuthView } from './components/AuthView';
+import { getSettings, defaultSettings, type AppSettings } from './services/db';
 import { supabase } from './services/supabase';
-import { getSettings, type AppSettings, defaultSettings } from './services/db';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
+import { ClonedHomeView } from './components/ClonedHomeView';
+import { MapPickerView } from './components/MapPickerView';
+
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute'>('scanner');
+  const [currentTab, setCurrentTab] = useState<'home' | 'scanner' | 'records' | 'dailyRoute' | 'mapPicker'>('home');
   const [modelLoading, setModelLoading] = useState(true);
-  const [mapVersion, setMapVersion] = useState(0);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [scannerInitialMode, setScannerInitialMode] = useState<'dashboard' | 'camera'>('dashboard');
+  const [scannerInitialMode, setScannerInitialMode] = useState<'camera' | 'confirm'>('camera');
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isSideNavOpen, setIsSideNavOpen] = useState(false);
-
-  // Use localStorage to pretend we have a real session active
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
     () => localStorage.getItem('isAuthenticated') === 'true'
   );
 
   useEffect(() => {
     const initApp = async () => {
-      console.log("🚀 Iniciando RouteVision...");
+      console.log("🚀 Iniciando RouteVision Cloned...");
       try {
-        // Run model loading in background to not block the main UI
-        console.log("📦 Disparando modelos IA no background...");
-        loadModel().then(() => console.log("✅ Modelos IA Carregados!")).catch(e => console.error("❌ Erro no carregamento do modelo:", e));
-
-        console.log("🔑 Verificando sessão...");
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error("❌ Erro na sessão:", sessionError);
-        }
-
+        loadModel().catch(console.error);
+        const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          console.log("👤 Usuário logado detected:", session.user.email);
           setUser(session.user);
           setIsAuthenticated(true);
-
-          console.log("⚙️ Carregando configurações...");
-          try {
-            const s = await getSettings();
-            if (s) setSettings(s);
-          } catch (e) {
-            console.warn("⚠️ Falha ao carregar configurações, seguindo com padrão", e);
-          }
+          const s = await getSettings();
+          if (s) setSettings(s);
         } else {
-          console.log("📢 Nenhuma sessão ativa encontrada.");
           setIsAuthenticated(false);
-          localStorage.removeItem('isAuthenticated');
         }
       } catch (err) {
-        console.error("❌ Erro fatal na inicialização:", err);
+        console.error("Init error:", err);
       } finally {
-        console.log("✅ Finalizando estado de carregamento.");
         setModelLoading(false);
       }
     };
     initApp();
 
-    // Failsafe: Force stop loading after 1.5 seconds no matter what
-    const timeout = setTimeout(() => {
-      console.log("⏱️ Failsafe acionado: forçando fechamento do loading");
+    // Failsafe timeout
+    const timer = setTimeout(() => {
       setModelLoading(false);
-    }, 1500);
+    }, 3000);
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
-      const isAuth = !!session;
-      setIsAuthenticated(isAuth);
-      if (isAuth) {
-        localStorage.setItem('isAuthenticated', 'true');
+      setIsAuthenticated(!!session);
+      if (session) {
         const s = await getSettings();
         setSettings(s);
       }
-      else {
-        localStorage.removeItem('isAuthenticated');
-        setSettings(defaultSettings);
-      }
     });
 
-    // Setup history for hardware back button navigation
-    const handlePopState = (e: PopStateEvent) => {
-      if (e.state && e.state.tab) {
-        setCurrentTab(e.state.tab);
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
     return () => {
-      clearTimeout(timeout);
       subscription.unsubscribe();
-      window.removeEventListener('popstate', handlePopState);
+      clearTimeout(timer);
     };
   }, []);
 
-  const changeTab = (tab: 'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute', options?: { scannerMode?: 'dashboard' | 'camera', showSubModal?: boolean }) => {
-    if (options?.showSubModal) {
-      setIsSubscriptionOpen(true);
-      return;
-    }
-    if (tab === currentTab && !options?.scannerMode) return;
-    window.history.pushState({ tab }, '');
-    if (tab === 'map') setMapVersion(v => v + 1);
-    if (tab === 'scanner') setScannerInitialMode(options?.scannerMode || 'dashboard');
+  const changeTab = (tab: any, options?: any) => {
+    if (tab === 'scanner') setScannerInitialMode(options?.scannerMode || 'camera');
     setCurrentTab(tab);
   };
 
-  // Sync Global Theme
-  useEffect(() => {
-    const isDark = settings?.mapPreferences?.darkMode ?? true;
-    if (!isDark) {
-      document.documentElement.classList.add('light-mode');
-    } else {
-      document.documentElement.classList.remove('light-mode');
-    }
-  }, [settings?.mapPreferences?.darkMode]);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('isAuthenticated');
+    window.location.reload();
+  };
 
   const handleSelectPlan = async (planId: 'free' | 'pro' | 'enterprise') => {
     if (!user) return;
-
-    // 1. Update in profiles table in Supabase
     const { error } = await supabase
       .from('profiles')
       .update({ subscription_plan: planId })
       .eq('id', user.id);
-
     if (error) {
       console.error("Failed to update plan", error);
       alert("Erro ao processar plano. Tente novamente.");
       return;
     }
-
-    // 2. Refresh settings locally
     const updatedSettings = await getSettings();
     setSettings(updatedSettings);
     setIsSubscriptionOpen(false);
     alert(`Parabéns! Você agora é um usuário ${planId.toUpperCase()}!`);
   };
 
-
-
-  if (modelLoading) {
-    return (
-      <LoadingOverlay
-        title="Protocolo RouteVision"
-        subtitle="Iniciando Motores de IA e Reconhecimento Neural"
-        icon={<span className="material-symbols-outlined !text-[44px] text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.8)]">center_focus_weak</span>}
-      />
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <AuthView onLogin={() => setIsAuthenticated(true)} />;
-  }
-
-  if (isAdminOpen) {
-    return (
-      <ErrorBoundary fallback={(error) => (
-        <div className="fixed inset-0 z-[500] bg-red-900 flex flex-col items-center justify-center p-8 text-white">
-          <h2 className="text-2xl font-black mb-4">CRASH NO PAINEL</h2>
-          <p className="font-mono text-xs">{error.message}</p>
-          <button onClick={() => setIsAdminOpen(false)} className="mt-8 bg-white/20 px-6 py-4 rounded-xl font-bold">Fechar Erro</button>
-        </div>
-      )}>
-        <AdminView onBack={() => setIsAdminOpen(false)} />
-      </ErrorBoundary>
-    );
-  }
+  if (modelLoading) return <LoadingOverlay title="Carregando..." subtitle="Preparando interface premium" />;
+  if (!isAuthenticated) return <AuthView onLogin={() => setIsAuthenticated(true)} />;
 
   return (
-    <div className="w-full h-screen bg-black text-white overflow-hidden flex flex-col font-sans">
+    <div className="w-full h-screen bg-white text-gray-900 overflow-hidden flex flex-col font-sans">
 
-      {/* Top Left Navigation Menu Toggle */}
-      <button
-        onClick={() => setIsSideNavOpen(true)}
-        className="absolute top-6 left-6 z-[100] size-12 glass-card rounded-xl flex items-center justify-center shadow-lg border-white/10 active:scale-95 transition-all group"
-      >
-        <span className="material-symbols-outlined !text-[28px] text-white/90">menu</span>
-      </button>
-
+      {/* Main Viewport */}
       <div className="flex-1 w-full h-full relative">
-        {currentTab === 'scanner' && (
-          <ScannerView
-            onNavigateToMap={() => changeTab('map')}
-            onNavigateToDailyRoute={() => changeTab('dailyRoute')}
-            initialViewMode={scannerInitialMode}
-            onShowPaywall={() => setIsSubscriptionOpen(true)}
+        {currentTab === 'home' && (
+          <ClonedHomeView
+            googleMapsApiKey={GOOGLE_MAPS_API_KEY}
+            onOpenMenu={() => setIsSideNavOpen(true)}
+            onAddStops={() => changeTab('scanner')}
+            onOpenMapPicker={() => changeTab('mapPicker')}
           />
         )}
-        {currentTab === 'map' && <MapView key={mapVersion} googleMapsApiKey={GOOGLE_MAPS_API_KEY} />}
+
+        {currentTab === 'mapPicker' && (
+          <MapPickerView
+            googleMapsApiKey={GOOGLE_MAPS_API_KEY}
+            onBack={() => changeTab('home')}
+            onConfirm={(addr) => {
+              console.log("Confirmado:", addr);
+              changeTab('home');
+            }}
+          />
+        )}
+
+        {currentTab === 'scanner' && (
+          <div className="fixed inset-0 z-[200] bg-black">
+            <ScannerView
+              onNavigateToDailyRoute={() => changeTab('dailyRoute')}
+              initialViewMode={scannerInitialMode}
+              onShowPaywall={() => setIsSubscriptionOpen(true)}
+            />
+            <button
+              onClick={() => changeTab('home')}
+              className="absolute top-6 left-6 z-[300] size-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+            </button>
+          </div>
+        )}
+
         {currentTab === 'records' && (
           <RecordsView
-            onNavigateToMap={() => changeTab('map')}
-            onBack={() => changeTab('map')}
+            onNavigateToMap={() => changeTab('home')}
+            onBack={() => changeTab('home')}
           />
         )}
+
         {currentTab === 'dailyRoute' && (
           <DailyRouteView
-            onNavigateToMap={() => changeTab('map')}
+            onNavigateToMap={() => changeTab('home')}
             onNavigateToScanner={() => changeTab('scanner', { scannerMode: 'camera' })}
-            onBack={() => changeTab('map')}
-          />
-        )}
-        {currentTab === 'profile' && (
-          <ProfileView
-            onLogout={async () => {
-              console.log("👋 Encerrando sessão...");
-              try {
-                // Pre-clear state to be fast
-                setIsAuthenticated(false);
-                setUser(null);
-                setSettings(defaultSettings);
-                localStorage.removeItem('isAuthenticated');
-
-                await supabase.auth.signOut();
-              } catch (e) {
-                console.error("Logout error:", e);
-              } finally {
-                // Ensure everything is clean
-                window.location.reload();
-              }
-            }}
-            onBack={() => changeTab('map')}
-            onNavigateToAdmin={() => setIsAdminOpen(true)}
-            isAdmin={true}
-            settings={settings}
-            onUpdateSettings={setSettings}
+            onBack={() => changeTab('home')}
           />
         )}
       </div>
 
+      {isAdminOpen && <AdminView onBack={() => setIsAdminOpen(false)} />}
+
       <SideNav
         isOpen={isSideNavOpen}
         onClose={() => setIsSideNavOpen(false)}
-        currentTab={currentTab}
-        setTab={changeTab}
+        currentTab={currentTab as any}
+        setTab={(t) => changeTab(t === 'map' ? 'home' : t)}
         userEmail={user?.email}
         isPro={settings?.subscriptionPlan !== 'free'}
+        onLogout={handleLogout}
+        onNavigateToAdmin={() => setIsAdminOpen(true)}
       />
 
       {isSubscriptionOpen && (

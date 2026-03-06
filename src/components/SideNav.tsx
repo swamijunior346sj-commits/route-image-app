@@ -1,21 +1,23 @@
 import { useEffect } from 'react';
+import { clearAllUserData } from '../services/db';
 
 interface SideNavProps {
     isOpen: boolean;
     onClose: () => void;
-    currentTab: 'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute';
-    setTab: (tab: 'scanner' | 'map' | 'records' | 'profile' | 'dailyRoute') => void;
+    currentTab: 'scanner' | 'map' | 'records' | 'dailyRoute';
+    setTab: (tab: 'scanner' | 'map' | 'records' | 'dailyRoute') => void;
     userEmail?: string;
     isPro: boolean;
+    onLogout: () => void;
+    onNavigateToAdmin: () => void;
 }
 
-export const SideNav = ({ isOpen, onClose, currentTab, setTab, userEmail, isPro }: SideNavProps) => {
+export const SideNav = ({ isOpen, onClose, currentTab, setTab, userEmail, isPro, onLogout, onNavigateToAdmin }: SideNavProps) => {
     const tabs = [
         { id: 'dailyRoute', icon: 'route', label: 'Rota do Dia' },
         { id: 'map', icon: 'map', label: 'Mapa de Entrega' },
-        { id: 'scanner', icon: 'barcode_scanner', label: 'Scan Inteligente' },
+        { id: 'scanner', icon: 'qr_code_scanner', label: 'Scan Inteligente' },
         { id: 'records', icon: 'format_list_bulleted', label: 'Histórico' },
-        { id: 'profile', icon: 'person', label: 'Minha Conta' },
     ] as const;
 
     // Handle pressing escape to close
@@ -26,6 +28,13 @@ export const SideNav = ({ isOpen, onClose, currentTab, setTab, userEmail, isPro 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, onClose]);
+
+    const handleClearData = async () => {
+        if (confirm("ATENÇÃO: Isso apagará TODOS os seus endereços, rotas e configurações. O processo é irreversível. Deseja continuar?")) {
+            await clearAllUserData();
+            window.location.reload();
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -80,6 +89,7 @@ export const SideNav = ({ isOpen, onClose, currentTab, setTab, userEmail, isPro 
 
                 {/* Navigation Links */}
                 <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2 no-scrollbar">
+                    <p className="px-5 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 opacity-60">Navegação Principal</p>
                     {tabs.map((tab) => {
                         const isActive = currentTab === tab.id;
                         return (
@@ -104,12 +114,41 @@ export const SideNav = ({ isOpen, onClose, currentTab, setTab, userEmail, isPro 
                             </button>
                         );
                     })}
+
+                    <div className="pt-4 space-y-2">
+                        <p className="px-5 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 opacity-60">Administração</p>
+                        <button
+                            onClick={() => { onNavigateToAdmin(); onClose(); }}
+                            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-400 hover:bg-red-400/5 transition-all"
+                        >
+                            <span className="material-symbols-outlined !text-[24px]">admin_panel_settings</span>
+                            <span className="text-xs font-black uppercase tracking-widest">Painel Admin</span>
+                        </button>
+                    </div>
+
+                    <div className="pt-4 space-y-2">
+                        <p className="px-5 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 opacity-60">Minha Conta</p>
+                        <button
+                            onClick={handleClearData}
+                            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-slate-500 hover:bg-white/5 transition-all"
+                        >
+                            <span className="material-symbols-outlined !text-[22px]">delete_sweep</span>
+                            <span className="text-xs font-black uppercase tracking-widest">Limpar Todos Dados</span>
+                        </button>
+                        <button
+                            onClick={() => { onLogout(); onClose(); }}
+                            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-slate-500 hover:bg-white/5 transition-all"
+                        >
+                            <span className="material-symbols-outlined !text-[22px]">logout</span>
+                            <span className="text-xs font-black uppercase tracking-widest">Sair da Conta</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Footer Link / Info */}
                 <div className="p-6 border-t border-white/5 text-center mt-auto">
                     <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.2em]">
-                        RouteVision Engine v2.4
+                        RouteVision Engine v2.5
                     </p>
                 </div>
             </div>
