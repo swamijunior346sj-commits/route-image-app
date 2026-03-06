@@ -8,25 +8,31 @@ const libraries: ("places" | "geometry")[] = ['places', 'geometry'];
 const defaultCenter = { lat: -23.5505, lng: -46.6333 };
 const mapContainerStyle = { width: '100%', height: '100%' };
 
-// Premium Dark Style
-const mapOptions = {
-    disableDefaultUI: true,
-    zoomControl: false,
-    mapTypeControl: false,
-    streetViewControl: false,
-    fullscreenControl: false,
-    clickableIcons: false,
-};
-
-const getMapStyles = () => [
+const NIGHT_MAP_STYLE = [
     { "elementType": "geometry", "stylers": [{ "color": "#0F172A" }] },
-    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0F172A" }] },
+    { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
     { "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] },
-    { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
+    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0F172A" }] },
+    { "featureType": "administrative", "elementType": "geometry", "stylers": [{ "visibility": "off" }] },
     { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
     { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1E293B" }] },
-    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#3B82F6" }, { "lightness": -40 }] },
-    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#082f49" }] },
+    { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748B" }] },
+    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#1E293B" }] },
+    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#334155" }] },
+    { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#CBD5E1" }] },
+    { "featureType": "transit", "stylers": [{ "visibility": "off" }] },
+    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#082F49" }] }
+];
+
+const SILVER_MAP_STYLE = [
+    { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
+    { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+    { "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
+    { "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f5f5" }] },
+    { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#bdbdbd" }] },
+    { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
+    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#dadada" }] },
+    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#c9c9c9" }] }
 ];
 
 // Custom Marker Components
@@ -54,11 +60,28 @@ const DeliveredMarker = () => (
 
 const CurrentMarker = () => (
     <div style={{ position: 'absolute', transform: 'translate(-50%, -50%)' }}>
-        <div className="relative">
-            <div className="absolute inset-0 bg-primary/40 rounded-full animate-ping scale-150"></div>
-            <div className="size-10 bg-primary/80 backdrop-blur-md rounded-full border-[3px] border-white shadow-2xl flex items-center justify-center">
-                <span className="material-symbols-outlined text-white !text-[20px] transform -rotate-45">navigation</span>
+        <div className="relative flex items-center justify-center">
+            {/* The Beam (Farol Aceso) - Animate glow */}
+            <div
+                className="absolute w-[80px] h-[80px] bg-gradient-to-t from-primary/30 to-transparent animate-pulse"
+                style={{
+                    clipPath: 'polygon(50% 100%, 10% 0%, 90% 0%)',
+                    transform: 'translateY(-40%)',
+                    filter: 'blur(8px)',
+                    opacity: 0.6
+                }}
+            />
+            {/* Pulsing Outer Halo */}
+            <div className="absolute inset-0 size-8 bg-primary/20 rounded-full animate-ping scale-150"></div>
+
+            {/* Driver "Blue Bullet" Dot */}
+            <div className="relative size-6 bg-primary rounded-full border-[3px] border-white shadow-[0_0_20px_rgba(59,130,246,0.8)] z-10 overflow-hidden flex items-center justify-center">
+                {/* Visual Glass Refraction effect */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent"></div>
             </div>
+
+            {/* Internal Core Shine */}
+            <div className="absolute size-2 bg-white rounded-full z-20 shadow-[0_0_10px_white]"></div>
         </div>
     </div>
 );
@@ -77,6 +100,7 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
     const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
     const [isNavigating, setIsNavigating] = useState(false);
     const [isHudMinimized, setIsHudMinimized] = useState(false);
+    const [mapTheme, setMapTheme] = useState<'night' | 'silver'>('night');
     const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -202,6 +226,17 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                 </div>
 
                 <div className="flex gap-3 pointer-events-auto">
+                    <button
+                        onClick={() => setMapTheme(prev => prev === 'night' ? 'silver' : 'night')}
+                        className={`size-12 rounded-[1.25rem] border backdrop-blur-xl transition-all flex items-center justify-center shadow-2xl ${mapTheme === 'night'
+                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
+                            : 'bg-primary/10 border-primary/20 text-primary'
+                            }`}
+                    >
+                        <span className="material-symbols-outlined !text-[24px]">
+                            {mapTheme === 'night' ? 'light_mode' : 'dark_mode'}
+                        </span>
+                    </button>
                     <button onClick={handleClearRoute} className="size-12 rounded-[1.25rem] bg-red-500/10 border border-red-500/20 text-red-500 active:scale-95 transition-all flex items-center justify-center shadow-2xl">
                         <span className="material-symbols-outlined !text-[24px]">delete_sweep</span>
                     </button>
@@ -215,7 +250,15 @@ export const MapView = ({ googleMapsApiKey }: MapViewProps) => {
                         mapContainerStyle={mapContainerStyle}
                         center={mapCenter}
                         zoom={15}
-                        options={{ ...mapOptions, styles: getMapStyles() }}
+                        options={{
+                            disableDefaultUI: true,
+                            zoomControl: false,
+                            mapTypeControl: false,
+                            streetViewControl: false,
+                            fullscreenControl: false,
+                            clickableIcons: false,
+                            styles: mapTheme === 'night' ? NIGHT_MAP_STYLE : SILVER_MAP_STYLE
+                        }}
                     >
                         {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true, polylineOptions: { strokeColor: '#3B82F6', strokeWeight: 6, strokeOpacity: 0.8 } }} />}
                         <OverlayView position={currentPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}><CurrentMarker /></OverlayView>

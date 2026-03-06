@@ -22,11 +22,12 @@ interface RouteCardProps {
     onToggleDelivered: (id: string) => void;
     onEdit: (point: RoutePoint, e: React.MouseEvent) => void;
     onDelete: (id: string, e: React.MouseEvent) => void;
+    onNotDelivered: (id: string) => void;
     onNavigateToMap?: () => void;
     isRecent?: boolean;
 }
 
-const RouteCard = ({ p, idx, isNext, onToggleDelivered, onEdit, onDelete, onNavigateToMap, isRecent }: RouteCardProps) => {
+const RouteCard = ({ p, idx, isNext, onToggleDelivered, onEdit, onDelete, onNotDelivered, isRecent }: RouteCardProps) => {
     const isDone = p.isDelivered;
 
     return (
@@ -94,13 +95,20 @@ const RouteCard = ({ p, idx, isNext, onToggleDelivered, onEdit, onDelete, onNavi
                 )}
 
                 {isNext && (
-                    <div className="mt-6 flex gap-3">
+                    <div className="mt-6 flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <button
-                            onClick={onNavigateToMap}
-                            className="flex-1 h-12 bg-white text-bg-start font-black text-[12px] uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl"
+                            onClick={() => onToggleDelivered(p.id)}
+                            className="flex-1 h-12 bg-emerald-500 text-white font-black text-[12px] uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-[0_10px_20px_rgba(16,185,129,0.3)]"
                         >
-                            <span className="material-symbols-outlined !text-[20px]">navigation</span>
-                            Navegar
+                            <span className="material-symbols-outlined !text-[20px]">package_2</span>
+                            Entregue
+                        </button>
+                        <button
+                            onClick={() => onNotDelivered(p.id)}
+                            className="flex-1 h-12 bg-red-500 text-white font-black text-[12px] uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-[0_10px_20px_rgba(239,68,68,0.3)]"
+                        >
+                            <span className="material-symbols-outlined !text-[20px]">package_2</span>
+                            Não Entregue
                         </button>
                     </div>
                 )}
@@ -168,11 +176,18 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
                 }));
 
                 const sortedPoints = [...pointsToOptimize].sort((a, b) => {
+                    // Always put return base at the very end
                     if (a.isReturnPoint) return 1;
                     if (b.isReturnPoint) return -1;
-                    if (a.deadline && !b.deadline) return -1;
-                    if (!a.deadline && b.deadline) return 1;
 
+                    // Prioritize by Deadline (Earliest first)
+                    if (a.deadline && b.deadline) {
+                        return a.deadline.localeCompare(b.deadline);
+                    }
+                    if (a.deadline) return -1;
+                    if (b.deadline) return 1;
+
+                    // If no deadlines, sort by physical distance
                     const distA = distances.find(d => pointsToOptimize[d.index].id === a.id)?.distance || 0;
                     const distB = distances.find(d => pointsToOptimize[d.index].id === b.id)?.distance || 0;
                     return distA - distB;
@@ -199,7 +214,26 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
     const handleDelete = async (id: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         const updated = await removeFromDailyRoute(id);
+        const data = updated;
+        setPoints(data);
+
+        const delivered = data.filter(p => p.isDelivered).length;
+        setDeliveredCount(delivered);
+        setProgressPercent(data.length > 0 ? Math.round((delivered / data.length) * 100) : 0);
+    };
+
+    const handleNotDelivered = async (id: string) => {
+        // Simple skip logic for now - could add a 'failed' status later
+        const updated = points.map(p => p.id === id ? { ...p, isDelivered: false, isRecent: false, tag: 'FAILED' } : p);
+        if (navigator.vibrate) navigator.vibrate(100);
+
+        // Find the index of the point just marked
+        // setPoints(updated); // already done below
+
+        // Move failed item to end or just keep it there but skip it
+        // For simplicity, we'll just toggle the 'next' indicator by updating the list
         setPoints(updated);
+        await updateDailyRoute(updated);
         loadData();
     };
 
@@ -314,7 +348,7 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
                                             onToggleDelivered={handleToggleDelivered}
                                             onEdit={handleEdit}
                                             onDelete={handleDelete}
-                                            onNavigateToMap={onNavigateToMap}
+                                            onNotDelivered={handleNotDelivered}
                                             isRecent
                                         />
                                     ))}
@@ -337,7 +371,7 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
                                         onToggleDelivered={handleToggleDelivered}
                                         onEdit={handleEdit}
                                         onDelete={handleDelete}
-                                        onNavigateToMap={onNavigateToMap}
+                                        onNotDelivered={handleNotDelivered}
                                     />
                                 ))}
                             </div>

@@ -91,7 +91,7 @@ export const getRecords = async (): Promise<LocationRecord[]> => {
                 const { data, error } = await supabase.from('location_records').select('*').order('created_at', { ascending: false });
                 if (!error && data) {
                     for (const r of data) {
-                        const rec = {
+                        const rec: LocationRecord = {
                             id: r.id,
                             name: r.name,
                             lat: r.lat,
@@ -101,7 +101,9 @@ export const getRecords = async (): Promise<LocationRecord[]> => {
                             notes: r.notes,
                             neighborhood: r.neighborhood,
                             city: r.city,
-                            createdAt: new Date(r.created_at).getTime()
+                            createdAt: new Date(r.created_at).getTime(),
+                            deadline: r.deadline,
+                            isReturnPoint: r.is_return_point
                         };
                         await store.setItem(rec.id, rec);
                     }
@@ -119,7 +121,7 @@ export const saveRecord = async (
     lng: number | null,
     imageThumbnail: string,
     featureVector: number[],
-    optionalFields?: { notes?: string, neighborhood?: string, city?: string }
+    optionalFields?: { notes?: string, neighborhood?: string, city?: string, deadline?: string, isReturnPoint?: boolean }
 ): Promise<LocationRecord> => {
     const id = crypto.randomUUID();
     const localRecord: LocationRecord = {
@@ -132,6 +134,8 @@ export const saveRecord = async (
         notes: optionalFields?.notes,
         neighborhood: optionalFields?.neighborhood,
         city: optionalFields?.city,
+        deadline: optionalFields?.deadline,
+        isReturnPoint: optionalFields?.isReturnPoint,
         createdAt: Date.now()
     };
 
@@ -152,7 +156,9 @@ export const saveRecord = async (
                     feature_vector: featureVector,
                     notes: optionalFields?.notes,
                     neighborhood: optionalFields?.neighborhood,
-                    city: optionalFields?.city
+                    city: optionalFields?.city,
+                    deadline: optionalFields?.deadline,
+                    is_return_point: optionalFields?.isReturnPoint || false
                 });
             } catch (e) {
                 console.warn('Falha no backup remoto', e);
@@ -193,6 +199,8 @@ export const updateRecord = async (id: string, updates: Partial<LocationRecord>)
             if (updates.notes !== undefined) sbUpdates.notes = updates.notes;
             if (updates.neighborhood !== undefined) sbUpdates.neighborhood = updates.neighborhood;
             if (updates.city !== undefined) sbUpdates.city = updates.city;
+            if (updates.deadline !== undefined) sbUpdates.deadline = updates.deadline;
+            if (updates.isReturnPoint !== undefined) sbUpdates.is_return_point = updates.isReturnPoint;
 
             try {
                 await supabase.from('location_records').update(sbUpdates).eq('id', id);
@@ -229,7 +237,9 @@ export const getActiveRoute = async (): Promise<RoutePoint[]> => {
                 notes: r.notes,
                 isDelivered: r.is_delivered,
                 neighborhood: r.neighborhood,
-                city: r.city
+                city: r.city,
+                deadline: r.deadline,
+                isReturnPoint: r.is_return_point
             }));
             // Also save to localforage for next time
             try {
@@ -280,6 +290,8 @@ export const updateActiveRoute = async (points: RoutePoint[]): Promise<void> => 
             city: p.city,
             is_delivered: p.isDelivered || false,
             scanned_at: new Date(p.scannedAt || Date.now()).toISOString(),
+            deadline: p.deadline,
+            is_return_point: p.isReturnPoint || false,
             external_record_id: p.id
         }));
 

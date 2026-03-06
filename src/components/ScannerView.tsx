@@ -50,6 +50,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [notesInput, setNotesInput] = useState('');
     const [latInput, setLatInput] = useState('');
     const [lngInput, setLngInput] = useState('');
+    const [deadlineInput, setDeadlineInput] = useState('');
 
     const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
     const [aiStatus, setAiStatus] = useState('');
@@ -280,7 +281,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 isNaN(lng) ? null : lng,
                 capturedImage,
                 capturedFeatures,
-                { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput }
+                { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput, deadline: deadlineInput }
             );
 
 
@@ -292,7 +293,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 scannedAt: Date.now(),
                 notes: record.notes,
                 neighborhood: record.neighborhood,
-                city: record.city
+                city: record.city,
+                deadline: record.deadline
             });
 
             setIsSendingToRoute(true);
@@ -306,6 +308,7 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 setNotesInput('');
                 setLatInput('');
                 setLngInput('');
+                setDeadlineInput('');
                 setViewMode('dashboard');
                 onNavigateToDailyRoute();
             }, 2000);
@@ -491,6 +494,39 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                                     if (parts[1]) setLngInput(parts[1]);
                                 }}
                             />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2.5">
+                            <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
+                                Entregar até
+                            </label>
+                            <div className="relative group/time">
+                                <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/time:text-primary transition-colors">schedule</span>
+                                <input
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none transition-all duration-300 focus:border-primary/50 focus:ring-1 focus:ring-primary/30 focus:bg-white/10 text-white"
+                                    type="time"
+                                    value={deadlineInput}
+                                    onChange={e => setDeadlineInput(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2.5">
+                            <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
+                                Bairro (Opcional)
+                            </label>
+                            <div className="relative group">
+                                <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors">domain</span>
+                                <input
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none transition-all duration-300 placeholder:text-slate-500 placeholder:font-light focus:border-primary/50 focus:ring-1 focus:ring-primary/30 focus:bg-white/10 text-white"
+                                    placeholder="Ex: Pinheiros"
+                                    type="text"
+                                    value={neighborhoodInput}
+                                    onChange={e => setNeighborhoodInput(e.target.value)}
+                                />
+                            </div>
                         </div>
                     </div>
 
