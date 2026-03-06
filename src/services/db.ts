@@ -13,6 +13,8 @@ export interface LocationRecord {
     neighborhood?: string;
     city?: string;
     createdAt: number;
+    deadline?: string;
+    isReturnPoint?: boolean;
 }
 
 export interface RoutePoint {
@@ -27,6 +29,7 @@ export interface RoutePoint {
     city?: string;
     deadline?: string;
     isReturnPoint?: boolean;
+    isRecent?: boolean;
 }
 
 export interface AppSettings {

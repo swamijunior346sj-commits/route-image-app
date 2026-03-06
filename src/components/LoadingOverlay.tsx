@@ -9,7 +9,7 @@ interface LoadingOverlayProps {
 export const LoadingOverlay = ({
     title = 'Processando Dados',
     subtitle = 'Sincronizando registros com o banco central',
-    icon = <span className="material-symbols-outlined !text-4xl text-white animate-pulse">database</span>
+    icon = <span className="material-symbols-outlined !text-[44px] text-primary animate-pulse">auto_awesome</span>
 }: LoadingOverlayProps) => {
     const [showReload, setShowReload] = useState(false);
 
@@ -18,42 +18,41 @@ export const LoadingOverlay = ({
         return () => clearTimeout(timer);
     }, []);
     return (
-        <div className="fixed inset-0 z-[9999] bg-bg-start/80 backdrop-blur-3xl flex flex-col items-center justify-center p-12 text-center animate-fade-in">
-            <div className="relative mb-8">
-                {/* Outer Glow */}
-                <div className="absolute inset-0 bg-primary/20 blur-[60px] animate-pulse rounded-full scale-150" />
-
-                {/* Rings */}
-                <div className="w-24 h-24 border border-white/10 rounded-full flex items-center justify-center relative z-10 shadow-premium">
-                    <div className="absolute inset-0 border-t border-primary rounded-full animate-spin" style={{ animationDuration: '1.5s' }} />
-                    <div className="absolute inset-2 border-b border-accent rounded-full animate-spin" style={{ animationDuration: '2s', animationDirection: 'reverse' }} />
+        <div className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+            <div className="relative size-48 flex items-center justify-center mb-12">
+                <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-[ping_3s_infinite]" />
+                <div className="absolute inset-4 rounded-full border-2 border-primary/40 animate-[ping_2s_infinite]" />
+                <div className="absolute inset-0 border-t-4 border-primary rounded-full animate-spin" />
+                <div className="relative z-10 scale-[1.5]">
                     {icon}
                 </div>
             </div>
 
-            <h3 className="text-2xl font-black text-white/90 italic tracking-tighter uppercase mb-2 relative z-10 drop-shadow-2xl">
+            <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase mb-3 relative z-10 drop-shadow-2xl">
                 {title}
             </h3>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em] relative z-10">
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em] relative z-10 max-w-xs leading-loose">
                 {subtitle}
             </p>
 
-            <div className="mt-10 w-44 h-1 bg-white/5 rounded-full overflow-hidden relative z-10 border border-white/5 shadow-inner">
-                <div className="h-full bg-gradient-to-r from-primary via-accent to-primary w-full animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+            <div className="mt-12 flex gap-1 relative z-10">
+                {[0, 1, 2].map(i => (
+                    <div key={i} className="size-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
+                ))}
             </div>
 
             {showReload && (
                 <button
                     onClick={() => window.location.reload()}
-                    className="mt-8 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/60 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all animate-fade-in"
+                    className="mt-12 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all animate-in zoom-in duration-300"
                 >
                     Recarregar App
                 </button>
             )}
 
-            {/* Corner Accents */}
-            <div className="absolute top-12 left-12 w-10 h-10 border-t border-l border-white/10 rounded-tl-3xl" />
-            <div className="absolute bottom-12 right-12 w-10 h-10 border-b border-r border-white/10 rounded-br-3xl" />
+            {/* Premium Accents */}
+            <div className="absolute top-12 left-12 w-10 h-10 border-t border-l border-white/5 rounded-tl-3xl" />
+            <div className="absolute bottom-12 right-12 w-10 h-10 border-b border-r border-white/5 rounded-br-3xl" />
         </div>
     );
 };

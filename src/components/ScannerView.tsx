@@ -35,6 +35,8 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
     const [viewMode, setViewMode] = useState<'dashboard' | 'camera' | 'confirm' | 'notifications'>(initialViewMode);
+    const [cameraMode, setCameraMode] = useState<'register' | 'scan'>('scan');
+    const [isCockpitOpen, setIsCockpitOpen] = useState(false);
     const [torch, setTorch] = useState(false);
 
     // Registering/Confirmation State
@@ -156,9 +158,11 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
         }
     };
 
-    const handleStartCamera = () => {
+    const handleStartCamera = (mode: 'register' | 'scan') => {
         if (navigator.vibrate) navigator.vibrate(50);
+        setCameraMode(mode);
         setViewMode('camera');
+        setIsCockpitOpen(false);
     };
 
     const handleCapture = async () => {
@@ -180,48 +184,53 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 return;
             }
 
-            // 1. Tentar reconhecimento offline primeiro (Scan funcional)
-            const records = await getRecords();
-            let bestMatch: LocationRecord | null = null;
-            let highestSim = 0;
+            if (cameraMode === 'scan') {
+                // 1. Tentar reconhecimento offline primeiro (Scan funcional)
+                const records = await getRecords();
+                let bestMatch: LocationRecord | null = null;
+                let highestSim = 0;
 
-            for (const rec of records) {
-                const sim = cosineSimilarity(capture.features, rec.featureVector);
-                if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
-                if (rec.additionalImages) {
-                    for (const addView of rec.additionalImages) {
-                        const simAdd = cosineSimilarity(capture.features, addView.features);
-                        if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
+                for (const rec of records) {
+                    const sim = cosineSimilarity(capture.features, rec.featureVector);
+                    if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
+                    if (rec.additionalImages) {
+                        for (const addView of rec.additionalImages) {
+                            const simAdd = cosineSimilarity(capture.features, addView.features);
+                            if (simAdd > highestSim) { highestSim = simAdd; bestMatch = rec; }
+                        }
                     }
                 }
-            }
 
-            if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
-                // Sucesso Scan Offline
-                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-                await addPointToActiveRoute({
-                    id: bestMatch.id!,
-                    name: bestMatch.name,
-                    lat: bestMatch.lat,
-                    lng: bestMatch.lng,
-                    scannedAt: Date.now(),
-                    notes: bestMatch.notes,
-                    neighborhood: bestMatch.neighborhood,
-                    city: bestMatch.city
-                });
+                if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
+                    // Sucesso Scan Offline
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                    await addPointToActiveRoute({
+                        id: bestMatch.id!,
+                        name: bestMatch.name,
+                        lat: bestMatch.lat,
+                        lng: bestMatch.lng,
+                        scannedAt: Date.now(),
+                        notes: bestMatch.notes,
+                        neighborhood: bestMatch.neighborhood,
+                        city: bestMatch.city,
+                        isRecent: true // Marker for the new section
+                    });
 
-                setIsSendingToRoute(true);
-                setTimeout(() => {
-                    setIsSendingToRoute(false);
-                    onNavigateToMap();
-                }, 2000);
+                    setIsSendingToRoute(true);
+                    setTimeout(() => {
+                        setIsSendingToRoute(false);
+                        onNavigateToDailyRoute(); // Go to daily route to see the item
+                    }, 2000);
+                } else {
+                    alert("Endereço não encontrado na base de dados. Use 'Novo Registro' para cadastrá-lo.");
+                    setViewMode('dashboard');
+                }
             } else {
-                // Não reconhecido -> Modo Registro Assistido por IA
+                // Modo Registro (Novo Registro) - Go straight to AI
                 setCapturedImage(capture.imageSrc);
                 setCapturedFeatures(capture.features);
                 setViewMode('confirm');
 
-                // Get Location
                 if ('geolocation' in navigator) {
                     navigator.geolocation.getCurrentPosition(
                         (pos) => {
@@ -369,94 +378,42 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                     </div>
                 </div>
 
-                <header className="relative z-10 px-6 pt-14 pb-6 flex items-center justify-between pointer-events-auto">
-                    <button
-                        onClick={() => setViewMode('dashboard')}
-                        className="size-11 flex items-center justify-center rounded-full glass-ui text-white active:scale-90 transition-transform"
-                    >
-                        <span className="material-symbols-outlined !text-[20px]">arrow_back_ios_new</span>
-                    </button>
+                {/* Minimalist Reader View */}
+                <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-auto" onClick={handleCapture}>
+                    {/* Floating Status HUD removed as requested */}
 
-                    <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-bold text-primary tracking-[0.3em] uppercase mb-0.5 animate-pulse">Scanner Digital</span>
-                        <h1 className="text-sm font-bold tracking-tight text-white/90">Aponte para a etiqueta</h1>
+                    {/* Viewfinder Only */}
+                    <div className="w-80 h-56 border border-white/10 rounded-[3rem] scan-focus relative overflow-hidden backdrop-blur-[2px]">
+                        <div className="scanning-line" />
+                        <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-primary rounded-tl-xl" />
+                        <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-primary rounded-tr-xl" />
+                        <div className="absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-primary rounded-bl-xl" />
+                        <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-primary rounded-br-xl" />
                     </div>
 
+                    {/* Minimal Close Button */}
                     <button
-                        onClick={() => setTorch(!torch)}
-                        className={`size-11 flex items-center justify-center rounded-full glass-ui transition-all ${torch ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' : 'text-white'}`}
+                        onClick={(e) => { e.stopPropagation(); setViewMode('dashboard'); }}
+                        className="absolute top-14 left-6 size-12 rounded-full glass-ui flex items-center justify-center text-white/40 active:scale-90 transition-all"
                     >
-                        <span className={`material-symbols-outlined ${torch ? 'filled-icon' : ''}`}>
-                            {torch ? 'flash_on' : 'flash_off'}
-                        </span>
+                        <span className="material-symbols-outlined">close</span>
                     </button>
-                </header>
 
-                {/* Floating Status HUD */}
-                <div className="absolute top-40 right-6 z-10 space-y-4 pointer-events-none">
-                    <div className="glass-ui px-3 py-2 rounded-xl border-l-4 border-primary">
-                        <p className="text-[8px] font-bold text-slate-500 uppercase">Resolução</p>
-                        <p className="text-[10px] font-mono font-bold text-white">4K - 60FPS</p>
-                    </div>
-                    <div className="glass-ui px-3 py-2 rounded-xl border-l-4 border-emerald-500">
-                        <p className="text-[8px] font-bold text-slate-500 uppercase">Foco</p>
-                        <p className="text-[10px] font-mono font-bold text-white">AUTO_LOCK</p>
+                    {/* Flash Toggle */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setTorch(!torch); }}
+                        className={`absolute top-14 right-6 size-12 rounded-full glass-ui flex items-center justify-center active:scale-90 transition-all ${torch ? 'text-yellow-400' : 'text-white/40'}`}
+                    >
+                        <span className="material-symbols-outlined">{torch ? 'flash_on' : 'flash_off'}</span>
+                    </button>
+
+                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 text-center pointer-events-none">
+                        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-primary mb-2 animate-pulse">
+                            {cameraMode === 'register' ? 'Novo Registro' : 'Escanear Endereço'}
+                        </p>
+                        <p className="text-[14px] font-bold text-white/40">Toque na tela para capturar</p>
                     </div>
                 </div>
-
-                {/* Bottom UI Panel */}
-                <main className="fixed bottom-0 left-0 right-0 z-20 pb-12 pt-8 px-8 glass-ui rounded-t-[3rem] pointer-events-auto">
-                    {/* Last Capture Small Preview */}
-
-                    <div className="flex items-center justify-between mt-8">
-                        {/* Manual Trigger */}
-                        <button
-                            onClick={() => {
-                                if (navigator.vibrate) navigator.vibrate(50);
-                            }}
-                            className="flex flex-col items-center gap-2 group"
-                        >
-                            <div className="size-14 rounded-2xl bg-white/5 flex items-center justify-center text-slate-300 border border-white/10 group-active:scale-95 transition-transform">
-                                <span className="material-symbols-outlined !text-[24px]">add_a_photo</span>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Nova Foto</span>
-                        </button>
-
-                        {/* Main Capture Button */}
-                        <div className="relative">
-                            <button
-                                onClick={handleCapture}
-                                disabled={loading}
-                                className="size-24 rounded-full bg-gradient-to-tr from-primary to-accent text-white flex items-center justify-center glow-blue active:scale-[0.92] transition-all shadow-inner relative overflow-hidden group"
-                            >
-                                {loading ? (
-                                    <span className="material-symbols-outlined !text-[40px] animate-spin">sync</span>
-                                ) : (
-                                    <span className="material-symbols-outlined !text-[44px] !font-light group-hover:scale-110 transition-transform">barcode_scanner</span>
-                                )}
-                            </button>
-                            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-max">
-                                <span className="text-[11px] font-extrabold text-white uppercase tracking-[0.1em]">Escanear</span>
-                            </div>
-                        </div>
-
-                        {/* Import Button */}
-                        <label className="flex flex-col items-center gap-2 group cursor-pointer">
-                            <div className="size-14 rounded-2xl bg-white/5 flex items-center justify-center text-slate-300 border border-white/10 group-active:scale-95 transition-transform">
-                                <span className="material-symbols-outlined !text-[24px]">file_upload</span>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Importar</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                        </label>
-                    </div>
-
-                    {/* Footer Slide Indicator */}
-                    <div className="mt-14 flex justify-center">
-                        <div className="w-32 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                            <div className="w-1/2 h-full bg-primary/40 rounded-full animate-[pulse_2s_infinite]"></div>
-                        </div>
-                    </div>
-                </main>
             </div>
         );
     }
@@ -703,37 +660,89 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                             </div>
                         </button>
 
-                        <div
-                            onClick={handleStartCamera}
+                        <button
+                            onClick={() => setIsCockpitOpen(true)}
                             className="glass-card rounded-[2.5rem] p-10 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-5 cursor-pointer hover:border-primary/50 hover:bg-white/10 active:scale-[0.97] transition-all group"
                         >
                             <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 shadow-lg transition-transform border border-primary/20">
-                                <span className="material-symbols-outlined !text-[36px]">photo_camera</span>
+                                <span className="material-symbols-outlined !text-[36px]">rocket_launch</span>
                             </div>
                             <div className="text-center space-y-1">
-                                <p className="text-base font-bold text-white tracking-tight">Foto da Etiqueta</p>
-                                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest opacity-60">Toque para escanear com IA</p>
+                                <p className="text-base font-bold text-white tracking-tight">Abrir Cockpit de Operações</p>
+                                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest opacity-60">Escolha o modo de captura</p>
                             </div>
-                        </div>
+                        </button>
                     </div>
                 </section>
             </main>
+
+            {/* Cockpit Menu Overlay */}
+            {isCockpitOpen && (
+                <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-2xl animate-in fade-in duration-300 flex items-end">
+                    <div
+                        className="absolute inset-0"
+                        onClick={() => setIsCockpitOpen(false)}
+                    />
+                    <div className="relative w-full bg-[#0F172A]/95 border-t border-white/10 rounded-t-[3rem] p-8 pb-14 animate-in slide-in-from-bottom duration-500 shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+                        <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto mb-8" />
+
+                        <div className="space-y-6">
+                            <div className="flex flex-col mb-4">
+                                <span className="text-[10px] font-black text-primary uppercase tracking-[0.4em] mb-1">Operações RouteVision</span>
+                                <h3 className="text-xl font-black text-white italic tracking-tight">Cockpit de Captura</h3>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                <button
+                                    onClick={() => handleStartCamera('register')}
+                                    className="w-full h-24 glass-card rounded-3xl flex items-center gap-6 p-6 border-white/5 active:scale-95 transition-all group"
+                                >
+                                    <div className="size-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20 shadow-lg shadow-amber-500/5 group-hover:scale-110 transition-transform">
+                                        <span className="material-symbols-outlined !text-[28px]">add_a_photo</span>
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className="text-lg font-bold text-white tracking-tight">Novo Registro</p>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Cadastro IA via Gemini™</p>
+                                    </div>
+                                    <span className="material-symbols-outlined text-slate-700">arrow_forward</span>
+                                </button>
+
+                                <button
+                                    onClick={() => handleStartCamera('scan')}
+                                    className="w-full h-24 glass-card rounded-3xl flex items-center gap-6 p-6 border-white/5 active:scale-95 transition-all group"
+                                >
+                                    <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-lg shadow-primary/5 group-hover:scale-110 transition-transform">
+                                        <span className="material-symbols-outlined !text-[28px]">barcode_scanner</span>
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className="text-lg font-bold text-white tracking-tight">Escanear Entregas</p>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Busca na Base de Dados</p>
+                                    </div>
+                                    <span className="material-symbols-outlined text-slate-700">arrow_forward</span>
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={() => setIsCockpitOpen(false)}
+                                className="w-full py-4 text-[10px] font-black uppercase text-slate-500 tracking-[0.3em] mt-4"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* Nav Fade Overlay */}
             <nav className="fixed bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-bg-start via-bg-start/80 to-transparent pointer-events-none z-10"></nav>
 
             {/* Registering/AI Analysis Overlay */}
             {isAiAnalyzing && (
-                <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center p-8 backdrop-blur-3xl animate-fade-in transition-all">
-                    <div className="relative size-48 flex items-center justify-center mb-12">
-                        <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-[ping_3s_infinite]" />
-                        <div className="absolute inset-4 rounded-full border-2 border-primary/40 animate-[ping_2s_infinite]" />
-                        <div className="absolute inset-0 border-t-4 border-primary rounded-full animate-spin" />
-                        <span className="material-symbols-outlined !text-[64px] text-primary animate-pulse">auto_awesome</span>
-                    </div>
-                    <h2 className="text-2xl font-black italic uppercase tracking-widest text-white mb-3 text-center tracking-tighter">Protocolo RouteVision™</h2>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.4em] text-center">{aiStatus}</p>
-                </div>
+                <LoadingOverlay
+                    title="Protocolo RouteVision™"
+                    subtitle={aiStatus}
+                />
             )}
 
             {/* Sync Overlay */}
@@ -741,8 +750,20 @@ export const ScannerView = ({ onNavigateToMap, onNavigateToDailyRoute, initialVi
                 <LoadingOverlay
                     title="Processando Rota"
                     subtitle="Identificando via Matriz de IA e Sincronizando..."
-                    icon={<span className="material-symbols-outlined !text-[32px] animate-spin text-white">sync</span>}
                 />
+            )}
+
+            {/* FAB for Camera */}
+            {viewMode === 'dashboard' && (
+                <div className="fixed bottom-32 right-6 z-50 animate-in fade-in zoom-in duration-500">
+                    <button
+                        onClick={() => setIsCockpitOpen(true)}
+                        className="size-16 rounded-full bg-primary text-white shadow-fab flex items-center justify-center active:scale-90 transition-all border border-white/20 group relative overflow-hidden"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-tr from-primary via-accent to-white opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                        <span className="material-symbols-outlined !text-[32px] group-hover:scale-110 transition-all duration-300">rocket_launch</span>
+                    </button>
+                </div>
             )}
 
             {/* Notifications View Overlay */}

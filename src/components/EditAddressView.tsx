@@ -23,8 +23,38 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
     // UI State
     const [showCockpit, setShowCockpit] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cockpitRef = useRef<HTMLDivElement>(null);
+    const isFirstRender = useRef(true);
+
+    // Auto-save logic
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+
+        setSaveStatus('saving');
+        const timer = setTimeout(() => {
+            onSave({
+                name,
+                neighborhood,
+                city,
+                lat: lat ? parseFloat(lat) : null,
+                lng: lng ? parseFloat(lng) : null,
+                notes,
+                ...(image ? { imageThumbnail: image } : {}),
+                additionalImages,
+                deadline,
+                isReturnPoint
+            });
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        }, 800); // 800ms debounce
+
+        return () => clearTimeout(timer);
+    }, [name, neighborhood, city, lat, lng, notes, image, additionalImages, deadline, isReturnPoint]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -69,20 +99,7 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
         }
     };
 
-    const handleSave = () => {
-        onSave({
-            name,
-            neighborhood,
-            city,
-            lat: lat ? parseFloat(lat) : null,
-            lng: lng ? parseFloat(lng) : null,
-            notes,
-            ...(image ? { imageThumbnail: image } : {}),
-            additionalImages,
-            deadline,
-            isReturnPoint
-        });
-    };
+
 
     const handleUpdateGPS = () => {
         if (navigator.geolocation) {
@@ -350,13 +367,37 @@ export const EditAddressView = ({ item, onSave, onBack }: EditAddressViewProps) 
             </main>
 
             <footer className="fixed bottom-0 left-0 right-0 p-6 pb-12 bg-gradient-to-t from-[#0F172A] via-[#0F172A]/90 to-transparent z-50">
-                <button
-                    onClick={handleSave}
-                    className="w-full bg-gradient-to-r from-primary-blue to-secondary-blue h-16 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-2xl"
-                >
-                    <span className="text-white font-bold text-base">Salvar Alterações</span>
-                    <span className="material-symbols-outlined text-white !text-[20px]">check_circle</span>
-                </button>
+                <div className="w-full h-16 rounded-2xl flex items-center justify-center gap-3 glass-card border-white/5 shadow-2xl overflow-hidden relative">
+                    {saveStatus === 'saving' && (
+                        <div className="absolute inset-0 bg-primary/5 animate-pulse" />
+                    )}
+
+                    <div className="flex items-center gap-3 z-10">
+                        {saveStatus === 'saving' ? (
+                            <>
+                                <span className="material-symbols-outlined text-primary animate-spin !text-[20px]">sync</span>
+                                <span className="text-white/60 font-bold text-sm uppercase tracking-widest">Sincronizando...</span>
+                            </>
+                        ) : saveStatus === 'saved' ? (
+                            <>
+                                <span className="material-symbols-outlined text-emerald-500 !text-[20px]">check_circle</span>
+                                <span className="text-emerald-500 font-bold text-sm uppercase tracking-widest text-glow-emerald">Alterações Salvas</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="material-symbols-outlined text-slate-500 !text-[20px]">cloud_done</span>
+                                <span className="text-slate-500 font-bold text-sm uppercase tracking-widest">Aguardando Alterações</span>
+                            </>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={onBack}
+                        className="absolute right-4 size-10 rounded-xl bg-white/5 flex items-center justify-center active:scale-95 transition-all"
+                    >
+                        <span className="material-symbols-outlined text-white/40 !text-[20px]">close</span>
+                    </button>
+                </div>
             </footer>
         </div>
     );
