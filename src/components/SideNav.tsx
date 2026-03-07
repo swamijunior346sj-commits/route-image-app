@@ -134,9 +134,15 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
                                                 <span className="text-[15px] font-bold text-gray-800">{item.day}</span>
                                             </div>
 
-                                            <div className="route-menu-container">
+                                            <div
+                                                className="route-menu-container"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
                                                 <button
-                                                    onClick={() => setOpenMenuId(isMenuOpen ? null : menuId)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setOpenMenuId(isMenuOpen ? null : menuId);
+                                                    }}
                                                     className={`text-gray-300 group-hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-gray-100 ${isMenuOpen ? 'text-blue-500 bg-gray-100' : ''}`}
                                                 >
                                                     <span className="material-symbols-outlined !text-[20px]">more_vert</span>
@@ -145,7 +151,10 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
                                                 {isMenuOpen && (
                                                     <div className="absolute right-0 top-8 w-40 bg-white border border-gray-100 shadow-xl rounded-2xl p-2 z-[13000] animate-in fade-in zoom-in duration-200">
                                                         <button
-                                                            onClick={() => handleDeleteRoute(item.date)}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteRoute(item.date);
+                                                            }}
                                                             className="w-full flex items-center gap-3 px-3 py-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
                                                         >
                                                             <span className="material-symbols-outlined !text-[18px]">delete</span>
