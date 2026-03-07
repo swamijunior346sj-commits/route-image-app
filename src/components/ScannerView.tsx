@@ -9,6 +9,7 @@ import {
 } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
+import { LoadingOverlay } from './LoadingOverlay';
 
 interface ScannerProps {
     onNavigateToDailyRoute: () => void;
@@ -22,7 +23,6 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
     // --- State ---
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState<'camera' | 'confirm'>(initialViewMode === 'confirm' ? 'confirm' : 'camera');
-    const [cameraMode, setCameraMode] = useState<'register' | 'scan'>('scan');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const importFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,25 +107,29 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
         }
     };
 
-    const handleStartCamera = (mode: 'register' | 'scan') => {
-        if (navigator.vibrate) navigator.vibrate(50);
-        setCameraMode(mode);
-        fileInputRef.current?.click();
-    };
+
 
     const handleNativeCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
-        await processImageData(file, cameraMode);
+        console.log("📸 Captura detectada:", file?.name);
+        if (!file) {
+            if (onBack) onBack(); else onNavigateToDailyRoute();
+            return;
+        }
+        await processImageData(file);
     };
 
     const handleImportImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
-        await processImageData(file, 'scan');
+        console.log("📥 Importação detectada:", file?.name);
+        if (!file) {
+            if (onBack) onBack(); else onNavigateToDailyRoute();
+            return;
+        }
+        await processImageData(file);
     };
 
-    const processImageData = async (file: File, mode: 'register' | 'scan') => {
+    const processImageData = async (file: File) => {
         setLoading(true);
         try {
             const usage = await checkAndUpdateUsage();
@@ -139,7 +143,11 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
             const reader = new FileReader();
             reader.onload = async (event) => {
                 const base64 = event.target?.result as string;
-                if (!base64) return;
+                if (!base64) {
+                    setLoading(false);
+                    if (onBack) onBack(); else onNavigateToDailyRoute();
+                    return;
+                }
 
                 const img = new Image();
                 img.onload = async () => {
@@ -147,69 +155,77 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                     if (!result) {
                         alert("Falha ao analisar a imagem.");
                         setLoading(false);
+                        if (onBack) onBack(); else onNavigateToDailyRoute();
                         return;
                     }
 
-                    if (mode === 'scan') {
-                        const records = await getRecords();
+                    // Lógica Unificada: Escanear e, se falhar, alternar para o modo de Registro.
+                    const records = await getRecords();
+                    let isMatchFound = false;
 
-                        // 1. Try AI signature match first (High precision)
-                        const aiReading = await analyzeAddressImage(base64);
-                        if (aiReading && aiReading.visualSignature) {
-                            const exactMatch = records.find(r => r.visualSignature === aiReading.visualSignature);
-                            if (exactMatch) {
-                                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-                                await addPointToActiveRoute({
-                                    id: exactMatch.id!,
-                                    name: exactMatch.name,
-                                    lat: exactMatch.lat,
-                                    lng: exactMatch.lng,
-                                    scannedAt: Date.now(),
-                                    notes: exactMatch.notes,
-                                    neighborhood: exactMatch.neighborhood,
-                                    city: exactMatch.city,
-                                    visualSignature: exactMatch.visualSignature,
-                                    isRecent: true
-                                });
-                                setLoading(false);
-                                onNavigateToDailyRoute();
-                                return;
-                            }
-                        }
-
-                        // 2. Fallback to Visual Embedding match (MobileNet)
-                        let bestMatch: LocationRecord | null = null;
-                        let highestSim = 0;
-
-                        for (const rec of records) {
-                            const sim = cosineSimilarity(result.features, rec.featureVector);
-                            if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
-                        }
-
-                        if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
+                    // 1. Tentar reconhecimento prévio via IA (Alta precisão)
+                    const aiReading = await analyzeAddressImage(base64);
+                    if (aiReading && aiReading.visualSignature) {
+                        const exactMatch = records.find(r => r.visualSignature === aiReading.visualSignature);
+                        if (exactMatch) {
                             if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                            setAiStatus(`Reconhecido: ${exactMatch.name}`);
                             await addPointToActiveRoute({
-                                id: bestMatch.id!,
-                                name: bestMatch.name,
-                                lat: bestMatch.lat,
-                                lng: bestMatch.lng,
+                                id: exactMatch.id!,
+                                name: exactMatch.name,
+                                lat: exactMatch.lat,
+                                lng: exactMatch.lng,
                                 scannedAt: Date.now(),
-                                notes: bestMatch.notes,
-                                neighborhood: bestMatch.neighborhood,
-                                city: bestMatch.city,
-                                visualSignature: bestMatch.visualSignature,
+                                notes: exactMatch.notes,
+                                neighborhood: exactMatch.neighborhood,
+                                city: exactMatch.city,
+                                visualSignature: exactMatch.visualSignature,
                                 isRecent: true
                             });
-
+                            isMatchFound = true;
+                            // Breve delay para o usuário ler o status de reconhecimento
                             setTimeout(() => {
                                 setLoading(false);
                                 onNavigateToDailyRoute();
-                            }, 500);
-                        } else {
-                            alert("Endereço não identificado no banco de dados.");
-                            setLoading(false);
+                            }, 1500);
+                            return;
                         }
-                    } else {
+                    }
+
+                    // 2. Tentar aproximação via Similaridade Embeddings (MobileNet fallback)
+                    let bestMatch: LocationRecord | null = null;
+                    let highestSim = 0;
+
+                    for (const rec of records) {
+                        const sim = cosineSimilarity(result.features, rec.featureVector);
+                        if (sim > highestSim) { highestSim = sim; bestMatch = rec; }
+                    }
+
+                    if (bestMatch && highestSim > SIMILARITY_THRESHOLD) {
+                        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                        await addPointToActiveRoute({
+                            id: bestMatch.id!,
+                            name: bestMatch.name,
+                            lat: bestMatch.lat,
+                            lng: bestMatch.lng,
+                            scannedAt: Date.now(),
+                            notes: bestMatch.notes,
+                            neighborhood: bestMatch.neighborhood,
+                            city: bestMatch.city,
+                            visualSignature: bestMatch.visualSignature,
+                            isRecent: true
+                        });
+                        isMatchFound = true;
+                        setTimeout(() => {
+                            setLoading(false);
+                            onNavigateToDailyRoute();
+                        }, 500);
+                        return;
+                    }
+
+                    // 3. Importação não pôde associar imagem a uma parada existente
+                    // Abrimos a tela de Confirmação com a imagem importada para Criar Nova Parada.
+                    if (!isMatchFound) {
                         setCapturedImage(base64);
                         setCapturedFeatures(result.features);
                         setViewMode('confirm');
@@ -225,8 +241,19 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                             );
                         }
 
-                        await runAiWithAnimation(base64);
-                        setLoading(false);
+                        // Aproveitamos a leitura do Gemini na tentativa 1, para não refazer cálculo dispendioso
+                        if (aiReading) {
+                            if (aiReading.address) setAddressInput(aiReading.address);
+                            if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
+                            if (aiReading.city) setCityInput(aiReading.city);
+                            if (aiReading.notes) setNotesInput(aiReading.notes);
+                            if (aiReading.recipientName) setLocationNameInput(aiReading.recipientName);
+                            if (aiReading.visualSignature) setVisualSignature(aiReading.visualSignature);
+                            setLoading(false);
+                        } else {
+                            await runAiWithAnimation(base64);
+                            setLoading(false);
+                        }
                     }
                 };
                 img.src = base64;
@@ -235,6 +262,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
         } catch (err) {
             console.error('Processing failed:', err);
             setLoading(false);
+            if (onBack) onBack(); else onNavigateToDailyRoute();
         }
     };
 
@@ -289,7 +317,6 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                 setLatInput('');
                 setLngInput('');
                 setDeadlineInput('');
-                setViewMode('camera');
                 onNavigateToDailyRoute();
             }, 500);
         } catch (err) {
@@ -299,11 +326,11 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
         }
     };
 
-    useEffect(() => {
-        if (viewMode === 'camera') {
-            handleStartCamera('register');
-        }
-    }, [viewMode]);
+
+
+    if (loading) {
+        return <LoadingOverlay title="Processando" subtitle={aiStatus || "Sincronizando com o banco central"} />;
+    }
 
     if (viewMode === 'confirm') {
         return (

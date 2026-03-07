@@ -13,13 +13,12 @@ import { supabase } from './services/supabase';
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 import { ClonedHomeView } from './components/ClonedHomeView';
-import { MapPickerView } from './components/MapPickerView';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'home' | 'scanner' | 'dailyRoute' | 'mapPicker'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'scanner' | 'dailyRoute'>('home');
   const [modelLoading, setModelLoading] = useState(true);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [lastTab, setLastTab] = useState<'home' | 'dailyRoute' | 'mapPicker'>('home');
+  const [lastTab, setLastTab] = useState<'home' | 'dailyRoute'>('home');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -135,20 +134,8 @@ export default function App() {
             googleMapsApiKey={GOOGLE_MAPS_API_KEY}
             onOpenMenu={() => setIsSideNavOpen(true)}
             onAddStops={() => changeTab('scanner', { initialAction: 'camera' })}
-            onOpenMapPicker={() => changeTab('mapPicker')}
             onImport={handleImportStops}
             onNavigateToDailyRoute={() => changeTab('dailyRoute')}
-          />
-        </div>
-
-        <div className={(currentTab === 'mapPicker' || (currentTab === 'scanner' && lastTab === 'mapPicker')) ? 'block h-full' : 'hidden'}>
-          <MapPickerView
-            googleMapsApiKey={GOOGLE_MAPS_API_KEY}
-            onBack={() => changeTab('home')}
-            onConfirm={(addr) => {
-              console.log("Confirmado:", addr);
-              changeTab('home');
-            }}
           />
         </div>
 
@@ -194,7 +181,7 @@ export default function App() {
         onClose={() => setIsSideNavOpen(false)}
         onLogout={handleLogout}
         onNavigateToAdmin={() => setIsSettingsOpen(true)}
-        onAddStops={() => changeTab('scanner')}
+        onAddStops={() => changeTab('scanner', { initialAction: 'camera' })}
         onNavigateToHome={() => changeTab('home')}
       />
 
