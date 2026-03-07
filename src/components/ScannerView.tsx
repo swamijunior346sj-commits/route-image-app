@@ -311,7 +311,11 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                 {/* Header Premium */}
                 <header className="px-6 pt-12 pb-6 flex items-center justify-between">
                     <button
-                        onClick={() => { setViewMode('camera'); onNavigateToDailyRoute(); }}
+                        onClick={() => {
+                            setViewMode('camera');
+                            if (onBack) onBack();
+                            else onNavigateToDailyRoute();
+                        }}
                         className="flex items-center justify-center size-10 rounded-full bg-white border border-gray-100 text-gray-400 active:scale-90 transition-all shadow-sm"
                     >
                         <span className="material-symbols-outlined !text-[20px]">close</span>
