@@ -450,7 +450,6 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
                 <ActiveRouteView
                     routePoints={routePoints}
                     onClose={() => setIsRouteActive(false)}
-                    onCompleteStop={(id) => console.log("Stop completed:", id)}
                     onArrived={(point) => {
                         const url = `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=driving`;
                         window.open(url, '_blank');

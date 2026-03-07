@@ -3,11 +3,10 @@ import type { RoutePoint } from '../services/db';
 interface ActiveRouteViewProps {
     routePoints: RoutePoint[];
     onClose: () => void;
-    onCompleteStop: (id: string) => void;
     onArrived: (point: RoutePoint) => void;
 }
 
-export const ActiveRouteView = ({ routePoints, onClose, onCompleteStop, onArrived }: ActiveRouteViewProps) => {
+export const ActiveRouteView = ({ routePoints, onClose, onArrived }: ActiveRouteViewProps) => {
     const activeStop = routePoints.find(p => !p.isDelivered) || routePoints[routePoints.length - 1];
     const completedCount = routePoints.filter(p => p.isDelivered).length;
 
