@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { clearAllUserData } from '../services/db';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface SideNavProps {
     isOpen: boolean;
@@ -13,6 +14,19 @@ interface SideNavProps {
 
 export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNavigateToRecords, onAddStops, onNavigateToHome }: SideNavProps) => {
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type: 'danger' | 'info';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        type: 'info'
+    });
 
     // Handle pressing escape to close
     useEffect(() => {
@@ -35,17 +49,29 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
     }, [isOpen, onClose, openMenuId]);
 
     const handleClearData = async () => {
-        if (confirm("ATENÇÃO: Isso apagará TODOS os seus endereços, rotas e configurações. O processo é irreversível. Deseja continuar?")) {
-            await clearAllUserData();
-            window.location.reload();
-        }
+        setModalConfig({
+            isOpen: true,
+            title: "Limpar tudo?",
+            message: "Isso apagará permanentemente todos os seus endereços, rotas e configurações. Deseja continuar?",
+            type: 'danger',
+            onConfirm: async () => {
+                await clearAllUserData();
+                window.location.reload();
+            }
+        });
     };
 
     const handleDeleteRoute = (date: string) => {
-        if (confirm(`Deseja excluir a rota de ${date}?`)) {
-            alert(`Rota de ${date} excluída com sucesso!`);
-            setOpenMenuId(null);
-        }
+        setModalConfig({
+            isOpen: true,
+            title: "Remover Rota",
+            message: `Tem certeza que deseja excluir a rota de ${date}? Esta ação não pode ser desfeita.`,
+            type: 'danger',
+            onConfirm: () => {
+                alert(`Rota de ${date} excluída com sucesso!`);
+                setOpenMenuId(null);
+            }
+        });
     };
 
     if (!isOpen) return null;
@@ -193,6 +219,17 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
                         Criar rota
                     </button>
                 </div>
+
+                <ConfirmationModal
+                    isOpen={modalConfig.isOpen}
+                    title={modalConfig.title}
+                    message={modalConfig.message}
+                    type={modalConfig.type}
+                    onConfirm={modalConfig.onConfirm}
+                    onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                    confirmText="Sim, continuar"
+                    cancelText="Cancelar"
+                />
             </div>
         </div>
     );

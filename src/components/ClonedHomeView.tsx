@@ -3,22 +3,55 @@ import {
     GoogleMap,
     useJsApiLoader,
     OverlayView,
-    Autocomplete
+    Autocomplete,
+    DirectionsRenderer
 } from '@react-google-maps/api';
+import { getActiveRoute, type RoutePoint } from '../services/db';
+import { ActiveRouteView } from './ActiveRouteView';
 
 const libraries: ("places" | "geometry")[] = ['places', 'geometry'];
 const defaultCenter = { lat: -23.5505, lng: -46.6333 };
 const mapContainerStyle = { width: '100%', height: '100dvh' };
 
-const LIGHT_MAP_STYLE = [
-    { "featureType": "landscape", "stylers": [{ "color": "#fdfaf3" }] },
-    { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
+const CLEAN_MAP_STYLE = [
+    { "featureType": "all", "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
+    { "featureType": "all", "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f5f5" }] },
+    { "featureType": "all", "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+    { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#bdbdbd" }] },
+    { "featureType": "landscape.man_made", "elementType": "geometry.fill", "stylers": [{ "color": "#f7f9fc" }] },
+    { "featureType": "landscape.man_made", "elementType": "geometry.stroke", "stylers": [{ "color": "#e2e8f0" }] },
+    { "featureType": "landscape.natural", "elementType": "geometry", "stylers": [{ "color": "#f8fafc" }] },
+    { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#eeeeee" }] },
     { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
-    { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#e1e1e1" }, { "weight": 1.5 }] },
-    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#ffcc66" }] },
-    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#f1c40f" }, { "weight": 2 }] },
-    { "featureType": "water", "stylers": [{ "color": "#7fc9bd" }] }
+    { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
+    { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#e5e7eb" }] },
+    { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#cce2ff" }] }
 ];
+
+const SpokeMarker = ({ number, type }: { number: number, type: 'active' | 'future' | 'passed' }) => (
+    <div className="relative" style={{ position: 'absolute', transform: 'translate(-50%, -50%)' }}>
+        <div className={`
+            flex items-center justify-center
+            size-8 rounded-xl
+            border-2 shadow-lg
+            transition-all duration-300
+            ${type === 'active'
+                ? 'bg-[#2970ff] border-white scale-125 z-20 shadow-[0_4px_12px_rgba(41,112,255,0.4)] text-white'
+                : type === 'future'
+                    ? 'bg-white border-[#2970ff] text-[#2970ff] z-10'
+                    : 'bg-gray-100 border-white text-gray-400 opacity-60 grayscale scale-90'}
+        `}>
+            <span className="text-[13px] font-black leading-none">
+                {number}
+            </span>
+
+            {/* Minimal Pulse for active only */}
+            {type === 'active' && (
+                <div className="absolute inset-0 rounded-xl bg-[#2970ff] animate-ping opacity-20 -z-10"></div>
+            )}
+        </div>
+    </div>
+);
 
 interface ClonedHomeViewProps {
     googleMapsApiKey: string;
@@ -26,9 +59,10 @@ interface ClonedHomeViewProps {
     onAddStops: () => void;
     onOpenMapPicker: () => void;
     onImport: () => void;
+    onNavigateToRecords: () => void;
 }
 
-export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpenMapPicker, onImport }: ClonedHomeViewProps) => {
+export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpenMapPicker, onImport, onNavigateToRecords }: ClonedHomeViewProps) => {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
         googleMapsApiKey,
@@ -36,14 +70,67 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
     });
 
     const [currentPos, setCurrentPos] = useState(defaultCenter);
+    const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
+    const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+    const [routeInfo, setRouteInfo] = useState({ distance: '...', duration: '...' });
     const [mapCenter, setMapCenter] = useState(defaultCenter);
     const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
     const [dragY, setDragY] = useState(0);
+    const [isRouteActive, setIsRouteActive] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const startY = useRef(0);
     const lastY = useRef(0);
     const mapRef = useRef<google.maps.Map | null>(null);
+
+    useEffect(() => {
+        const loadRoute = async () => {
+            const data = await getActiveRoute();
+            setRoutePoints(data);
+        };
+        loadRoute();
+    }, []);
+
+    useEffect(() => {
+        if (routePoints.length > 1) {
+            const origin = { lat: routePoints[0].lat!, lng: routePoints[0].lng! };
+            const destination = { lat: routePoints[routePoints.length - 1].lat!, lng: routePoints[routePoints.length - 1].lng! };
+            const waypoints = routePoints.slice(1, -1).map(p => ({
+                location: { lat: p.lat!, lng: p.lng! },
+                stopover: true
+            }));
+
+            const service = new google.maps.DirectionsService();
+            service.route(
+                {
+                    origin,
+                    destination,
+                    waypoints,
+                    travelMode: google.maps.TravelMode.DRIVING,
+                    optimizeWaypoints: false
+                },
+                (result, status) => {
+                    if (status === 'OK' && result) {
+                        setDirections(result);
+                        // Calculate total distance and duration
+                        let totalDist = 0;
+                        let totalTime = 0;
+                        result.routes[0].legs.forEach(leg => {
+                            totalDist += leg.distance?.value || 0;
+                            totalTime += leg.duration?.value || 0;
+                        });
+                        setRouteInfo({
+                            distance: (totalDist / 1000).toFixed(1) + ' km',
+                            duration: Math.round(totalTime / 60) + ' min'
+                        });
+                    }
+                }
+            );
+        } else {
+            setDirections(null);
+            setRouteInfo({ distance: '0 km', duration: '0 min' });
+        }
+    }, [routePoints]);
 
     useEffect(() => {
         navigator.geolocation.getCurrentPosition(
@@ -118,7 +205,7 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
                     zoom={15}
                     onLoad={m => { mapRef.current = m; }}
                     options={{
-                        styles: LIGHT_MAP_STYLE,
+                        styles: CLEAN_MAP_STYLE,
                         disableDefaultUI: true,
                         zoomControl: false,
                         mapTypeControl: false,
@@ -128,10 +215,42 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
                         fullscreenControl: false
                     }}
                 >
+                    {/* Real Route Renderer */}
+                    {directions && (
+                        <DirectionsRenderer
+                            directions={directions}
+                            options={{
+                                suppressMarkers: true, // We use our custom markers
+                                polylineOptions: {
+                                    strokeColor: "#2970ff",
+                                    strokeOpacity: 0.8,
+                                    strokeWeight: 6
+                                }
+                            }}
+                        />
+                    )}
+
+                    {/* Markers */}
+                    {routePoints.map((point, idx) => (
+                        point.lat && point.lng && (
+                            <OverlayView
+                                key={point.id}
+                                position={{ lat: point.lat, lng: point.lng }}
+                                mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                            >
+                                <SpokeMarker
+                                    number={idx + 1}
+                                    type={idx === 0 ? 'active' : (point.isDelivered ? 'passed' : 'future')}
+                                />
+                            </OverlayView>
+                        )
+                    ))}
+
+                    {/* Current User Marker */}
                     <OverlayView position={currentPos} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                         <div className="relative flex items-center justify-center">
                             <div className="absolute size-10 bg-blue-500/20 rounded-full animate-ping"></div>
-                            <div className="size-5 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                            <div className="size-5 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-white ring-4 ring-blue-500/10">
                                 <div className="size-3.5 bg-blue-500 rounded-full"></div>
                             </div>
                         </div>
@@ -249,25 +368,57 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
 
                 {/* Footer Controls (Expanded only) */}
                 {isExpanded && (
-                    <div className="mt-auto pb-10 pt-4 animate-in slide-in-from-bottom duration-500">
-                        <div className="grid grid-cols-3 gap-4">
+                    <div className="mt-auto pb-8 pt-4 animate-in slide-in-from-bottom duration-500">
+                        <div className="grid grid-cols-3 gap-4 mb-6">
                             <button
                                 onClick={onOpenMapPicker}
-                                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm active:scale-95 transition-all"
+                                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-[#f8fafc] border border-gray-50 active:scale-95 transition-all"
                             >
                                 <span className="material-symbols-outlined text-blue-600 !text-[28px]">map</span>
-                                <span className="text-[12px] font-bold text-gray-600 uppercase tracking-wider">Mapa</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alfinete</span>
                             </button>
                             <button
                                 onClick={onAddStops}
-                                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm active:scale-95 transition-all"
+                                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-[#f8fafc] border border-gray-50 active:scale-95 transition-all"
                             >
-                                <span className="material-symbols-outlined text-blue-600 !text-[28px]">barcode_scanner</span>
-                                <span className="text-[12px] font-bold text-gray-600 uppercase tracking-wider">Leitor</span>
+                                <span className="material-symbols-outlined text-blue-600 !text-[28px]">photo_camera</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Capturar</span>
                             </button>
-                            <button className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm active:scale-95 transition-all">
-                                <span className="material-symbols-outlined text-blue-600 !text-[28px]">mic</span>
-                                <span className="text-[12px] font-bold text-gray-600 uppercase tracking-wider">Voz</span>
+                            <button
+                                onClick={onNavigateToRecords}
+                                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-[#f8fafc] border border-gray-50 active:scale-95 transition-all"
+                            >
+                                <span className="material-symbols-outlined text-blue-600 !text-[28px]">inventory_2</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Endereços</span>
+                            </button>
+                        </div>
+
+                        <div className="bg-white border-t border-gray-100 flex items-center justify-between py-4 select-none">
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-gray-400">schedule</span>
+                                <span className="text-[14px] font-bold text-gray-700">{routeInfo.duration}</span>
+                            </div>
+                            <div className="h-4 w-[1px] bg-gray-100"></div>
+                            <div className="text-[14px] font-bold text-gray-700">
+                                {routePoints.length} paradas
+                            </div>
+                            <div className="h-4 w-[1px] bg-gray-100"></div>
+                            <div className="text-[14px] font-bold text-gray-700">
+                                {routeInfo.distance}
+                            </div>
+                            <button className="size-10 flex items-center justify-center text-gray-400">
+                                <span className="material-symbols-outlined">search</span>
+                            </button>
+                        </div>
+
+                        {/* Start Route Button */}
+                        <div className="pt-2">
+                            <button
+                                onClick={() => setIsRouteActive(true)}
+                                className="w-full h-16 bg-[#2970ff] rounded-[1.5rem] flex items-center justify-center gap-3 text-white shadow-[0_8px_20px_rgba(41,112,255,0.3)] active:scale-95 transition-all"
+                            >
+                                <span className="material-symbols-outlined filled-icon">play_arrow</span>
+                                <span className="text-[16px] font-black tracking-wide">Iniciar Rota</span>
                             </button>
                         </div>
                     </div>
@@ -294,6 +445,18 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
             <div className={`absolute bottom-4 left-6 z-10 transition-opacity duration-300 ${isExpanded ? 'opacity-0' : 'opacity-30'}`}>
                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/bd/Google_Maps_Logo_2020.svg/512px-Google_Maps_Logo_2020.svg.png" className="h-6 grayscale" alt="Google" />
             </div>
+
+            {isRouteActive && (
+                <ActiveRouteView
+                    routePoints={routePoints}
+                    onClose={() => setIsRouteActive(false)}
+                    onCompleteStop={(id) => console.log("Stop completed:", id)}
+                    onArrived={(point) => {
+                        const url = `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=driving`;
+                        window.open(url, '_blank');
+                    }}
+                />
+            )}
         </div>
     );
 };

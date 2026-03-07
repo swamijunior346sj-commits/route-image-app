@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { clearAllUserData } from '../services/db';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface SettingsViewProps {
     onBack: () => void;
@@ -7,11 +9,41 @@ interface SettingsViewProps {
 }
 
 export const SettingsView = ({ onBack, onNavigateToAdmin, onLogout }: SettingsViewProps) => {
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type: 'danger' | 'info';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        type: 'info'
+    });
+
     const handleClearData = async () => {
-        if (confirm("ATENÇÃO: Isso apagará TODOS os seus endereços, rotas e configurações. O processo é irreversível. Deseja continuar?")) {
-            await clearAllUserData();
-            window.location.reload();
-        }
+        setModalConfig({
+            isOpen: true,
+            title: "Limpar tudo?",
+            message: "Isso apagará permanentemente todos os seus endereços, rotas e configurações. Deseja continuar?",
+            type: 'danger',
+            onConfirm: async () => {
+                await clearAllUserData();
+                window.location.reload();
+            }
+        });
+    };
+
+    const handleLogoutClick = () => {
+        setModalConfig({
+            isOpen: true,
+            title: "Sair da conta?",
+            message: "Você precisará fazer login novamente para acessar seus dados.",
+            type: 'info',
+            onConfirm: onLogout
+        });
     };
 
     return (
@@ -66,7 +98,7 @@ export const SettingsView = ({ onBack, onNavigateToAdmin, onLogout }: SettingsVi
                         </button>
 
                         <button
-                            onClick={onLogout}
+                            onClick={handleLogoutClick}
                             className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors group"
                         >
                             <div className="flex items-center gap-4">
@@ -106,9 +138,17 @@ export const SettingsView = ({ onBack, onNavigateToAdmin, onLogout }: SettingsVi
                 </div>
             </main>
 
-            <footer className="p-8 text-center">
-                <p className="text-[11px] font-black text-gray-200 uppercase tracking-[0.3em]">Built by Antigravity AI</p>
-            </footer>
-        </div>
+
+            <ConfirmationModal
+                isOpen={modalConfig.isOpen}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                onConfirm={modalConfig.onConfirm}
+                onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                confirmText="Sim, continuar"
+                cancelText="Cancelar"
+            />
+        </div >
     );
 };

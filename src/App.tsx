@@ -127,6 +127,7 @@ export default function App() {
             onAddStops={() => changeTab('scanner')}
             onOpenMapPicker={() => changeTab('mapPicker')}
             onImport={handleImportStops}
+            onNavigateToRecords={() => changeTab('records')}
           />
         )}
 

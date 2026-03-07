@@ -4,6 +4,7 @@ import type { LocationRecord } from '../services/db';
 import { DeliveryDetailView } from './DeliveryDetailView';
 import { EditAddressView } from './EditAddressView';
 import { LoadingOverlay } from './LoadingOverlay';
+import { ConfirmationModal } from './ConfirmationModal';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -24,6 +25,19 @@ export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [optimizationLog, setOptimizationLog] = useState('');
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type: 'danger' | 'info';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        type: 'info'
+    });
     const fileInputRef = useRef<HTMLInputElement>(null);
     const longPressTimer = useRef<any>(null);
 
@@ -54,14 +68,20 @@ export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
 
     const handleDeleteSelected = async () => {
         if (selectedIds.length === 0) return;
-        if (confirm(`Deseja excluir ${selectedIds.length} registros selecionados?`)) {
-            for (const id of selectedIds) {
-                await deleteRecord(id);
+        setModalConfig({
+            isOpen: true,
+            title: "Excluir Selecionados",
+            message: `Deseja excluir permanentemente os ${selectedIds.length} registros selecionados?`,
+            type: 'danger',
+            onConfirm: async () => {
+                for (const id of selectedIds) {
+                    await deleteRecord(id);
+                }
+                setRecords(records.filter(r => !selectedIds.includes(r.id)));
+                setSelectedIds([]);
+                setIsSelectionMode(false);
             }
-            setRecords(records.filter(r => !selectedIds.includes(r.id)));
-            setSelectedIds([]);
-            setIsSelectionMode(false);
-        }
+        });
     };
 
     const handleLongPress = (id: string) => {
@@ -82,10 +102,16 @@ export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (confirm('Deseja excluir este registro?')) {
-            await deleteRecord(id);
-            setRecords(records.filter(r => r.id !== id));
-        }
+        setModalConfig({
+            isOpen: true,
+            title: "Excluir Registro",
+            message: "Tem certeza que deseja excluir este endereço? Esta ação não pode ser desfeita.",
+            type: 'danger',
+            onConfirm: async () => {
+                await deleteRecord(id);
+                setRecords(records.filter(r => r.id !== id));
+            }
+        });
     };
 
     const handleEdit = (record: LocationRecord, e: React.MouseEvent) => {
@@ -564,6 +590,16 @@ export const RecordsView = ({ onNavigateToMap, onBack }: RecordsViewProps) => {
                     icon={<span className="material-symbols-outlined !text-[32px] animate-spin text-primary shadow-glow">{isImporting ? 'sync' : 'auto_fix_high'}</span>}
                 />
             )}
+            <ConfirmationModal
+                isOpen={modalConfig.isOpen}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                onConfirm={modalConfig.onConfirm}
+                onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                confirmText="Sim, excluir"
+                cancelText="Cancelar"
+            />
         </div>
     );
 };
