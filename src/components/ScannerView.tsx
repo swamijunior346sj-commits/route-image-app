@@ -275,75 +275,131 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
 
     if (viewMode === 'confirm') {
         return (
-            <div className="fixed inset-0 z-[11000] bg-bg-start flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-500 overflow-hidden font-sans">
-                <header className="sticky top-0 z-50 backdrop-blur-xl bg-bg-start/60 border-b border-white/5 px-6 pt-10 pb-5 text-white">
-                    <div className="flex items-center justify-between">
-                        <button
-                            onClick={() => { setViewMode('camera'); onNavigateToDailyRoute(); }}
-                            className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 text-slate-300 active:scale-90 transition-transform"
-                        >
-                            <span className="material-symbols-outlined !text-[20px]">arrow_back_ios_new</span>
-                        </button>
-                        <h1 className="text-lg font-bold tracking-tight">Novo Endereço</h1>
-                        <div className="size-10"></div>
-                    </div>
+            <div className="fixed inset-0 z-[11000] bg-[#f8fafc] flex flex-col font-sans">
+                {/* Header Premium */}
+                <header className="px-6 pt-12 pb-6 flex items-center justify-between">
+                    <button
+                        onClick={() => { setViewMode('camera'); onNavigateToDailyRoute(); }}
+                        className="flex items-center justify-center size-10 rounded-full bg-white border border-gray-100 text-gray-400 active:scale-90 transition-all shadow-sm"
+                    >
+                        <span className="material-symbols-outlined !text-[20px]">close</span>
+                    </button>
+                    <h1 className="text-[17px] font-bold text-gray-800">Detalhes da Parada</h1>
+                    <button
+                        onClick={handleSaveEntry}
+                        disabled={loading || !addressInput.trim()}
+                        className="text-[14px] font-black uppercase tracking-widest text-[#2970ff] disabled:opacity-30"
+                    >
+                        Concluído
+                    </button>
                 </header>
 
-                <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 no-scrollbar text-white">
-                    <div className="space-y-3">
-                        <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
-                            Foto da Etiqueta
-                        </label>
-                        <div className="relative w-full aspect-video rounded-[2rem] border-2 border-dashed border-white/20 overflow-hidden group">
+                <main className="flex-1 overflow-y-auto px-6 pb-32 no-scrollbar">
+                    {/* Visual Preview Card */}
+                    <div className="mb-8 relative group">
+                        <div className="aspect-[4/3] rounded-[2rem] overflow-hidden bg-gray-100 border border-gray-100 shadow-sm relative">
                             {capturedImage && (
                                 <img src={capturedImage} className="w-full h-full object-cover" alt="Capture" />
                             )}
 
                             {isAiAnalyzing && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-bg-start/80 backdrop-blur-md animate-in fade-in scale-in duration-500">
-                                    <span className="material-symbols-outlined !text-[32px] text-primary animate-pulse mb-4">auto_awesome</span>
-                                    <p className="text-xs font-bold text-white uppercase tracking-widest">{aiStatus}</p>
+                                <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center">
+                                    <div className="size-12 border-4 border-blue-50 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{aiStatus}</p>
                                 </div>
                             )}
                         </div>
+                        <button className="absolute -bottom-3 right-6 bg-white size-12 rounded-full shadow-lg border border-gray-50 flex items-center justify-center text-gray-400 hover:text-[#2970ff] transition-colors">
+                            <span className="material-symbols-outlined filled-icon !text-[20px]">photo_camera</span>
+                        </button>
                     </div>
 
                     <div className="space-y-6">
-                        <div className="space-y-2.5">
-                            <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">Destinatário</label>
-                            <input className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none text-white focus:border-primary/50" type="text" value={locationNameInput} onChange={e => setLocationNameInput(e.target.value)} placeholder="Ex: João da Silva" />
-                        </div>
-
-                        <div className="space-y-2.5">
-                            <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">Endereço Completo</label>
-                            <input className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none text-white focus:border-primary/50" type="text" value={addressInput} onChange={e => setAddressInput(e.target.value)} placeholder="Rua exemplo, 123" />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2.5">
-                                <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">Bairro</label>
-                                <input className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none text-white focus:border-primary/50" type="text" value={neighborhoodInput} onChange={e => setNeighborhoodInput(e.target.value)} />
+                        {/* Address Section */}
+                        <div className="space-y-4">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[11px] font-black text-gray-300 uppercase tracking-widest px-1">Endereço</label>
+                                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm focus-within:ring-2 focus-within:ring-blue-50 transition-all">
+                                    <textarea
+                                        className="w-full bg-transparent border-none p-0 text-[15px] font-semibold text-gray-800 placeholder:text-gray-300 outline-none resize-none"
+                                        rows={2}
+                                        value={addressInput}
+                                        onChange={e => setAddressInput(e.target.value)}
+                                        placeholder="Digite o endereço completo"
+                                    />
+                                </div>
                             </div>
-                            <div className="space-y-2.5">
-                                <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">Horário Limite</label>
-                                <input className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none text-white focus:border-primary/50" type="time" value={deadlineInput} onChange={e => setDeadlineInput(e.target.value)} />
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[11px] font-black text-gray-300 uppercase tracking-widest px-1">Bairro</label>
+                                    <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                                        <input
+                                            className="w-full bg-transparent border-none p-0 text-[15px] font-semibold text-gray-800 placeholder:text-gray-300 outline-none"
+                                            value={neighborhoodInput}
+                                            onChange={e => setNeighborhoodInput(e.target.value)}
+                                            placeholder="Bairro"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[11px] font-black text-gray-300 uppercase tracking-widest px-1">Cidade</label>
+                                    <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                                        <input
+                                            className="w-full bg-transparent border-none p-0 text-[15px] font-semibold text-gray-800 placeholder:text-gray-300 outline-none"
+                                            value={cityInput}
+                                            onChange={e => setCityInput(e.target.value)}
+                                            placeholder="Cidade"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="space-y-2.5">
-                            <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">Observações</label>
-                            <textarea className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none text-white focus:border-primary/50 min-h-[100px] resize-none" value={notesInput} onChange={e => setNotesInput(e.target.value)} placeholder="Ex: Casa verde, deixar na portaria..."></textarea>
+                        {/* Details Section */}
+                        <div className="space-y-4 pt-4 border-t border-gray-100">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[11px] font-black text-gray-300 uppercase tracking-widest px-1">Destinatário</label>
+                                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                                    <input
+                                        className="w-full bg-transparent border-none p-0 text-[15px] font-semibold text-gray-800 placeholder:text-gray-300 outline-none"
+                                        value={locationNameInput}
+                                        onChange={e => setLocationNameInput(e.target.value)}
+                                        placeholder="Nome do cliente"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[11px] font-black text-gray-300 uppercase tracking-widest px-1">Instruções de entrega</label>
+                                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                                    <textarea
+                                        className="w-full bg-transparent border-none p-0 text-[14px] font-medium text-gray-600 placeholder:text-gray-300 outline-none resize-none"
+                                        rows={3}
+                                        value={notesInput}
+                                        onChange={e => setNotesInput(e.target.value)}
+                                        placeholder="Ex: Tocar campainha 2x, deixar na vizinha do lado..."
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </main>
 
-                <footer className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg-start via-bg-start p-6 pb-10 z-[210]">
+                <footer className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#f8fafc] via-[#f8fafc] to-transparent">
                     <button
                         onClick={handleSaveEntry}
                         disabled={loading || !addressInput.trim()}
-                        className="w-full h-16 bg-primary text-white font-black uppercase tracking-[0.2em] rounded-2xl shadow-premium active:scale-[0.97] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                        className="w-full h-16 bg-[#2970ff] text-white font-bold rounded-2xl shadow-[0_8px_24px_rgba(41,112,255,0.3)] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                     >
-                        {loading ? <span className="material-symbols-outlined animate-spin">refresh</span> : "Salvar e Adicionar Rota"}
+                        {loading ? (
+                            <span className="material-symbols-outlined animate-spin">refresh</span>
+                        ) : (
+                            <>
+                                <span className="text-[16px]">Confirmar Parada</span>
+                                <span className="material-symbols-outlined !text-[20px]">arrow_forward</span>
+                            </>
+                        )}
                     </button>
                 </footer>
             </div>

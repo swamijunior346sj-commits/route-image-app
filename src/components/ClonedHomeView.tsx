@@ -39,6 +39,10 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
     const [mapCenter, setMapCenter] = useState(defaultCenter);
     const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [dragY, setDragY] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const startY = useRef(0);
+    const lastY = useRef(0);
     const mapRef = useRef<google.maps.Map | null>(null);
 
     useEffect(() => {
@@ -64,6 +68,38 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
                 setMapCenter(newPos);
             }
         }
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        startY.current = e.touches[0].clientY;
+        lastY.current = e.touches[0].clientY;
+        setIsDragging(true);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        const currentY = e.touches[0].clientY;
+        const delta = currentY - startY.current;
+
+        // Se estiver expandido, só permite arrastar para baixo
+        if (isExpanded) {
+            if (delta > 0) setDragY(delta);
+        } else {
+            // Se estiver recolhido, só permite arrastar para cima
+            if (delta < 0) setDragY(delta);
+        }
+        lastY.current = currentY;
+    };
+
+    const handleTouchEnd = () => {
+        setIsDragging(false);
+        const threshold = 100;
+
+        if (isExpanded) {
+            if (dragY > threshold) setIsExpanded(false);
+        } else {
+            if (dragY < -threshold) setIsExpanded(true);
+        }
+        setDragY(0);
     };
 
     if (!isLoaded) return (
@@ -128,8 +164,15 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
 
             {/* 4. Bottom Sheet Container */}
             <div
-                className={`absolute bottom-0 left-0 right-0 z-[150] bg-white transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col px-6 pt-4 
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                className={`absolute bottom-0 left-0 right-0 z-[150] bg-white flex flex-col px-6 pt-4 
+                ${!isDragging ? 'transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]' : ''}
                 ${isExpanded ? 'h-[95dvh] rounded-t-[32px] shadow-[0_-20px_80px_rgba(0,0,0,0.15)]' : 'h-auto rounded-t-[32px] shadow-[0_-20px_40px_rgba(0,0,0,0.1)] pb-12'}`}
+                style={{
+                    transform: isDragging ? `translateY(${dragY}px)` : 'translateY(0)',
+                }}
             >
                 {/* Drag Indicator */}
                 <div
