@@ -52,3 +52,28 @@ export const analyzeLabel = async (base64Image: string): Promise<AddressData | n
         return null;
     }
 };
+
+export const optimizeRoute = async (points: any[]): Promise<string[] | null> => {
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const prompt = `You are a logistics expert. I have a list of delivery points with coordinates. 
+        Reorder these points to create the most efficient route (shortest distance).
+        Points: ${JSON.stringify(points.map(p => ({ id: p.id, lat: p.lat, lng: p.lng, address: p.address })))}
+        
+        Return ONLY a JSON array of IDs in the optimized order. Example: ["id1", "id2", "id3"].
+        Do not include any explanation or other text.`;
+
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim();
+
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+        }
+        return null;
+    } catch (error) {
+        console.error("Gemini Optimization Error:", error);
+        return null;
+    }
+};

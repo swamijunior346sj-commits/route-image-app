@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MapView } from './components/MapView';
 import { ScannerView } from './components/ScannerView';
 import { RouteListView } from './components/RouteListView';
+import { getActiveRoute, saveToActiveRoute, deletePoint } from './services/db';
 
 // --- Global Types ---
 export type LocationPoint = {
@@ -21,18 +22,56 @@ function App() {
     const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [points, setPoints] = useState<LocationPoint[]>([]);
+    const [isNavigating, setIsNavigating] = useState(false);
+
+    // Load points from Supabase
+    useEffect(() => {
+        loadPoints();
+    }, []);
+
+    const loadPoints = async () => {
+        try {
+            const data = await getActiveRoute();
+            setPoints(data);
+        } catch (error) {
+            console.error("Failed to load points:", error);
+        } finally {
+            // setLoading(false); // Removed as per instruction
+        }
+    };
 
     // Add a new point to the route
-    const handleAddPoint = (newPoint: Omit<LocationPoint, 'id' | 'status' | 'createdAt'>) => {
-        const point: LocationPoint = {
-            ...newPoint,
-            id: Math.random().toString(36).substring(7),
-            status: 'pending',
-            createdAt: Date.now()
-        };
-        setPoints(prev => [...prev, point]);
-        setIsScannerOpen(false);
-        setActiveTab('map');
+    const handleAddPoint = async (newPoint: Omit<LocationPoint, 'id' | 'status' | 'createdAt'>) => {
+        try {
+            // setLoading(true); // Removed as per instruction
+            const savedPoint = await saveToActiveRoute(newPoint);
+
+            const point: LocationPoint = {
+                ...newPoint,
+                id: savedPoint.id,
+                status: 'pending',
+                createdAt: Date.now()
+            };
+
+            setPoints((prev: LocationPoint[]) => [...prev, point]);
+            setIsScannerOpen(false);
+            setActiveTab('map');
+        } catch (error) {
+            alert("Erro ao salvar no banco de dados.");
+            console.error(error);
+        } finally {
+            // setLoading(false); // Removed as per instruction
+        }
+    };
+
+    const handleDeletePoint = async (id: string) => {
+        try {
+            await deletePoint(id);
+            setPoints((prev: LocationPoint[]) => prev.filter(p => p.id !== id));
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao remover ponto.");
+        }
     };
 
     return (
@@ -41,9 +80,18 @@ function App() {
             {/* Main Content Area */}
             <div className="w-full h-full pb-20">
                 {activeTab === 'map' ? (
-                    <MapView points={points} />
+                    <MapView
+                        points={points}
+                        onAddManualPoint={handleAddPoint}
+                        onDeletePoint={handleDeletePoint}
+                        isNavigating={isNavigating}
+                        onStopNavigation={() => setIsNavigating(false)}
+                    />
                 ) : (
-                    <RouteListView points={points} />
+                    <RouteListView points={points} onRefresh={loadPoints} onStartInternalNav={() => {
+                        setActiveTab('map');
+                        setIsNavigating(true);
+                    }} />
                 )}
             </div>
 
