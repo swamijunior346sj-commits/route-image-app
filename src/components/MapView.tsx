@@ -59,7 +59,9 @@ export const MapView = ({ points, onDeletePoint, onToggleStatus, isNavigating, o
     });
 
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-    const [center, setCenter] = useState(defaultCenter);
+    const [userPos, setUserPos] = useState(defaultCenter); // Position of the blue dot
+    const [mapCenter, setMapCenter] = useState<google.maps.LatLngLiteral | undefined>(defaultCenter); // Fixed center only when snapping
+    const [lastRouteUpdate, setLastRouteUpdate] = useState<number>(0);
     const mapRef = useRef<google.maps.Map | null>(null);
 
     const nextPoint = points.find(p => p.status === 'pending');
@@ -73,9 +75,11 @@ export const MapView = ({ points, onDeletePoint, onToggleStatus, isNavigating, o
                     lat: position.coords.latitude,
                     lng: position.coords.longitude
                 };
-                setCenter(pos);
-                if (isNavigating) {
-                    mapRef.current?.panTo(pos);
+                setUserPos(pos);
+
+                // If navigating, follow the user smoothly with panTo
+                if (isNavigating && mapRef.current) {
+                    mapRef.current.panTo(pos);
                 }
             },
             (error) => console.error("GPS Watch Error:", error),
@@ -89,25 +93,29 @@ export const MapView = ({ points, onDeletePoint, onToggleStatus, isNavigating, o
         return () => navigator.geolocation.clearWatch(watchId);
     }, [isNavigating]);
 
+    // Optimize Directions API calls
     useEffect(() => {
-        if (isNavigating && nextPoint && center) {
+        const now = Date.now();
+        if (isNavigating && nextPoint && userPos && (now - lastRouteUpdate > 30000)) {
             const directionsService = new google.maps.DirectionsService();
             directionsService.route(
                 {
-                    origin: center,
+                    origin: userPos,
                     destination: { lat: nextPoint.lat, lng: nextPoint.lng },
                     travelMode: google.maps.TravelMode.DRIVING,
                 },
                 (result, status) => {
                     if (status === google.maps.DirectionsStatus.OK) {
                         setDirections(result);
+                        setLastRouteUpdate(now);
                     }
                 }
             );
-        } else {
+        } else if (!isNavigating) {
             setDirections(null);
+            setLastRouteUpdate(0);
         }
-    }, [isNavigating, nextPoint, center]);
+    }, [isNavigating, nextPoint, userPos, lastRouteUpdate]);
 
     const handleMyLocation = () => {
         if ("geolocation" in navigator) {
@@ -116,10 +124,9 @@ export const MapView = ({ points, onDeletePoint, onToggleStatus, isNavigating, o
                     lat: position.coords.latitude,
                     lng: position.coords.longitude
                 };
-                setCenter(pos);
-                if (isNavigating) {
-                    mapRef.current?.panTo(pos);
-                }
+                setUserPos(pos);
+                setMapCenter(pos); // This forces the map to jump back to user
+                if (mapRef.current) mapRef.current.panTo(pos);
             });
         }
     };
@@ -131,7 +138,7 @@ export const MapView = ({ points, onDeletePoint, onToggleStatus, isNavigating, o
     if (!isLoaded) return <div className="p-10 font-black text-slate-300 uppercase tracking-widest animate-pulse">Iniciando GPS...</div>;
 
     return (
-        <div className="w-full h-full relative">
+        <div className="w-full h-full relative text-left">
 
             {/* Navigation HUD */}
             {isNavigating && nextPoint && (
@@ -178,13 +185,14 @@ export const MapView = ({ points, onDeletePoint, onToggleStatus, isNavigating, o
 
             <GoogleMap
                 mapContainerStyle={containerStyle}
-                center={center}
+                center={mapCenter}
                 zoom={15}
                 onLoad={onLoad}
                 options={mapOptions}
+                onDragStart={() => setMapCenter(undefined)} // Unlocks center when user drags
             >
                 <Marker
-                    position={center}
+                    position={userPos}
                     zIndex={100}
                     icon={{
                         url: 'https://cdn-icons-png.flaticon.com/512/3722/3722927.png',
