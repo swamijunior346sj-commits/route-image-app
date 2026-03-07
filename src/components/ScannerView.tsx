@@ -85,10 +85,11 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
         }, 600);
 
         try {
-            const [aiReading] = await Promise.all([
-                analyzeAddressImage(imageSrc),
-                new Promise(r => setTimeout(r, 2000)),
-            ]);
+            // Hard timeout for AI - 10 seconds max
+            const aiPromise = analyzeAddressImage(imageSrc);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI Timeout')), 10000));
+
+            const aiReading = await Promise.race([aiPromise, timeoutPromise]) as GeminiAddressExtraction | null;
 
             if (aiReading) {
                 if (aiReading.address) setAddressInput(aiReading.address);
@@ -99,12 +100,24 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                 if (aiReading.visualSignature) setVisualSignature(aiReading.visualSignature);
             }
         } catch (err) {
-            console.warn('AI analysis failed:', err);
+            console.warn('AI analysis failed or timed out:', err);
         } finally {
             clearInterval(msgInterval);
             setIsAiAnalyzing(false);
             setAiStatus('');
         }
+    };
+
+    const handleManualEntry = () => {
+        setCapturedImage(null);
+        setCapturedFeatures(new Array(1024).fill(0)); // Placeholder dummy features
+        setAddressInput('');
+        setLocationNameInput('');
+        setNeighborhoodInput('');
+        setCityInput('');
+        setNotesInput('');
+        setVisualSignature(`MAN-${Date.now().toString().slice(-6)}`);
+        setViewMode('confirm');
     };
 
 
@@ -297,11 +310,18 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
     };
 
     const handleSaveEntry = async () => {
-        if (!capturedImage || !capturedFeatures || !addressInput.trim()) return;
+        if (!addressInput.trim()) {
+            alert("Por favor, digite um endereço.");
+            return;
+        }
         setLoading(true);
         try {
             let lat = parseFloat(latInput);
             let lng = parseFloat(lngInput);
+
+            // Fallback features if none exist
+            const features = capturedFeatures || new Array(1024).fill(0);
+            const image = capturedImage || '';
 
             if (isNaN(lat) || isNaN(lng)) {
                 try {
@@ -319,8 +339,8 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                 locationNameInput.trim() || addressInput.trim(),
                 isNaN(lat) ? null : lat,
                 isNaN(lng) ? null : lng,
-                capturedImage,
-                capturedFeatures,
+                image,
+                features,
                 { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput, deadline: deadlineInput, visualSignature: visualSignature }
             );
 
@@ -534,6 +554,14 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                     >
                         <span className="material-symbols-outlined !text-[20px]">image</span>
                         <span>Galeria</span>
+                    </button>
+
+                    <button
+                        onClick={handleManualEntry}
+                        className="w-full h-14 bg-white text-gray-800 font-bold rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-3 border border-gray-100 border-dashed"
+                    >
+                        <span className="material-symbols-outlined !text-[20px]">edit_note</span>
+                        <span>Digitar Endereço</span>
                     </button>
 
                     <button
