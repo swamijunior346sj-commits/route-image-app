@@ -1,198 +1,91 @@
-import { useState, useEffect } from 'react';
-import { loadModel } from './services/imageProcessing';
+import { useState } from 'react';
+import { MapView } from './components/MapView';
 import { ScannerView } from './components/ScannerView';
-import { SideNav } from './components/SideNav';
-import { DailyRouteView } from './components/DailyRouteView';
-import { SettingsView } from './components/SettingsView';
-import { SubscriptionView } from './components/SubscriptionView';
-import { AdminView } from './components/AdminView';
-import { AuthView } from './components/AuthView';
-import { getSettings, defaultSettings, type AppSettings } from './services/db';
-import { supabase } from './services/supabase';
+import { RouteListView } from './components/RouteListView';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+// --- Global Types ---
+export type LocationPoint = {
+    id: string;
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+    neighborhood?: string;
+    city?: string;
+    notes?: string;
+    status: 'pending' | 'delivered' | 'failed';
+    createdAt: number;
+};
 
-import { ClonedHomeView } from './components/ClonedHomeView';
+function App() {
+    const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [points, setPoints] = useState<LocationPoint[]>([]);
 
-export default function App() {
-  const [currentTab, setCurrentTab] = useState<'home' | 'scanner' | 'dailyRoute'>('home');
-  const [modelLoading, setModelLoading] = useState(true);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [lastTab, setLastTab] = useState<'home' | 'dailyRoute'>('home');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [scannerInitialMode, setScannerInitialMode] = useState<'camera' | 'confirm'>('camera');
-  const [scannerInitialAction, setScannerInitialAction] = useState<'camera' | 'import' | null>(null);
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
-  const [isSideNavOpen, setIsSideNavOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
-    () => localStorage.getItem('isAuthenticated') === 'true'
-  );
-  const [routeKey, setRouteKey] = useState(0);
-
-  useEffect(() => {
-    const initApp = async () => {
-      console.log("🚀 Iniciando RouteVision Cloned...");
-      try {
-        loadModel().catch(console.error);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setUser(session.user);
-          setIsAuthenticated(true);
-          const s = await getSettings();
-          if (s) setSettings(s);
-        } else {
-          setIsAuthenticated(false);
-        }
-      } catch (err) {
-        console.error("Init error:", err);
-      } finally {
-        setModelLoading(false);
-      }
+    // Add a new point to the route
+    const handleAddPoint = (newPoint: Omit<LocationPoint, 'id' | 'status' | 'createdAt'>) => {
+        const point: LocationPoint = {
+            ...newPoint,
+            id: Math.random().toString(36).substring(7),
+            status: 'pending',
+            createdAt: Date.now()
+        };
+        setPoints(prev => [...prev, point]);
+        setIsScannerOpen(false);
+        setActiveTab('map');
     };
-    initApp();
 
-    // Failsafe timeout
-    const timer = setTimeout(() => {
-      setModelLoading(false);
-    }, 3000);
+    return (
+        <div className="relative w-full h-[100dvh] overflow-hidden bg-slate-50">
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null);
-      setIsAuthenticated(!!session);
-      if (session) {
-        const s = await getSettings();
-        setSettings(s);
-      }
-    });
+            {/* Main Content Area */}
+            <div className="w-full h-full pb-20">
+                {activeTab === 'map' ? (
+                    <MapView points={points} />
+                ) : (
+                    <RouteListView points={points} />
+                )}
+            </div>
 
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timer);
-    };
-  }, []);
+            {/* Navigation Bar - Premium Glass Mode */}
+            <nav className="fixed bottom-0 left-0 right-0 h-20 glass-morphism border-t border-white/50 flex items-center justify-around px-6 z-50">
+                <button
+                    onClick={() => setActiveTab('map')}
+                    className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'map' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}
+                >
+                    <span className="material-symbols-outlined filled-icon">map</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Mapa</span>
+                </button>
 
-  const changeTab = (tab: any, options?: any) => {
-    if (tab !== 'scanner') {
-      setLastTab(tab);
-    }
-    if (tab === 'scanner') {
-      setScannerInitialMode(options?.scannerMode || 'camera');
-      setScannerInitialAction(options?.initialAction || null);
-    } else {
-      setScannerInitialAction(null);
-    }
-    if (tab === 'home') {
-      setRouteKey(prev => prev + 1);
-    }
-    setCurrentTab(tab);
-  };
+                {/* Center Floating Action Button */}
+                <button
+                    onClick={() => setIsScannerOpen(true)}
+                    className="absolute -top-6 bg-blue-600 size-16 rounded-full shadow-[0_8px_25px_rgba(37,99,235,0.4)] flex items-center justify-center text-white active:scale-90 transition-all border-4 border-white"
+                >
+                    <span className="material-symbols-outlined !text-32px">photo_camera</span>
+                </button>
 
-  const handleImportStops = () => {
-    changeTab('scanner', { initialAction: 'import' });
-  };
+                <button
+                    onClick={() => setActiveTab('list')}
+                    className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'list' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}
+                >
+                    <span className="material-symbols-outlined">route</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Rota</span>
+                </button>
+            </nav>
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('isAuthenticated');
-    window.location.reload();
-  };
+            {/* Scanner Modal Overlay */}
+            {isScannerOpen && (
+                <div className="fixed inset-0 z-[100] animate-in fade-in duration-300">
+                    <ScannerView
+                        onClose={() => setIsScannerOpen(false)}
+                        onConfirm={handleAddPoint}
+                    />
+                </div>
+            )}
 
-  const handleSelectPlan = async (planId: 'free' | 'pro' | 'enterprise') => {
-    if (!user) return;
-    const { error } = await supabase
-      .from('profiles')
-      .update({ subscription_plan: planId })
-      .eq('id', user.id);
-    if (error) {
-      console.error("Failed to update plan", error);
-      alert("Erro ao processar plano. Tente novamente.");
-      return;
-    }
-    const updatedSettings = await getSettings();
-    setSettings(updatedSettings);
-    setIsSubscriptionOpen(false);
-    alert(`Parabéns! Você agora é um usuário ${planId.toUpperCase()}!`);
-  };
-
-  if (modelLoading) return (
-    <div className="fixed inset-0 bg-white flex items-center justify-center">
-      <div className="size-8 border-2 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
-    </div>
-  );
-  if (!isAuthenticated) return <AuthView onLogin={() => setIsAuthenticated(true)} />;
-
-  return (
-    <div className="w-full h-screen bg-white text-gray-900 overflow-hidden flex flex-col font-sans">
-
-      {/* Main Viewport */}
-      <div className="flex-1 w-full h-full relative">
-        <div className={(currentTab === 'home' || (currentTab === 'scanner' && lastTab === 'home')) ? 'block h-full' : 'hidden'}>
-          <ClonedHomeView
-            key={routeKey}
-            googleMapsApiKey={GOOGLE_MAPS_API_KEY}
-            onOpenMenu={() => setIsSideNavOpen(true)}
-            onAddStops={() => changeTab('scanner', { initialAction: 'camera' })}
-            onImport={handleImportStops}
-            onNavigateToDailyRoute={() => changeTab('dailyRoute')}
-          />
         </div>
-
-
-
-        <div className={(currentTab === 'dailyRoute' || (currentTab === 'scanner' && lastTab === 'dailyRoute')) ? 'block h-full' : 'hidden'}>
-          <DailyRouteView
-            onNavigateToMap={() => changeTab('home')}
-            onNavigateToScanner={() => changeTab('scanner', { scannerMode: 'camera' })}
-            onBack={() => changeTab('home')}
-          />
-        </div>
-
-        {/* Global Scanner Overlay - Absolute Transparency Layer */}
-        {currentTab === 'scanner' && (
-          <div className="fixed inset-0 z-[10000]">
-            <ScannerView
-              onNavigateToDailyRoute={() => changeTab('dailyRoute')}
-              onBack={() => changeTab('home')}
-              initialViewMode={scannerInitialMode}
-              initialAction={scannerInitialAction}
-              onShowPaywall={() => setIsSubscriptionOpen(true)}
-            />
-          </div>
-        )}
-      </div>
-
-      {isSettingsOpen && (
-        <SettingsView
-          onBack={() => setIsSettingsOpen(false)}
-          onNavigateToAdmin={() => {
-            setIsAdminOpen(true);
-            setIsSettingsOpen(false);
-          }}
-          onLogout={handleLogout}
-        />
-      )}
-
-      {isAdminOpen && <AdminView onBack={() => setIsAdminOpen(false)} />}
-
-      <SideNav
-        isOpen={isSideNavOpen}
-        onClose={() => setIsSideNavOpen(false)}
-        onLogout={handleLogout}
-        onNavigateToAdmin={() => setIsSettingsOpen(true)}
-        onAddStops={() => changeTab('scanner', { initialAction: 'camera' })}
-        onNavigateToHome={() => changeTab('home')}
-      />
-
-      {isSubscriptionOpen && (
-        <SubscriptionView
-          onBack={() => setIsSubscriptionOpen(false)}
-          currentPlan={settings?.subscriptionPlan}
-          onSelectPlan={handleSelectPlan}
-        />
-      )}
-
-    </div>
-  );
+    );
 }
+
+export default App;
