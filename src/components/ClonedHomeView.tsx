@@ -25,9 +25,10 @@ interface ClonedHomeViewProps {
     onOpenMenu: () => void;
     onAddStops: () => void;
     onOpenMapPicker: () => void;
+    onImport: () => void;
 }
 
-export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpenMapPicker }: ClonedHomeViewProps) => {
+export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpenMapPicker, onImport }: ClonedHomeViewProps) => {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
         googleMapsApiKey,
@@ -149,8 +150,24 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
                             />
                         </Autocomplete>
                         <div className="flex items-center gap-3 ml-2 border-l border-gray-200 pl-3">
-                            <span className="material-symbols-outlined text-gray-400 !text-[22px] cursor-pointer hover:text-blue-500">barcode_scanner</span>
-                            <span className="material-symbols-outlined text-gray-400 !text-[22px] cursor-pointer hover:text-blue-500">mic</span>
+                            <span
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAddStops();
+                                }}
+                                className="material-symbols-outlined text-gray-400 !text-[22px] cursor-pointer hover:text-blue-500"
+                            >
+                                barcode_scanner
+                            </span>
+                            <span
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onImport();
+                                }}
+                                className="material-symbols-outlined text-gray-400 !text-[22px] cursor-pointer hover:text-blue-500"
+                            >
+                                image
+                            </span>
                         </div>
                     </div>
                     {isExpanded && (
@@ -193,7 +210,7 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
                                 onClick={onAddStops}
                                 className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm active:scale-95 transition-all"
                             >
-                                <span className="material-symbols-outlined text-blue-600 !text-[28px]">qr_code_scanner</span>
+                                <span className="material-symbols-outlined text-blue-600 !text-[28px]">barcode_scanner</span>
                                 <span className="text-[12px] font-bold text-gray-600 uppercase tracking-wider">Leitor</span>
                             </button>
                             <button className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm active:scale-95 transition-all">

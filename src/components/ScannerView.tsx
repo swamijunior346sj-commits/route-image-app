@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import {
     getRecords,
     saveRecord,
@@ -15,9 +15,10 @@ interface ScannerProps {
     onNavigateToDailyRoute: () => void;
     initialViewMode?: 'camera' | 'confirm';
     onShowPaywall?: () => void;
+    onRegisterImport?: (trigger: () => void) => void;
 }
 
-export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera', onShowPaywall }: ScannerProps) => {
+export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera', onShowPaywall, onRegisterImport }: ScannerProps) => {
     // --- State ---
     const [loading, setLoading] = useState(false);
     const [isSendingToRoute, setIsSendingToRoute] = useState(false);
@@ -42,6 +43,14 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
     const [aiStatus, setAiStatus] = useState('');
 
     const SIMILARITY_THRESHOLD = 0.80;
+
+    useEffect(() => {
+        if (onRegisterImport) {
+            onRegisterImport(() => {
+                importFileInputRef.current?.click();
+            });
+        }
+    }, [onRegisterImport]);
 
     // --- Camera Logic ---
     const captureAndAnalyze = useCallback(async (image: HTMLImageElement): Promise<{ features: number[] } | null> => {
@@ -258,37 +267,36 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
         }
     };
 
+    useEffect(() => {
+        if (viewMode === 'camera') {
+            handleStartCamera('register');
+        }
+    }, [viewMode]);
+
     if (viewMode === 'confirm') {
         return (
             <div className="fixed inset-0 z-[11000] bg-bg-start flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-500 overflow-hidden font-sans">
-                <header className="sticky top-0 z-50 backdrop-blur-xl bg-bg-start/60 border-b border-white/5 px-6 pt-10 pb-5">
+                <header className="sticky top-0 z-50 backdrop-blur-xl bg-bg-start/60 border-b border-white/5 px-6 pt-10 pb-5 text-white">
                     <div className="flex items-center justify-between">
                         <button
-                            onClick={() => setViewMode('camera')}
+                            onClick={() => { setViewMode('camera'); onNavigateToDailyRoute(); }}
                             className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 text-slate-300 active:scale-90 transition-transform"
                         >
                             <span className="material-symbols-outlined !text-[20px]">arrow_back_ios_new</span>
                         </button>
-                        <h1 className="text-lg font-bold tracking-tight text-white/90">Novo Endereço</h1>
+                        <h1 className="text-lg font-bold tracking-tight">Novo Endereço</h1>
                         <div className="size-10"></div>
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 no-scrollbar">
+                <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 pb-32 no-scrollbar text-white">
                     <div className="space-y-3">
                         <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">
                             Foto da Etiqueta
                         </label>
                         <div className="relative w-full aspect-video rounded-[2rem] border-2 border-dashed border-white/20 overflow-hidden group">
-                            {capturedImage ? (
+                            {capturedImage && (
                                 <img src={capturedImage} className="w-full h-full object-cover" alt="Capture" />
-                            ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-white/5">
-                                    <div className="size-16 rounded-2xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center shadow-xl shadow-primary/20">
-                                        <span className="material-symbols-outlined text-white text-3xl">add_a_photo</span>
-                                    </div>
-                                    <p className="text-[15px] font-bold text-white tracking-wide">Sem Foto</p>
-                                </div>
                             )}
 
                             {isAiAnalyzing && (
@@ -302,7 +310,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
 
                     <div className="space-y-6">
                         <div className="space-y-2.5">
-                            <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">Destinatário / Identificação</label>
+                            <label className="block text-[13px] font-semibold tracking-wider uppercase text-slate-400 ml-1">Destinatário</label>
                             <input className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 outline-none text-white focus:border-primary/50" type="text" value={locationNameInput} onChange={e => setLocationNameInput(e.target.value)} placeholder="Ex: João da Silva" />
                         </div>
 
@@ -335,7 +343,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                         disabled={loading || !addressInput.trim()}
                         className="w-full h-16 bg-primary text-white font-black uppercase tracking-[0.2em] rounded-2xl shadow-premium active:scale-[0.97] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                     >
-                        {loading ? <span className="material-symbols-outlined animate-spin">refresh</span> : "Salvar e Adicionar à Rota"}
+                        {loading ? <span className="material-symbols-outlined animate-spin">refresh</span> : "Salvar e Adicionar Rota"}
                     </button>
                 </footer>
             </div>
@@ -343,57 +351,17 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
     }
 
     return (
-        <div className="relative w-full h-full bg-bg-start overflow-hidden flex flex-col font-sans">
-            <header className="sticky top-0 z-50 backdrop-blur-2xl bg-bg-start/80 border-b border-white/5 px-6 pt-12 pb-6 flex flex-col">
-                <span className="text-[11px] font-bold text-primary tracking-[0.2em] uppercase mb-0.5">Captura de Protocolo</span>
-                <h1 className="text-2xl font-black tracking-tight text-white/90 italic">Scan Inteligente</h1>
-            </header>
+        <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-8 text-center">
+            <div className="size-20 border-2 border-primary border-t-transparent rounded-full animate-spin mb-8"></div>
+            <h2 className="text-xl font-bold text-white mb-2">Preparando Scanner...</h2>
+            <p className="text-slate-500 text-[11px] font-black uppercase tracking-widest">Aguardando câmera do sistema</p>
 
-            <main className="px-6 py-12 flex-1 flex flex-col items-center justify-center space-y-8 animate-in fade-in slide-in-from-bottom-10">
-                <div className="size-32 rounded-[2.5rem] bg-primary/10 flex items-center justify-center text-primary relative">
-                    <div className="absolute inset-0 bg-primary/20 blur-[40px] rounded-full animate-pulse"></div>
-                    <span className="material-symbols-outlined !text-[64px] relative z-10">qr_code_scanner</span>
-                </div>
-
-                <div className="text-center space-y-2">
-                    <h2 className="text-xl font-bold text-white">Central de Processamento</h2>
-                    <p className="text-slate-500 text-sm max-w-[240px] mx-auto">Selecione o método de entrada para processar etiquetas com IA.</p>
-                </div>
-
-                <div className="w-full max-w-xs space-y-4">
-                    <button
-                        onClick={() => handleStartCamera('register')}
-                        className="w-full h-20 bg-gradient-to-r from-primary to-accent rounded-3xl p-[1px] shadow-premium group active:scale-95 transition-all"
-                    >
-                        <div className="w-full h-full bg-bg-start rounded-[inherit] flex items-center px-6 gap-4 group-hover:bg-transparent transition-colors">
-                            <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors !text-[32px]">add_a_photo</span>
-                            <div className="text-left">
-                                <p className="text-white font-black uppercase tracking-widest text-sm">Novo Registro</p>
-                                <p className="text-slate-500 text-[10px] group-hover:text-white/70">Fotografar e ler com IA</p>
-                            </div>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => handleStartCamera('scan')}
-                        className="w-full h-20 bg-white/5 border border-white/10 rounded-3xl flex items-center px-6 gap-4 hover:bg-white/10 active:scale-95 transition-all"
-                    >
-                        <span className="material-symbols-outlined text-slate-400 !text-[32px]">barcode_scanner</span>
-                        <div className="text-left">
-                            <p className="text-white font-black uppercase tracking-widest text-sm">Escanear Existente</p>
-                            <p className="text-slate-500 text-[10px]">Identificação visual instantânea</p>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => importFileInputRef.current?.click()}
-                        className="w-full py-4 text-slate-500 font-bold text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 hover:text-white transition-colors"
-                    >
-                        <span className="material-symbols-outlined !text-[16px]">image</span>
-                        Importar Galeria
-                    </button>
-                </div>
-            </main>
+            <button
+                onClick={() => handleStartCamera('register')}
+                className="mt-12 px-8 py-4 bg-white/10 border border-white/10 rounded-2xl text-white font-bold uppercase tracking-widest text-xs"
+            >
+                Abrir Câmera Manualmente
+            </button>
 
             {isAiAnalyzing && <LoadingOverlay title="Protocolo RouteVision™" subtitle={aiStatus} />}
             {isSendingToRoute && <LoadingOverlay title="Processando Rota" subtitle="Sincronizando com o motor de IA..." />}

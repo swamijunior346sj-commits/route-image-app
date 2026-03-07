@@ -28,6 +28,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
     () => localStorage.getItem('isAuthenticated') === 'true'
   );
+  const [importTrigger, setImportTrigger] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     const initApp = async () => {
@@ -76,6 +77,13 @@ export default function App() {
     setCurrentTab(tab);
   };
 
+  const handleImportStops = () => {
+    changeTab('scanner');
+    setTimeout(() => {
+      if (importTrigger) importTrigger();
+    }, 100);
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem('isAuthenticated');
@@ -113,6 +121,7 @@ export default function App() {
             onOpenMenu={() => setIsSideNavOpen(true)}
             onAddStops={() => changeTab('scanner')}
             onOpenMapPicker={() => changeTab('mapPicker')}
+            onImport={handleImportStops}
           />
         )}
 
@@ -133,6 +142,7 @@ export default function App() {
               onNavigateToDailyRoute={() => changeTab('dailyRoute')}
               initialViewMode={scannerInitialMode}
               onShowPaywall={() => setIsSubscriptionOpen(true)}
+              onRegisterImport={(trigger) => setImportTrigger(() => trigger)}
             />
             <button
               onClick={() => changeTab('home')}
@@ -164,12 +174,11 @@ export default function App() {
       <SideNav
         isOpen={isSideNavOpen}
         onClose={() => setIsSideNavOpen(false)}
-        currentTab={currentTab as any}
-        setTab={(t) => changeTab(t === 'map' ? 'home' : t)}
-        userEmail={user?.email}
-        isPro={settings?.subscriptionPlan !== 'free'}
         onLogout={handleLogout}
         onNavigateToAdmin={() => setIsAdminOpen(true)}
+        onNavigateToRecords={() => changeTab('records')}
+        onAddStops={() => changeTab('scanner')}
+        onNavigateToHome={() => changeTab('home')}
       />
 
       {isSubscriptionOpen && (

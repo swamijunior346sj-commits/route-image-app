@@ -1,33 +1,38 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { clearAllUserData } from '../services/db';
 
 interface SideNavProps {
     isOpen: boolean;
     onClose: () => void;
-    currentTab: 'scanner' | 'map' | 'records' | 'dailyRoute';
-    setTab: (tab: 'scanner' | 'map' | 'records' | 'dailyRoute') => void;
-    userEmail?: string;
-    isPro: boolean;
     onLogout: () => void;
     onNavigateToAdmin: () => void;
+    onNavigateToRecords: () => void;
+    onAddStops: () => void;
+    onNavigateToHome: () => void;
 }
 
-export const SideNav = ({ isOpen, onClose, currentTab, setTab, userEmail, isPro, onLogout, onNavigateToAdmin }: SideNavProps) => {
-    const tabs = [
-        { id: 'dailyRoute', icon: 'route', label: 'Rota do Dia' },
-        { id: 'map', icon: 'map', label: 'Mapa de Entrega' },
-        { id: 'scanner', icon: 'qr_code_scanner', label: 'Scan Inteligente' },
-        { id: 'records', icon: 'format_list_bulleted', label: 'Histórico' },
-    ] as const;
+export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNavigateToRecords, onAddStops, onNavigateToHome }: SideNavProps) => {
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
     // Handle pressing escape to close
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape' && isOpen) onClose();
         };
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (openMenuId && !(e.target as HTMLElement).closest('.route-menu-container')) {
+                setOpenMenuId(null);
+            }
+        };
+
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, onClose]);
+        window.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen, onClose, openMenuId]);
 
     const handleClearData = async () => {
         if (confirm("ATENÇÃO: Isso apagará TODOS os seus endereços, rotas e configurações. O processo é irreversível. Deseja continuar?")) {
@@ -36,120 +41,148 @@ export const SideNav = ({ isOpen, onClose, currentTab, setTab, userEmail, isPro,
         }
     };
 
+    const handleDeleteRoute = (date: string) => {
+        if (confirm(`Deseja excluir a rota de ${date}?`)) {
+            alert(`Rota de ${date} excluída com sucesso!`);
+            setOpenMenuId(null);
+        }
+    };
+
     if (!isOpen) return null;
 
+    const routes = [
+        { id: 'r1', section: 'Próximas rotas', items: [{ date: '07 de mar.', day: 'sábado' }] },
+        { id: 'r2', section: 'Hoje', items: [{ date: '06 de mar.', day: 'sexta-feira' }] },
+        { id: 'r3', section: 'Início desta semana', items: [{ date: '04 de mar.', day: 'quarta-feira' }, { date: '02 de mar.', day: 'segunda-feira' }] },
+        { id: 'r4', section: 'fev. de 2026', items: [{ date: '27 de fev.', day: 'sexta-feira' }, { date: '23 de fev.', day: 'segunda-feira' }, { date: '20 de fev.', day: 'sexta-feira Rota 4' }] },
+    ];
+
     return (
-        <div className="fixed inset-0 z-[12000] font-sans">
+        <div className="fixed inset-0 z-[12000] font-sans antialiased">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
+                className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-300 animate-in fade-in"
                 onClick={onClose}
             />
 
             {/* Sidebar Plate */}
             <div
-                className="absolute top-0 left-0 bottom-0 w-[85%] max-w-[320px] bg-bg-start border-r border-white/5 flex flex-col shadow-2xl animate-in slide-in-from-left duration-300"
+                className="absolute top-0 left-0 bottom-0 w-[85%] max-w-[340px] bg-white flex flex-col shadow-2xl animate-in slide-in-from-left duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
             >
-                {/* Header */}
-                <div className="p-8 pb-6 border-b border-white/5 relative">
-                    <button
-                        onClick={onClose}
-                        className="absolute top-6 right-6 size-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 active:scale-95 transition-all"
-                    >
-                        <span className="material-symbols-outlined !text-[20px]">close</span>
-                    </button>
-
-                    <div className="size-16 rounded-[1.5rem] bg-gradient-to-tr from-primary to-accent flex items-center justify-center mb-4 shadow-premium">
-                        <span className="material-symbols-outlined text-white !text-[32px]">local_shipping</span>
+                {/* Header Section */}
+                <div className="relative pt-6 px-6 pb-4 bg-gradient-to-b from-cyan-50/50 to-transparent">
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-4">
+                            <button className="text-gray-400 hover:text-gray-600">
+                                <span className="material-symbols-outlined !text-[24px]">help</span>
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={onNavigateToRecords}
+                                className="flex items-center gap-2 bg-[#f0f4ff] px-4 py-2 rounded-full text-blue-600 active:scale-95 transition-all"
+                            >
+                                <span className="material-symbols-outlined !text-[20px]">location_on</span>
+                                <span className="text-[12px] font-bold uppercase tracking-tight">Endereços</span>
+                            </button>
+                            <button
+                                onClick={onNavigateToAdmin}
+                                className="text-gray-400 hover:text-gray-600 p-1"
+                            >
+                                <span className="material-symbols-outlined !text-[24px]">settings</span>
+                            </button>
+                        </div>
                     </div>
-                    <h2 className="text-xl font-black text-white italic tracking-tighter uppercase leading-none">
-                        Route<span className="text-primary">Vision</span>
-                    </h2>
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-1">
-                        Logística Neural
-                    </p>
 
-                    {userEmail && (
-                        <div className="mt-6 flex items-center gap-3">
-                            <div className="size-10 rounded-full bg-white/10 flex items-center justify-center overflow-hidden border border-white/20">
-                                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`} className="w-full h-full object-cover" alt="Avatar" />
+                    <div className="mb-6">
+                        <h1 className="text-[20px] font-black text-gray-900 tracking-tight">+5531995610728</h1>
+                    </div>
+
+                    {/* Team Selector Card */}
+                    <div className="bg-[#f0f9f8] border border-[#e0f2f1] rounded-[1.25rem] p-4 flex items-center justify-between shadow-sm active:scale-[0.98] transition-transform cursor-pointer">
+                        <div className="flex items-center gap-4">
+                            <div className="size-12 rounded-full bg-[#dcf2f0] flex items-center justify-center text-[#2d9e94]">
+                                <span className="material-symbols-outlined !text-[28px]">group</span>
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[11px] text-white font-bold truncate">{userEmail}</p>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                    <div className={`size-1.5 rounded-full ${isPro ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-emerald-400 shadow-[0_0_8px_#34d399]'}`}></div>
-                                    <span className={`text-[9px] font-black uppercase tracking-widest ${isPro ? 'text-amber-400' : 'text-emerald-400'}`}>
-                                        {isPro ? 'PRO' : 'Básico'}
-                                    </span>
-                                </div>
+                            <div className="flex flex-col">
+                                <span className="text-[15px] font-bold text-gray-800 leading-tight">Swm Transportes</span>
+                                <span className="text-[13px] text-gray-400 font-medium leading-tight">Equipe</span>
                             </div>
                         </div>
-                    )}
-                </div>
-
-                {/* Navigation Links */}
-                <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2 no-scrollbar">
-                    <p className="px-5 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 opacity-60">Navegação Principal</p>
-                    {tabs.map((tab) => {
-                        const isActive = currentTab === tab.id;
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => {
-                                    setTab(tab.id);
-                                    if (navigator.vibrate) navigator.vibrate(20);
-                                    onClose();
-                                }}
-                                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${isActive
-                                    ? 'bg-primary/10 border border-primary/30 text-primary shadow-premium'
-                                    : 'bg-transparent text-slate-400 hover:bg-white/5'
-                                    }`}
-                            >
-                                <span className={`material-symbols-outlined !text-[24px] ${isActive ? 'text-primary' : 'text-slate-500'}`}>
-                                    {tab.icon}
-                                </span>
-                                <span className={`text-xs font-black uppercase tracking-widest ${isActive ? 'text-white' : 'text-slate-400'}`}>
-                                    {tab.label}
-                                </span>
-                            </button>
-                        );
-                    })}
-
-                    <div className="pt-4 space-y-2">
-                        <p className="px-5 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 opacity-60">Administração</p>
-                        <button
-                            onClick={() => { onNavigateToAdmin(); onClose(); }}
-                            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-400 hover:bg-red-400/5 transition-all"
-                        >
-                            <span className="material-symbols-outlined !text-[24px]">admin_panel_settings</span>
-                            <span className="text-xs font-black uppercase tracking-widest">Painel Admin</span>
-                        </button>
-                    </div>
-
-                    <div className="pt-4 space-y-2">
-                        <p className="px-5 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 opacity-60">Minha Conta</p>
-                        <button
-                            onClick={handleClearData}
-                            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-slate-500 hover:bg-white/5 transition-all"
-                        >
-                            <span className="material-symbols-outlined !text-[22px]">delete_sweep</span>
-                            <span className="text-xs font-black uppercase tracking-widest">Limpar Todos Dados</span>
-                        </button>
-                        <button
-                            onClick={() => { onLogout(); onClose(); }}
-                            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-slate-500 hover:bg-white/5 transition-all"
-                        >
-                            <span className="material-symbols-outlined !text-[22px]">logout</span>
-                            <span className="text-xs font-black uppercase tracking-widest">Sair da Conta</span>
-                        </button>
+                        <span className="material-symbols-outlined text-gray-300 !text-[20px]">unfold_more</span>
                     </div>
                 </div>
 
-                {/* Footer Link / Info */}
-                <div className="p-6 border-t border-white/5 text-center mt-auto">
-                    <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.2em]">
-                        RouteVision Engine v2.5
-                    </p>
+                {/* Routes List */}
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-8 no-scrollbar pb-32">
+                    {routes.map((group, idx) => (
+                        <div key={idx} className="space-y-4">
+                            <h3 className="text-[11px] font-black text-gray-300 uppercase tracking-[0.15em]">{group.section}</h3>
+                            <div className="space-y-3">
+                                {group.items.map((item, i) => {
+                                    const menuId = `${idx}-${i}`;
+                                    const isMenuOpen = openMenuId === menuId;
+
+                                    return (
+                                        <div
+                                            key={i}
+                                            onClick={() => { onNavigateToHome(); onClose(); }}
+                                            className="flex items-center justify-between group cursor-pointer border-b border-gray-50 pb-3 last:border-0 relative active:opacity-70 transition-opacity"
+                                        >
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-[15px] font-bold text-blue-500/80">{item.date}</span>
+                                                <span className="text-[15px] font-bold text-gray-800">{item.day}</span>
+                                            </div>
+
+                                            <div className="route-menu-container">
+                                                <button
+                                                    onClick={() => setOpenMenuId(isMenuOpen ? null : menuId)}
+                                                    className={`text-gray-300 group-hover:text-blue-500 transition-colors p-1 rounded-full hover:bg-gray-100 ${isMenuOpen ? 'text-blue-500 bg-gray-100' : ''}`}
+                                                >
+                                                    <span className="material-symbols-outlined !text-[20px]">more_vert</span>
+                                                </button>
+
+                                                {isMenuOpen && (
+                                                    <div className="absolute right-0 top-8 w-40 bg-white border border-gray-100 shadow-xl rounded-2xl p-2 z-[13000] animate-in fade-in zoom-in duration-200">
+                                                        <button
+                                                            onClick={() => handleDeleteRoute(item.date)}
+                                                            className="w-full flex items-center gap-3 px-3 py-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                                                        >
+                                                            <span className="material-symbols-outlined !text-[18px]">delete</span>
+                                                            <span className="text-[13px] font-bold">Excluir rota</span>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* Footer Actions (Moved here from main menu but styled to fit) */}
+                    <div className="pt-8 border-t border-gray-50 space-y-1 opacity-40 hover:opacity-100 transition-opacity">
+                        <button onClick={handleClearData} className="w-full flex items-center gap-3 px-2 py-2 text-[12px] font-bold text-gray-400 hover:text-red-500 transition-colors">
+                            <span className="material-symbols-outlined !text-[18px]">delete_forever</span>
+                            Limpar Dados do App
+                        </button>
+                        <button onClick={onLogout} className="w-full flex items-center gap-3 px-2 py-2 text-[12px] font-bold text-gray-400 hover:text-gray-900 transition-colors">
+                            <span className="material-symbols-outlined !text-[18px]">logout</span>
+                            Sair da Conta
+                        </button>
+                    </div>
+                </div>
+
+                {/* Fixed Bottom Button */}
+                <div className="p-6 bg-gradient-to-t from-white via-white to-transparent pt-8">
+                    <button
+                        onClick={() => { onAddStops(); onClose(); }}
+                        className="w-full h-[56px] bg-[#2970ff] hover:bg-[#1a60f0] text-white font-bold rounded-[1rem] flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(41,112,255,0.3)] active:scale-[0.98] transition-all"
+                    >
+                        <span className="material-symbols-outlined !text-[24px]">add</span>
+                        Criar rota
+                    </button>
                 </div>
             </div>
         </div>
