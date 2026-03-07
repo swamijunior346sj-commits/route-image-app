@@ -83,6 +83,7 @@ export const ScannerView = ({ onClose, onConfirm }: ScannerProps) => {
                 lat,
                 lng,
                 city,
+                neighborhood: extractedData?.neighborhood || '',
                 notes: extractedData?.notes || ''
             });
 
@@ -94,7 +95,9 @@ export const ScannerView = ({ onClose, onConfirm }: ScannerProps) => {
                 name: name || 'Entrega',
                 lat: -23.5505 + (Math.random() - 0.5) * 0.01,
                 lng: -46.6333 + (Math.random() - 0.5) * 0.01,
-                city
+                city,
+                neighborhood: '',
+                notes: ''
             });
         } finally {
             setLoading(false);

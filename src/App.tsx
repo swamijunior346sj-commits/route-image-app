@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { MapView } from './components/MapView';
 import { ScannerView } from './components/ScannerView';
 import { RouteListView } from './components/RouteListView';
-import { getActiveRoute, saveToActiveRoute, deletePoint } from './services/db';
+import { HistoryView } from './components/HistoryView';
+import { getActiveRoute, saveToActiveRoute, deletePoint, updatePointStatus } from './services/db';
+import confetti from 'canvas-confetti';
 
 // --- Global Types ---
 export type LocationPoint = {
@@ -11,15 +13,15 @@ export type LocationPoint = {
     address: string;
     lat: number;
     lng: number;
-    neighborhood?: string;
-    city?: string;
-    notes?: string;
-    status: 'pending' | 'delivered' | 'failed';
+    neighborhood: string;
+    city: string;
+    notes: string;
+    status: 'pending' | 'delivered';
     createdAt: number;
 };
 
 function App() {
-    const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
+    const [activeTab, setActiveTab] = useState<'map' | 'list' | 'history'>('map');
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [points, setPoints] = useState<LocationPoint[]>([]);
     const [isNavigating, setIsNavigating] = useState(false);
@@ -30,37 +32,18 @@ function App() {
     }, []);
 
     const loadPoints = async () => {
-        try {
-            const data = await getActiveRoute();
-            setPoints(data);
-        } catch (error) {
-            console.error("Failed to load points:", error);
-        } finally {
-            // setLoading(false); // Removed as per instruction
-        }
+        const data = await getActiveRoute();
+        setPoints(data);
     };
 
-    // Add a new point to the route
     const handleAddPoint = async (newPoint: Omit<LocationPoint, 'id' | 'status' | 'createdAt'>) => {
         try {
-            // setLoading(true); // Removed as per instruction
-            const savedPoint = await saveToActiveRoute(newPoint);
-
-            const point: LocationPoint = {
-                ...newPoint,
-                id: savedPoint.id,
-                status: 'pending',
-                createdAt: Date.now()
-            };
-
-            setPoints((prev: LocationPoint[]) => [...prev, point]);
+            await saveToActiveRoute(newPoint);
+            loadPoints();
             setIsScannerOpen(false);
-            setActiveTab('map');
         } catch (error) {
-            alert("Erro ao salvar no banco de dados.");
             console.error(error);
-        } finally {
-            // setLoading(false); // Removed as per instruction
+            alert("Erro ao salvar rota.");
         }
     };
 
@@ -74,57 +57,102 @@ function App() {
         }
     };
 
+    const handleToggleStatus = async (id: string, currentStatus: string) => {
+        try {
+            const nextStatus = currentStatus === 'pending';
+            await updatePointStatus(id, nextStatus);
+
+            if (nextStatus && points.filter(p => p.status === 'pending').length === 1) {
+                confetti({
+                    particleCount: 150,
+                    spread: 100,
+                    origin: { y: 0.6 }
+                });
+            }
+
+            loadPoints();
+        } catch (error) {
+            console.error("Toggle status error:", error);
+        }
+    };
+
     return (
         <div className="relative w-full h-[100dvh] overflow-hidden bg-slate-50">
 
             {/* Main Content Area */}
             <div className="w-full h-full pb-20">
-                {activeTab === 'map' ? (
+                {activeTab === 'map' && (
                     <MapView
                         points={points}
-                        onAddManualPoint={handleAddPoint}
                         onDeletePoint={handleDeletePoint}
+                        onToggleStatus={handleToggleStatus}
                         isNavigating={isNavigating}
                         onStopNavigation={() => setIsNavigating(false)}
                     />
-                ) : (
-                    <RouteListView points={points} onRefresh={loadPoints} onStartInternalNav={() => {
-                        setActiveTab('map');
-                        setIsNavigating(true);
-                    }} />
                 )}
+                {activeTab === 'list' && (
+                    <RouteListView
+                        points={points}
+                        onRefresh={loadPoints}
+                        onToggleStatus={handleToggleStatus}
+                        onStartInternalNav={() => {
+                            setActiveTab('map');
+                            setIsNavigating(true);
+                        }} />
+                )}
+                {activeTab === 'history' && <HistoryView />}
             </div>
 
-            {/* Navigation Bar - Premium Glass Mode */}
-            <nav className="fixed bottom-0 left-0 right-0 h-20 glass-morphism border-t border-white/50 flex items-center justify-around px-6 z-50">
+            {/* Bottom Navigation Control Bar */}
+            <nav className="fixed bottom-0 left-0 right-0 h-24 bg-white/95 backdrop-blur-xl flex items-center justify-around px-2 pb-6 z-50 border-t border-slate-100 shadow-[0_-8px_40px_rgba(0,0,0,0.04)]">
+
+                {/* Map Button */}
                 <button
                     onClick={() => setActiveTab('map')}
-                    className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'map' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}
+                    className={`flex flex-col items-center gap-1.5 min-w-[64px] transition-all duration-300 ${activeTab === 'map' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}
                 >
-                    <span className="material-symbols-outlined filled-icon">map</span>
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Mapa</span>
+                    <div className={`p-2 rounded-2xl ${activeTab === 'map' ? 'bg-blue-50' : 'bg-transparent'}`}>
+                        <span className="material-symbols-outlined filled-icon !text-24px">explore</span>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">MAPA</span>
                 </button>
 
-                {/* Center Floating Action Button */}
+                {/* Main Action: Scanner (Floating) */}
                 <button
                     onClick={() => setIsScannerOpen(true)}
-                    className="absolute -top-6 bg-blue-600 size-16 rounded-full shadow-[0_8px_25px_rgba(37,99,235,0.4)] flex items-center justify-center text-white active:scale-90 transition-all border-4 border-white"
+                    className="relative -top-6 size-20 bg-slate-900 rounded-[2.5rem] shadow-2xl shadow-slate-900/30 flex items-center justify-center text-white active:scale-90 transition-all group overflow-hidden"
                 >
-                    <span className="material-symbols-outlined !text-32px">photo_camera</span>
+                    <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <span className="material-symbols-outlined !text-36px relative z-10">photo_camera</span>
                 </button>
 
+                {/* Route List Button */}
                 <button
                     onClick={() => setActiveTab('list')}
-                    className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'list' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}
+                    className={`flex flex-col items-center gap-1.5 min-w-[64px] transition-all duration-300 ${activeTab === 'list' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}
                 >
-                    <span className="material-symbols-outlined">route</span>
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Rota</span>
+                    <div className={`p-2 rounded-2xl ${activeTab === 'list' ? 'bg-blue-50' : 'bg-transparent'}`}>
+                        <span className="material-symbols-outlined filled-icon !text-24px">route</span>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">ROTA</span>
                 </button>
+
+                {/* History Button (New) */}
+                <button
+                    onClick={() => setActiveTab('history')}
+                    className={`flex flex-col items-center gap-1.5 min-w-[64px] transition-all duration-300 ${activeTab === 'history' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}
+                >
+                    <div className={`p-2 rounded-2xl ${activeTab === 'history' ? 'bg-blue-50' : 'bg-transparent'}`}>
+                        <span className="material-symbols-outlined filled-icon !text-24px">history</span>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">ARQUIVO</span>
+                </button>
+
             </nav>
 
-            {/* Scanner Modal Overlay */}
+            {/* Scanner Overlay */}
             {isScannerOpen && (
-                <div className="fixed inset-0 z-[100] animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[100] bg-black">
                     <ScannerView
                         onClose={() => setIsScannerOpen(false)}
                         onConfirm={handleAddPoint}

@@ -71,3 +71,39 @@ export const deletePoint = async (id: string) => {
 
     if (error) throw error;
 };
+
+export const archiveCurrentRoute = async (points: LocationPoint[]) => {
+    if (points.length === 0) return;
+
+    const deliveredCount = points.filter(p => p.status === 'delivered').length;
+
+    // 1. Save to history
+    const { error: historyError } = await supabase
+        .from('route_history')
+        .insert([{
+            route_date: new Date().toISOString().split('T')[0],
+            points_count: points.length,
+            delivered_count: deliveredCount,
+            route_data: points
+        }]);
+
+    if (historyError) throw historyError;
+
+    // 2. Clear active route
+    const { error: clearError } = await supabase
+        .from('active_route')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+    if (clearError) throw clearError;
+};
+
+export const getRouteHistory = async () => {
+    const { data, error } = await supabase
+        .from('route_history')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+};

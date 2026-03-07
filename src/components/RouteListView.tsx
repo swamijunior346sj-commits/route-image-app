@@ -1,34 +1,19 @@
 import type { LocationPoint } from '../App';
-import { updatePointStatus, clearActiveRoute, saveToActiveRoute, deletePoint } from '../services/db';
+import { archiveCurrentRoute, deletePoint, saveToActiveRoute, clearActiveRoute } from '../services/db';
 import { optimizeRoute } from '../services/gemini';
-import confetti from 'canvas-confetti';
 import { useState } from 'react';
 
 interface RouteListProps {
     points: LocationPoint[];
     onRefresh: () => void;
+    onToggleStatus?: (id: string, currentStatus: string) => void;
     onStartInternalNav?: () => void;
 }
 
-export const RouteListView = ({ points, onRefresh, onStartInternalNav }: RouteListProps) => {
+export const RouteListView = ({ points, onRefresh, onToggleStatus, onStartInternalNav }: RouteListProps) => {
 
-    const handleToggleStatus = async (id: string, currentStatus: string) => {
-        try {
-            const newStatus = currentStatus === 'pending';
-            await updatePointStatus(id, newStatus);
-            onRefresh();
-
-            if (newStatus && points.filter(p => p.status === 'pending').length === 1) {
-                confetti({
-                    particleCount: 150,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                    colors: ['#2563eb', '#10b981', '#ffffff']
-                });
-            }
-        } catch (error) {
-            console.error(error);
-        }
+    const handleToggleLocal = (id: string, status: string) => {
+        if (onToggleStatus) onToggleStatus(id, status);
     };
 
     const handleDelete = async (id: string, name: string) => {
@@ -43,9 +28,17 @@ export const RouteListView = ({ points, onRefresh, onStartInternalNav }: RouteLi
     };
 
     const handleClear = async () => {
-        if (confirm("Deseja limpar toda a rota atual?")) {
-            await clearActiveRoute();
-            onRefresh();
+        if (points.length === 0) return;
+
+        if (confirm("Deseja finalizar e arquivar esta rota no histórico?")) {
+            try {
+                await archiveCurrentRoute(points);
+                onRefresh();
+                alert("Rota arquivada com sucesso!");
+            } catch (error) {
+                console.error(error);
+                alert("Erro ao arquivar rota.");
+            }
         }
     };
 
@@ -84,13 +77,12 @@ export const RouteListView = ({ points, onRefresh, onStartInternalNav }: RouteLi
         }
     };
 
-    const handleStartNavigation = () => {
+    const handleExternalMaps = () => {
         const nextPoint = points.find(p => p.status === 'pending');
         if (!nextPoint) {
             alert("Todas as entregas foram concluídas!");
             return;
         }
-
         const url = `https://www.google.com/maps/dir/?api=1&destination=${nextPoint.lat},${nextPoint.lng}&travelmode=driving`;
         window.open(url, '_blank');
     };
@@ -115,7 +107,7 @@ export const RouteListView = ({ points, onRefresh, onStartInternalNav }: RouteLi
                         <div key={p.id} className="group glass-morphism p-5 rounded-[2rem] shadow-sm border border-white hover:shadow-xl hover:-translate-y-1 transition-all animate-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${idx * 100}ms` }}>
                             <div className="flex gap-4">
                                 <div
-                                    onClick={() => handleToggleStatus(p.id, p.status)}
+                                    onClick={() => handleToggleLocal(p.id, p.status)}
                                     className={`size-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg transition-all cursor-pointer ${p.status === 'delivered' ? 'bg-green-500' : 'bg-blue-600 shadow-blue-500/20 active:scale-90'}`}
                                 >
                                     {p.status === 'delivered' ? (
@@ -127,9 +119,9 @@ export const RouteListView = ({ points, onRefresh, onStartInternalNav }: RouteLi
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between mb-1">
                                         <h3 className="font-bold text-slate-900 truncate">{p.name || 'Nova Parada'}</h3>
-                                        <div className={`size-2 rounded-full ${p.status === 'delivered' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                                        <div className={`size-2 rounded-full ${p.status === 'delivered' ? 'bg-green-500' : 'bg-blue-600'}`}></div>
                                     </div>
-                                    <p className="text-[13px] font-medium text-slate-400 line-clamp-2 leading-snug mb-3">
+                                    <p className="text-[13px] font-medium text-slate-400 line-clamp-2 leading-snug mb-3 text-left">
                                         {p.address}
                                     </p>
                                     <div className="flex items-center gap-3">
@@ -155,26 +147,23 @@ export const RouteListView = ({ points, onRefresh, onStartInternalNav }: RouteLi
                     <div className="flex gap-2">
                         <button
                             onClick={handleClear}
-                            className="flex-1 h-14 bg-white/80 backdrop-blur-md rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 border border-slate-200 hover:text-red-500 transition-colors"
+                            className="flex-1 h-14 bg-white/80 backdrop-blur-md rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 border border-slate-200"
+                            title="Arquivar rota e limpar tudo"
                         >
-                            Limpar Tudo
+                            Arquivar Dia
                         </button>
                         <button
                             onClick={handleOptimize}
                             disabled={isOptimizing || points.length < 2}
                             className="flex-[2] h-14 bg-slate-900 rounded-2xl text-[11px] font-black uppercase tracking-widest text-white flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all disabled:opacity-50"
                         >
-                            {isOptimizing ? (
-                                <span className="material-symbols-outlined animate-spin !text-16px">refresh</span>
-                            ) : (
-                                <span className="material-symbols-outlined !text-16px">auto_awesome</span>
-                            )}
+                            <span className="material-symbols-outlined !text-16px">{isOptimizing ? 'refresh' : 'auto_awesome'}</span>
                             {isOptimizing ? 'Otimizando...' : 'Otimizar por IA'}
                         </button>
                     </div>
                     <div className="flex gap-2">
                         <button
-                            onClick={handleStartNavigation}
+                            onClick={handleExternalMaps}
                             className="flex-1 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-blue-600 shadow-xl active:scale-95 transition-all"
                         >
                             <span className="material-symbols-outlined !text-24px">directions</span>
