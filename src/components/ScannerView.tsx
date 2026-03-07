@@ -19,7 +19,7 @@ interface ScannerProps {
     onShowPaywall?: () => void;
 }
 
-export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 'camera', initialAction = null, onShowPaywall }: ScannerProps) => {
+export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 'camera', onShowPaywall }: ScannerProps) => {
     // --- State ---
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState<'camera' | 'confirm'>(initialViewMode === 'confirm' ? 'confirm' : 'camera');
@@ -45,18 +45,17 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
     const SIMILARITY_THRESHOLD = 0.80;
 
     useEffect(() => {
-        if (initialAction === 'camera') {
-            const timer = setTimeout(() => {
-                fileInputRef.current?.click();
-            }, 50);
-            return () => clearTimeout(timer);
-        } else if (initialAction === 'import') {
-            const timer = setTimeout(() => {
-                importFileInputRef.current?.click();
-            }, 50);
-            return () => clearTimeout(timer);
-        }
-    }, [initialAction]);
+        // ESSENCIAL: Disparar a câmera imediatamente ao entrar nesta tela
+        // O Chrome mobile e o WebView do Android precisam de um pequeno delay ou interação
+        // Mas como o usuário clicou em "Capturar", já temos o gesto inicial.
+        console.log("🚀 Tentando abrir câmera nativa...");
+        const timer = setTimeout(() => {
+            if (fileInputRef.current) {
+                fileInputRef.current.click();
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, []);
 
     // --- Camera Logic ---
     const captureAndAnalyze = useCallback(async (image: HTMLImageElement): Promise<{ features: number[] } | null> => {
@@ -108,9 +107,10 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
         }
     };
 
+    // Chamado pelo botão de digitar endereço no failsafe
     const handleManualEntry = () => {
         setCapturedImage(null);
-        setCapturedFeatures(new Array(1024).fill(0)); // Placeholder dummy features
+        setCapturedFeatures(new Array(1024).fill(0));
         setAddressInput('');
         setLocationNameInput('');
         setNeighborhoodInput('');
@@ -528,53 +528,76 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
     }
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-8 z-[10000] animate-in fade-in duration-300">
-            <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 flex flex-col items-center text-center shadow-2xl animate-in zoom-in-95 duration-500">
-                <div className="size-20 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-500 mb-6 animate-bounce">
-                    <span className="material-symbols-outlined !text-[44px]">photo_camera</span>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center z-[10000] animate-in fade-in duration-500 overflow-hidden">
+            {/* Overlay de carregamento da câmera / Estado Inicial */}
+            {!capturedImage && !loading && (
+                <div className="text-center p-8 max-w-sm w-full animate-in zoom-in-95 duration-700">
+                    <div className="relative mb-10">
+                        <div className="size-28 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto border-2 border-blue-500/20 shadow-[0_0_50px_rgba(59,130,246,0.2)]">
+                            <span className="material-symbols-outlined !text-[56px] text-blue-400">photo_camera</span>
+                        </div>
+                        <div className="absolute inset-0 size-28 mx-auto rounded-full border-t-2 border-blue-500 animate-spin duration-[2s]"></div>
+                    </div>
+
+                    <h2 className="text-2xl font-black text-white mb-3">Preparando Scanner</h2>
+                    <p className="text-gray-400 text-sm mb-12 leading-relaxed">
+                        Aguardando autorização da câmera para ler as etiquetas de entrega...
+                    </p>
+
+                    <div className="space-y-4 w-full">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                fileInputRef.current?.click();
+                            }}
+                            className="w-full h-16 bg-blue-600 text-white font-black rounded-2xl shadow-[0_8px_30px_rgba(37,99,235,0.3)] active:scale-95 transition-all text-[14px] uppercase tracking-widest"
+                        >
+                            Abrir Câmera Agora
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={handleManualEntry}
+                                className="h-14 bg-white/5 text-white/80 font-bold rounded-2xl border border-white/10 active:scale-95 transition-all flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined !text-[20px]">edit</span>
+                                <span className="text-[13px]">Manual</span>
+                            </button>
+                            <button
+                                onClick={() => importFileInputRef.current?.click()}
+                                className="h-14 bg-white/5 text-white/80 font-bold rounded-2xl border border-white/10 active:scale-95 transition-all flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined !text-[20px]">image</span>
+                                <span className="text-[13px]">Galeria</span>
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={onBack}
+                            className="w-full py-6 text-gray-500 text-[11px] font-black uppercase tracking-[0.2em] transition-colors hover:text-white"
+                        >
+                            Cancelar e Voltar
+                        </button>
+                    </div>
                 </div>
+            )}
 
-                <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Scanner Ativo</h2>
-                <p className="text-gray-400 text-[13px] font-medium mb-8 leading-relaxed max-w-[240px]">
-                    Posicione a etiqueta no centro ou importe uma imagem da sua galeria.
-                </p>
-
-                <div className="w-full space-y-3">
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full h-14 bg-[#2970ff] text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
-                    >
-                        <span className="material-symbols-outlined !text-[20px]">camera</span>
-                        <span>Abrir Câmera</span>
-                    </button>
-
-                    <button
-                        onClick={() => importFileInputRef.current?.click()}
-                        className="w-full h-14 bg-gray-50 text-gray-800 font-bold rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-3 border border-gray-100"
-                    >
-                        <span className="material-symbols-outlined !text-[20px]">image</span>
-                        <span>Galeria</span>
-                    </button>
-
-                    <button
-                        onClick={handleManualEntry}
-                        className="w-full h-14 bg-white text-gray-800 font-bold rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-3 border border-gray-100 border-dashed"
-                    >
-                        <span className="material-symbols-outlined !text-[20px]">edit_note</span>
-                        <span>Digitar Endereço</span>
-                    </button>
-
-                    <button
-                        onClick={onBack}
-                        className="w-full py-4 text-[12px] font-black uppercase tracking-widest text-gray-300 hover:text-gray-400"
-                    >
-                        Voltar ao Mapa
-                    </button>
-                </div>
-            </div>
-
-            <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleNativeCapture} className="hidden" />
-            <input type="file" accept="image/*" ref={importFileInputRef} onChange={handleImportImage} className="hidden" />
+            {/* Inputs Ocultos */}
+            <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                ref={fileInputRef}
+                onChange={handleNativeCapture}
+                className="hidden"
+            />
+            <input
+                type="file"
+                accept="image/*"
+                ref={importFileInputRef}
+                onChange={handleImportImage}
+                className="hidden"
+            />
         </div>
     );
 };
