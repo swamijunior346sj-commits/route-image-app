@@ -8,7 +8,7 @@ import {
     type LocationRecord
 } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
-import { analyzeAddressImage } from '../services/geminiService';
+import { analyzeAddressImage, type GeminiAddressExtraction } from '../services/geminiService';
 import { LoadingOverlay } from './LoadingOverlay';
 
 interface ScannerProps {
