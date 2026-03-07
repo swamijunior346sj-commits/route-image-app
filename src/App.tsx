@@ -151,7 +151,7 @@ export default function App() {
 
         {/* Global Scanner Overlay - Absolute Transparency Layer */}
         {currentTab === 'scanner' && (
-          <div className="fixed inset-0 z-[10000] pointer-events-none">
+          <div className="fixed inset-0 z-[10000]">
             <ScannerView
               onNavigateToDailyRoute={() => changeTab('dailyRoute')}
               onBack={() => changeTab('home')}

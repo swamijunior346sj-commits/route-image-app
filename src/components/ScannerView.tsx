@@ -359,7 +359,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
 
 
     if (loading) {
-        return <LoadingOverlay title="Processando" subtitle={aiStatus || "Sincronizando com o banco central"} />;
+        return <LoadingOverlay title="Processando" subtitle={aiStatus || "Analisando dados da imagem"} />;
     }
 
     if (viewMode === 'confirm') {
@@ -370,12 +370,11 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                     <button
                         onClick={() => {
                             setViewMode('camera');
-                            if (onBack) onBack();
-                            else onNavigateToDailyRoute();
+                            setCapturedImage(null);
                         }}
                         className="flex items-center justify-center size-10 rounded-full bg-white border border-gray-100 text-gray-400 active:scale-90 transition-all shadow-sm"
                     >
-                        <span className="material-symbols-outlined !text-[20px]">close</span>
+                        <span className="material-symbols-outlined !text-[20px]">arrow_back</span>
                     </button>
                     <h1 className="text-[17px] font-bold text-gray-800">Detalhes da Parada</h1>
                     <button
@@ -408,7 +407,10 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                                 </div>
                             )}
                         </div>
-                        <button className="absolute -bottom-3 right-6 bg-white size-12 rounded-full shadow-lg border border-gray-50 flex items-center justify-center text-gray-400 hover:text-[#2970ff] transition-colors">
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="absolute -bottom-3 right-6 bg-white size-12 rounded-full shadow-lg border border-gray-50 flex items-center justify-center text-gray-400 hover:text-[#2970ff] transition-colors"
+                        >
                             <span className="material-symbols-outlined filled-icon !text-[20px]">photo_camera</span>
                         </button>
                     </div>
@@ -506,7 +508,43 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
     }
 
     return (
-        <div className="fixed inset-0 pointer-events-none">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-8 z-[10000] animate-in fade-in duration-300">
+            <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 flex flex-col items-center text-center shadow-2xl animate-in zoom-in-95 duration-500">
+                <div className="size-20 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-500 mb-6 animate-bounce">
+                    <span className="material-symbols-outlined !text-[44px]">photo_camera</span>
+                </div>
+
+                <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Scanner Ativo</h2>
+                <p className="text-gray-400 text-[13px] font-medium mb-8 leading-relaxed max-w-[240px]">
+                    Posicione a etiqueta no centro ou importe uma imagem da sua galeria.
+                </p>
+
+                <div className="w-full space-y-3">
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full h-14 bg-[#2970ff] text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
+                    >
+                        <span className="material-symbols-outlined !text-[20px]">camera</span>
+                        <span>Abrir Câmera</span>
+                    </button>
+
+                    <button
+                        onClick={() => importFileInputRef.current?.click()}
+                        className="w-full h-14 bg-gray-50 text-gray-800 font-bold rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-3 border border-gray-100"
+                    >
+                        <span className="material-symbols-outlined !text-[20px]">image</span>
+                        <span>Galeria</span>
+                    </button>
+
+                    <button
+                        onClick={onBack}
+                        className="w-full py-4 text-[12px] font-black uppercase tracking-widest text-gray-300 hover:text-gray-400"
+                    >
+                        Voltar ao Mapa
+                    </button>
+                </div>
+            </div>
+
             <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleNativeCapture} className="hidden" />
             <input type="file" accept="image/*" ref={importFileInputRef} onChange={handleImportImage} className="hidden" />
         </div>

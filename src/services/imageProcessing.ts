@@ -7,17 +7,28 @@ let isModelLoading = false;
 export const loadModel = async () => {
     if (model) return model;
     if (isModelLoading) {
-        while (!model) {
+        let attempts = 0;
+        while (!model && attempts < 50) { // Wait max 5 seconds
             await new Promise(r => setTimeout(r, 100));
+            attempts++;
         }
-        return model;
+        if (model) return model;
     }
 
     isModelLoading = true;
-    await tf.ready();
-    // MobileNet features inference without final classification head
-    model = await mobilenet.load({ version: 2, alpha: 0.5 });
-    isModelLoading = false;
+    try {
+        await tf.ready();
+        console.log("📦 Carregando MobileNet V2...");
+        model = await mobilenet.load({
+            version: 2,
+            alpha: 0.5
+        });
+        console.log("✅ Modelo carregado com sucesso.");
+    } catch (err) {
+        console.error("❌ Erro ao carregar modelo:", err);
+    } finally {
+        isModelLoading = false;
+    }
     return model;
 };
 
