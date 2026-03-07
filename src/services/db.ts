@@ -15,6 +15,7 @@ export interface LocationRecord {
     createdAt: number;
     deadline?: string;
     isReturnPoint?: boolean;
+    visualSignature?: string;
 }
 
 export interface RoutePoint {
@@ -30,6 +31,7 @@ export interface RoutePoint {
     deadline?: string;
     isReturnPoint?: boolean;
     isRecent?: boolean;
+    visualSignature?: string;
 }
 
 export interface AppSettings {
@@ -121,7 +123,7 @@ export const saveRecord = async (
     lng: number | null,
     imageThumbnail: string,
     featureVector: number[],
-    optionalFields?: { notes?: string, neighborhood?: string, city?: string, deadline?: string, isReturnPoint?: boolean }
+    optionalFields?: { notes?: string, neighborhood?: string, city?: string, deadline?: string, isReturnPoint?: boolean, visualSignature?: string }
 ): Promise<LocationRecord> => {
     const id = crypto.randomUUID();
     const localRecord: LocationRecord = {
@@ -136,6 +138,7 @@ export const saveRecord = async (
         city: optionalFields?.city,
         deadline: optionalFields?.deadline,
         isReturnPoint: optionalFields?.isReturnPoint,
+        visualSignature: optionalFields?.visualSignature,
         createdAt: Date.now()
     };
 

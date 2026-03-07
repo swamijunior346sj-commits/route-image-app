@@ -39,6 +39,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
 
     const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
     const [aiStatus, setAiStatus] = useState('');
+    const [visualSignature, setVisualSignature] = useState('');
 
     const SIMILARITY_THRESHOLD = 0.80;
 
@@ -88,6 +89,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                 if (aiReading.city) setCityInput(aiReading.city);
                 if (aiReading.notes) setNotesInput(aiReading.notes);
                 if (aiReading.recipientName) setLocationNameInput(aiReading.recipientName);
+                if (aiReading.visualSignature) setVisualSignature(aiReading.visualSignature);
             }
         } catch (err) {
             console.warn('AI analysis failed:', err);
@@ -143,6 +145,32 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
 
                     if (mode === 'scan') {
                         const records = await getRecords();
+
+                        // 1. Try AI signature match first (High precision)
+                        const aiReading = await analyzeAddressImage(base64);
+                        if (aiReading && aiReading.visualSignature) {
+                            const exactMatch = records.find(r => r.visualSignature === aiReading.visualSignature);
+                            if (exactMatch) {
+                                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                                await addPointToActiveRoute({
+                                    id: exactMatch.id!,
+                                    name: exactMatch.name,
+                                    lat: exactMatch.lat,
+                                    lng: exactMatch.lng,
+                                    scannedAt: Date.now(),
+                                    notes: exactMatch.notes,
+                                    neighborhood: exactMatch.neighborhood,
+                                    city: exactMatch.city,
+                                    visualSignature: exactMatch.visualSignature,
+                                    isRecent: true
+                                });
+                                setLoading(false);
+                                onNavigateToDailyRoute();
+                                return;
+                            }
+                        }
+
+                        // 2. Fallback to Visual Embedding match (MobileNet)
                         let bestMatch: LocationRecord | null = null;
                         let highestSim = 0;
 
@@ -162,16 +190,18 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                                 notes: bestMatch.notes,
                                 neighborhood: bestMatch.neighborhood,
                                 city: bestMatch.city,
+                                visualSignature: bestMatch.visualSignature,
                                 isRecent: true
                             });
 
                             setTimeout(() => {
+                                setLoading(false);
                                 onNavigateToDailyRoute();
                             }, 500);
                         } else {
                             alert("Endereço não identificado no banco de dados.");
+                            setLoading(false);
                         }
-                        setLoading(false);
                     } else {
                         setCapturedImage(base64);
                         setCapturedFeatures(result.features);
@@ -226,7 +256,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                 isNaN(lng) ? null : lng,
                 capturedImage,
                 capturedFeatures,
-                { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput, deadline: deadlineInput }
+                { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput, deadline: deadlineInput, visualSignature: visualSignature }
             );
 
             await addToDailyRoute({
@@ -238,7 +268,8 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                 notes: record.notes,
                 neighborhood: record.neighborhood,
                 city: record.city,
-                deadline: record.deadline
+                deadline: record.deadline,
+                visualSignature: record.visualSignature
             });
 
             setTimeout(() => {
@@ -300,6 +331,12 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                                 <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center">
                                     <div className="size-12 border-4 border-blue-50 border-t-blue-500 rounded-full animate-spin mb-4"></div>
                                     <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{aiStatus}</p>
+                                </div>
+                            )}
+                            {visualSignature && !isAiAnalyzing && (
+                                <div className="absolute top-4 right-4 bg-blue-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg animate-in zoom-in duration-300">
+                                    <span className="material-symbols-outlined !text-[12px]">qr_code_2</span>
+                                    <span className="text-[10px] font-black tracking-widest uppercase">ID: {visualSignature}</span>
                                 </div>
                             )}
                         </div>

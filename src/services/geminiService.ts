@@ -8,6 +8,7 @@ export interface GeminiAddressExtraction {
     city?: string;
     recipientName?: string;
     notes?: string;
+    visualSignature?: string; // ID único baseado em características visuais
 }
 
 export const analyzeAddressImage = async (base64Image: string): Promise<GeminiAddressExtraction | null> => {
@@ -30,6 +31,7 @@ export const analyzeAddressImage = async (base64Image: string): Promise<GeminiAd
         - city (Cidade)
         - recipientName (Nome do recebedor)
         - notes (Any useful reference points or instructions)
+        - visualSignature (A unique 10-character alphanumeric ID that represents this specific label. If a tracking code or barcode value is visible, use it. If not, generate a consistent short hash based on the text contents).
 
         Return ONLY the JSON string. If you cannot find a specific field, leave it empty.
         Ensure it works well with Brazilian format.
