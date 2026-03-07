@@ -18,7 +18,7 @@ export const LoadingOverlay = ({
         return () => clearTimeout(timer);
     }, []);
     return (
-        <div className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+        <div className="fixed inset-0 z-[10000] bg-blue-950/40 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
             <div className="relative size-48 flex items-center justify-center mb-12">
                 <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-[ping_3s_infinite]" />
                 <div className="absolute inset-4 rounded-full border-2 border-primary/40 animate-[ping_2s_infinite]" />

@@ -3,7 +3,6 @@ import { loadModel } from './services/imageProcessing';
 import { ScannerView } from './components/ScannerView';
 import { SideNav } from './components/SideNav';
 import { DailyRouteView } from './components/DailyRouteView';
-import { RecordsView } from './components/RecordsView';
 import { SettingsView } from './components/SettingsView';
 import { SubscriptionView } from './components/SubscriptionView';
 import { AdminView } from './components/AdminView';
@@ -17,19 +16,21 @@ import { ClonedHomeView } from './components/ClonedHomeView';
 import { MapPickerView } from './components/MapPickerView';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'home' | 'scanner' | 'records' | 'dailyRoute' | 'mapPicker'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'scanner' | 'dailyRoute' | 'mapPicker'>('home');
   const [modelLoading, setModelLoading] = useState(true);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [lastTab, setLastTab] = useState<'home' | 'dailyRoute' | 'mapPicker'>('home');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [scannerInitialMode, setScannerInitialMode] = useState<'camera' | 'confirm'>('camera');
+  const [scannerInitialAction, setScannerInitialAction] = useState<'camera' | 'import' | null>(null);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isSideNavOpen, setIsSideNavOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
     () => localStorage.getItem('isAuthenticated') === 'true'
   );
-  const [importTrigger, setImportTrigger] = useState<(() => void) | null>(null);
+  const [routeKey, setRouteKey] = useState(0);
 
   useEffect(() => {
     const initApp = async () => {
@@ -74,15 +75,23 @@ export default function App() {
   }, []);
 
   const changeTab = (tab: any, options?: any) => {
-    if (tab === 'scanner') setScannerInitialMode(options?.scannerMode || 'camera');
+    if (tab !== 'scanner') {
+      setLastTab(tab);
+    }
+    if (tab === 'scanner') {
+      setScannerInitialMode(options?.scannerMode || 'camera');
+      setScannerInitialAction(options?.initialAction || null);
+    } else {
+      setScannerInitialAction(null);
+    }
+    if (tab === 'home') {
+      setRouteKey(prev => prev + 1);
+    }
     setCurrentTab(tab);
   };
 
   const handleImportStops = () => {
-    changeTab('scanner');
-    setTimeout(() => {
-      if (importTrigger) importTrigger();
-    }, 100);
+    changeTab('scanner', { initialAction: 'import' });
   };
 
   const handleLogout = async () => {
@@ -120,18 +129,19 @@ export default function App() {
 
       {/* Main Viewport */}
       <div className="flex-1 w-full h-full relative">
-        {currentTab === 'home' && (
+        <div className={(currentTab === 'home' || (currentTab === 'scanner' && lastTab === 'home')) ? 'block h-full' : 'hidden'}>
           <ClonedHomeView
+            key={routeKey}
             googleMapsApiKey={GOOGLE_MAPS_API_KEY}
             onOpenMenu={() => setIsSideNavOpen(true)}
-            onAddStops={() => changeTab('scanner')}
+            onAddStops={() => changeTab('scanner', { initialAction: 'camera' })}
             onOpenMapPicker={() => changeTab('mapPicker')}
             onImport={handleImportStops}
-            onNavigateToRecords={() => changeTab('records')}
+            onNavigateToDailyRoute={() => changeTab('dailyRoute')}
           />
-        )}
+        </div>
 
-        {currentTab === 'mapPicker' && (
+        <div className={(currentTab === 'mapPicker' || (currentTab === 'scanner' && lastTab === 'mapPicker')) ? 'block h-full' : 'hidden'}>
           <MapPickerView
             googleMapsApiKey={GOOGLE_MAPS_API_KEY}
             onBack={() => changeTab('home')}
@@ -140,38 +150,29 @@ export default function App() {
               changeTab('home');
             }}
           />
-        )}
+        </div>
 
-        {currentTab === 'scanner' && (
-          <div className="fixed inset-0 z-[200] bg-black">
-            <ScannerView
-              onNavigateToDailyRoute={() => changeTab('dailyRoute')}
-              initialViewMode={scannerInitialMode}
-              onShowPaywall={() => setIsSubscriptionOpen(true)}
-              onRegisterImport={(trigger) => setImportTrigger(() => trigger)}
-            />
-            <button
-              onClick={() => changeTab('home')}
-              className="absolute top-6 left-6 z-[300] size-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md"
-            >
-              <span className="material-symbols-outlined">arrow_back</span>
-            </button>
-          </div>
-        )}
 
-        {currentTab === 'records' && (
-          <RecordsView
-            onNavigateToMap={() => changeTab('home')}
-            onBack={() => changeTab('home')}
-          />
-        )}
 
-        {currentTab === 'dailyRoute' && (
+        <div className={(currentTab === 'dailyRoute' || (currentTab === 'scanner' && lastTab === 'dailyRoute')) ? 'block h-full' : 'hidden'}>
           <DailyRouteView
             onNavigateToMap={() => changeTab('home')}
             onNavigateToScanner={() => changeTab('scanner', { scannerMode: 'camera' })}
             onBack={() => changeTab('home')}
           />
+        </div>
+
+        {/* Global Scanner Overlay - Absolute Transparency Layer */}
+        {currentTab === 'scanner' && (
+          <div className="fixed inset-0 z-[10000] pointer-events-none">
+            <ScannerView
+              onNavigateToDailyRoute={() => changeTab('dailyRoute')}
+              onBack={() => changeTab('home')}
+              initialViewMode={scannerInitialMode}
+              initialAction={scannerInitialAction}
+              onShowPaywall={() => setIsSubscriptionOpen(true)}
+            />
+          </div>
         )}
       </div>
 
@@ -193,7 +194,6 @@ export default function App() {
         onClose={() => setIsSideNavOpen(false)}
         onLogout={handleLogout}
         onNavigateToAdmin={() => setIsSettingsOpen(true)}
-        onNavigateToRecords={() => changeTab('records')}
         onAddStops={() => changeTab('scanner')}
         onNavigateToHome={() => changeTab('home')}
       />

@@ -23,11 +23,11 @@ export const ActiveRouteView = ({ routePoints, onClose, onArrived }: ActiveRoute
         <div className="fixed inset-0 z-[15000] flex flex-col pointer-events-none font-sans">
             {/* Top Navigation Card */}
             <div className="w-full px-6 pt-14 pb-6 pointer-events-auto">
-                <div className="bg-white rounded-[2rem] shadow-2xl border border-blue-50 p-6 flex items-center justify-between animate-in slide-in-from-top-10 duration-500">
+                <div className="bg-white rounded-[2rem] shadow-2xl border border-blue-50 p-6 flex items-center justify-between">
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                             <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Próxima Parada</span>
-                            <div className="size-1.5 rounded-full bg-blue-600 animate-pulse"></div>
+                            <div className="size-1.5 rounded-full bg-blue-600"></div>
                         </div>
                         <h2 className="text-[18px] font-black text-gray-900 leading-tight truncate">
                             {activeStop?.name || "Destino final"}
@@ -47,7 +47,7 @@ export const ActiveRouteView = ({ routePoints, onClose, onArrived }: ActiveRoute
 
                     <button
                         onClick={handleOpenNavigation}
-                        className="ml-4 size-16 bg-[#2970ff] rounded-2xl flex flex-col items-center justify-center text-white shadow-[0_8px_16px_rgba(41,112,255,0.3)] active:scale-95 transition-all"
+                        className="ml-4 size-16 bg-[#2970ff] rounded-2xl flex flex-col items-center justify-center text-white shadow-[0_8px_16px_rgba(41,112,255,0.3)] active:scale-95"
                     >
                         <span className="material-symbols-outlined !text-[28px] filled-icon">navigation</span>
                         <span className="text-[9px] font-black uppercase mt-1">Ir</span>
@@ -58,11 +58,11 @@ export const ActiveRouteView = ({ routePoints, onClose, onArrived }: ActiveRoute
             <div className="flex-1"></div>
 
             {/* Bottom Controls */}
-            <div className="w-full px-6 pb-12 pointer-events-auto flex flex-col gap-4 animate-in slide-in-from-bottom-10 duration-500">
+            <div className="w-full px-6 pb-12 pointer-events-auto flex flex-col gap-4">
                 {/* Progress Bar */}
                 <div className="bg-white/80 backdrop-blur-md rounded-full h-12 px-6 flex items-center justify-between border border-white shadow-lg overflow-hidden relative">
                     <div
-                        className="absolute left-0 top-0 bottom-0 bg-blue-50 transition-all duration-1000"
+                        className="absolute left-0 top-0 bottom-0 bg-blue-50"
                         style={{ width: `${routePoints.length > 0 ? (completedCount / routePoints.length) * 100 : 0}%` }}
                     ></div>
                     <span className="relative z-10 text-[12px] font-black text-gray-400 uppercase tracking-widest">
@@ -77,14 +77,14 @@ export const ActiveRouteView = ({ routePoints, onClose, onArrived }: ActiveRoute
                 <div className="flex gap-4">
                     <button
                         onClick={onClose}
-                        className="h-18 flex-1 bg-white rounded-[2rem] shadow-xl border border-gray-100 flex items-center justify-center text-gray-400 active:scale-95 transition-all"
+                        className="h-18 flex-1 bg-white rounded-[2rem] shadow-xl border border-gray-100 flex items-center justify-center text-gray-400 active:scale-95"
                     >
                         <span className="material-symbols-outlined !text-[32px]">close</span>
                     </button>
 
                     <button
                         onClick={() => onArrived(activeStop)}
-                        className="h-18 flex-[3] bg-[#2970ff] rounded-[2rem] shadow-[0_12px_24px_rgba(41,112,255,0.3)] flex items-center justify-center gap-3 text-white active:scale-95 transition-all"
+                        className="h-18 flex-[3] bg-[#2970ff] rounded-[2rem] shadow-[0_12px_24px_rgba(41,112,255,0.3)] flex items-center justify-center gap-3 text-white active:scale-95"
                     >
                         <span className="text-[18px] font-black tracking-tight tracking-wide">Cheguei ao Local</span>
                         <span className="material-symbols-outlined !text-[24px]">arrow_forward</span>

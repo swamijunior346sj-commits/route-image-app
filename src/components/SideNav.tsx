@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { clearAllUserData } from '../services/db';
+import { clearAllUserData, getRouteHistory, deleteRouteFromHistory, updateDailyRoute, updateActiveRoute, type RouteHistory } from '../services/db';
 import { ConfirmationModal } from './ConfirmationModal';
 
 interface SideNavProps {
@@ -7,12 +7,12 @@ interface SideNavProps {
     onClose: () => void;
     onLogout: () => void;
     onNavigateToAdmin: () => void;
-    onNavigateToRecords: () => void;
     onAddStops: () => void;
     onNavigateToHome: () => void;
 }
 
-export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNavigateToRecords, onAddStops, onNavigateToHome }: SideNavProps) => {
+export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onAddStops, onNavigateToHome }: SideNavProps) => {
+    const [history, setHistory] = useState<RouteHistory[]>([]);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [modalConfig, setModalConfig] = useState<{
         isOpen: boolean;
@@ -28,8 +28,11 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
         type: 'info'
     });
 
-    // Handle pressing escape to close
     useEffect(() => {
+        if (isOpen) {
+            loadHistory();
+        }
+
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape' && isOpen) onClose();
         };
@@ -48,6 +51,18 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
         };
     }, [isOpen, onClose, openMenuId]);
 
+    const loadHistory = async () => {
+        const data = await getRouteHistory();
+        setHistory(data);
+    };
+
+    const handleSelectRoute = async (route: RouteHistory) => {
+        await updateDailyRoute(route.points);
+        await updateActiveRoute(route.points);
+        onNavigateToHome();
+        onClose();
+    };
+
     const handleClearData = async () => {
         setModalConfig({
             isOpen: true,
@@ -61,14 +76,15 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
         });
     };
 
-    const handleDeleteRoute = (date: string) => {
+    const handleDeleteRoute = (id: string, date: string) => {
         setModalConfig({
             isOpen: true,
             title: "Remover Rota",
             message: `Tem certeza que deseja excluir a rota de ${date}? Esta ação não pode ser desfeita.`,
             type: 'danger',
-            onConfirm: () => {
-                alert(`Rota de ${date} excluída com sucesso!`);
+            onConfirm: async () => {
+                await deleteRouteFromHistory(id);
+                loadHistory();
                 setOpenMenuId(null);
             }
         });
@@ -76,12 +92,19 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
 
     if (!isOpen) return null;
 
-    const routes = [
-        { id: 'r1', section: 'Próximas rotas', items: [{ date: '07 de mar.', day: 'sábado' }] },
-        { id: 'r2', section: 'Hoje', items: [{ date: '06 de mar.', day: 'sexta-feira' }] },
-        { id: 'r3', section: 'Início desta semana', items: [{ date: '04 de mar.', day: 'quarta-feira' }, { date: '02 de mar.', day: 'segunda-feira' }] },
-        { id: 'r4', section: 'fev. de 2026', items: [{ date: '27 de fev.', day: 'sexta-feira' }, { date: '23 de fev.', day: 'segunda-feira' }, { date: '20 de fev.', day: 'sexta-feira Rota 4' }] },
-    ];
+    const formatDate = (ts: number) => {
+        const date = new Date(ts);
+        const day = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+        const weekday = date.toLocaleDateString('pt-BR', { weekday: 'long' });
+        return { day, weekday };
+    };
+
+    // Grouping logic for the visuals
+    const today = new Date().toDateString();
+    const groups = [
+        { title: 'Hoje', items: history.filter(h => new Date(h.timestamp).toDateString() === today) },
+        { title: 'Anteriores', items: history.filter(h => new Date(h.timestamp).toDateString() !== today) }
+    ].filter(g => g.items.length > 0);
 
     return (
         <div className="fixed inset-0 z-[12000] font-sans antialiased">
@@ -104,13 +127,6 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
                             </button>
                         </div>
                         <div className="flex items-center gap-3">
-                            <button
-                                onClick={onNavigateToRecords}
-                                className="flex items-center gap-2 bg-[#f0f4ff] px-4 py-2 rounded-full text-blue-600 active:scale-95 transition-all"
-                            >
-                                <span className="material-symbols-outlined !text-[20px]">location_on</span>
-                                <span className="text-[12px] font-bold uppercase tracking-tight">Endereços</span>
-                            </button>
                             <button
                                 onClick={onNavigateToAdmin}
                                 className="text-gray-400 hover:text-gray-600 p-1"
@@ -141,23 +157,32 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
 
                 {/* Routes List */}
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-8 no-scrollbar pb-32">
-                    {routes.map((group, idx) => (
+                    {groups.length === 0 && (
+                        <div className="py-10 text-center opacity-30">
+                            <span className="material-symbols-outlined !text-[40px] mb-2">history</span>
+                            <p className="text-[11px] font-black uppercase tracking-widest">Nenhuma rota salva</p>
+                        </div>
+                    )}
+
+                    {groups.map((group, idx) => (
                         <div key={idx} className="space-y-4">
-                            <h3 className="text-[11px] font-black text-gray-300 uppercase tracking-[0.15em]">{group.section}</h3>
+                            <h3 className="text-[11px] font-black text-gray-300 uppercase tracking-[0.15em]">{group.title}</h3>
                             <div className="space-y-3">
-                                {group.items.map((item, i) => {
-                                    const menuId = `${idx}-${i}`;
+                                {group.items.map((item) => {
+                                    const { day, weekday } = formatDate(item.timestamp);
+                                    const menuId = item.id;
                                     const isMenuOpen = openMenuId === menuId;
 
                                     return (
                                         <div
-                                            key={i}
-                                            onClick={() => { onNavigateToHome(); onClose(); }}
+                                            key={item.id}
+                                            onClick={() => handleSelectRoute(item)}
                                             className="flex items-center justify-between group cursor-pointer border-b border-gray-50 pb-3 last:border-0 relative active:opacity-70 transition-opacity"
                                         >
-                                            <div className="flex items-baseline gap-2">
-                                                <span className="text-[15px] font-bold text-blue-500/80">{item.date}</span>
-                                                <span className="text-[15px] font-bold text-gray-800">{item.day}</span>
+                                            <div className="flex items-baseline gap-2 overflow-hidden">
+                                                <span className="text-[15px] font-bold text-blue-500/80 whitespace-nowrap">{day}</span>
+                                                <span className="text-[15px] font-bold text-gray-800 capitalize truncate">{weekday}</span>
+                                                <span className="text-[10px] font-black text-gray-300 ml-1">{item.stats.delivered}/{item.stats.total}</span>
                                             </div>
 
                                             <div
@@ -179,7 +204,7 @@ export const SideNav = ({ isOpen, onClose, onLogout, onNavigateToAdmin, onNaviga
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                handleDeleteRoute(item.date);
+                                                                handleDeleteRoute(item.id, day);
                                                             }}
                                                             className="w-full flex items-center gap-3 px-3 py-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
                                                         >

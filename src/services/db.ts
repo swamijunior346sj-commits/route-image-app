@@ -56,6 +56,16 @@ export interface AppSettings {
     subscriptionPlan: 'free' | 'pro' | 'enterprise';
 }
 
+export interface RouteHistory {
+    id: string;
+    timestamp: number;
+    points: RoutePoint[];
+    stats: {
+        total: number;
+        delivered: number;
+    };
+}
+
 export const defaultSettings: AppSettings = {
     personalData: {
         name: '',
@@ -431,6 +441,37 @@ export const getSettings = async (): Promise<AppSettings> => {
         console.warn("❌ Erro ao buscar configurações no Supabase:", err);
         return defaultSettings;
     }
+};
+
+// --- ROUTE HISTORY ---
+
+const historyStore = localforage.createInstance({ name: 'RouteImageApp', storeName: 'routeHistory' });
+
+export const getRouteHistory = async (): Promise<RouteHistory[]> => {
+    const history: RouteHistory[] = [];
+    await historyStore.iterate((val: RouteHistory) => {
+        history.push(val);
+    });
+    return history.sort((a, b) => b.timestamp - a.timestamp);
+};
+
+export const saveRouteToHistory = async (points: RoutePoint[]): Promise<RouteHistory> => {
+    const id = crypto.randomUUID();
+    const historyItem: RouteHistory = {
+        id,
+        timestamp: Date.now(),
+        points,
+        stats: {
+            total: points.length,
+            delivered: points.filter(p => p.isDelivered).length
+        }
+    };
+    await historyStore.setItem(id, historyItem);
+    return historyItem;
+};
+
+export const deleteRouteFromHistory = async (id: string): Promise<void> => {
+    await historyStore.removeItem(id);
 };
 
 export const updateSettings = async (updates: Partial<AppSettings>): Promise<AppSettings> => {

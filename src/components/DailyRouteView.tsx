@@ -4,6 +4,7 @@ import {
     updateDailyRoute,
     updateActiveRoute,
     removeFromDailyRoute,
+    saveRouteToHistory,
     type RoutePoint
 } from '../services/db';
 import { EditAddressView } from './EditAddressView';
@@ -282,6 +283,7 @@ export const DailyRouteView = ({ onNavigateToMap, onNavigateToScanner, onBack }:
         if (points.length === 0) return;
         setLoading(true);
         try {
+            await saveRouteToHistory(points);
             await updateActiveRoute(points.map(p => ({ ...p, isRecent: false })));
             onNavigateToMap?.();
         } catch (err) {

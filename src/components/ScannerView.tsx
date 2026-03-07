@@ -12,12 +12,13 @@ import { analyzeAddressImage } from '../services/geminiService';
 
 interface ScannerProps {
     onNavigateToDailyRoute: () => void;
+    onBack?: () => void;
     initialViewMode?: 'camera' | 'confirm';
+    initialAction?: 'camera' | 'import' | null;
     onShowPaywall?: () => void;
-    onRegisterImport?: (trigger: () => void) => void;
 }
 
-export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera', onShowPaywall, onRegisterImport }: ScannerProps) => {
+export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 'camera', initialAction = null, onShowPaywall }: ScannerProps) => {
     // --- State ---
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState<'camera' | 'confirm'>(initialViewMode === 'confirm' ? 'confirm' : 'camera');
@@ -44,12 +45,18 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
     const SIMILARITY_THRESHOLD = 0.80;
 
     useEffect(() => {
-        if (onRegisterImport) {
-            onRegisterImport(() => {
+        if (initialAction === 'camera') {
+            const timer = setTimeout(() => {
+                fileInputRef.current?.click();
+            }, 50);
+            return () => clearTimeout(timer);
+        } else if (initialAction === 'import') {
+            const timer = setTimeout(() => {
                 importFileInputRef.current?.click();
-            });
+            }, 50);
+            return () => clearTimeout(timer);
         }
-    }, [onRegisterImport]);
+    }, [initialAction]);
 
     // --- Camera Logic ---
     const captureAndAnalyze = useCallback(async (image: HTMLImageElement): Promise<{ features: number[] } | null> => {
@@ -300,7 +307,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
 
     if (viewMode === 'confirm') {
         return (
-            <div className="fixed inset-0 z-[11000] bg-[#f8fafc] flex flex-col font-sans">
+            <div className="fixed inset-0 z-[11000] bg-[#f8fafc] flex flex-col font-sans pointer-events-auto">
                 {/* Header Premium */}
                 <header className="px-6 pt-12 pb-6 flex items-center justify-between">
                     <button
@@ -438,19 +445,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
     }
 
     return (
-        <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-8 text-center">
-            <div className="size-20 border-2 border-primary border-t-transparent rounded-full animate-spin mb-8"></div>
-            <h2 className="text-xl font-bold text-white mb-2">Preparando Scanner...</h2>
-            <p className="text-slate-500 text-[11px] font-black uppercase tracking-widest">Aguardando câmera do sistema</p>
-
-            <button
-                onClick={() => handleStartCamera('register')}
-                className="mt-12 px-8 py-4 bg-white/10 border border-white/10 rounded-2xl text-white font-bold uppercase tracking-widest text-xs"
-            >
-                Abrir Câmera Manualmente
-            </button>
-
-
+        <div className="fixed inset-0 pointer-events-none">
             <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleNativeCapture} className="hidden" />
             <input type="file" accept="image/*" ref={importFileInputRef} onChange={handleImportImage} className="hidden" />
         </div>
