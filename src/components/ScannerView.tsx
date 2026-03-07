@@ -36,9 +36,6 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
     const [notesInput, setNotesInput] = useState('');
     const [latInput, setLatInput] = useState('');
     const [lngInput, setLngInput] = useState('');
-    const [deadlineInput, setDeadlineInput] = useState('');
-
-    const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
     const [aiStatus, setAiStatus] = useState('');
     const [visualSignature, setVisualSignature] = useState('');
 
@@ -68,44 +65,6 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
         }
     }, []);
 
-    const runAiWithAnimation = async (imageSrc: string): Promise<void> => {
-        setIsAiAnalyzing(true);
-        setAiStatus('Iniciando leitura de IA...');
-
-        const statusMessages = [
-            'Detectando elementos da etiqueta...',
-            'Lendo endereço com IA...',
-            'Preenchendo campos automaticamente...',
-        ];
-        let msgIdx = 0;
-        const msgInterval = setInterval(() => {
-            msgIdx = (msgIdx + 1) % statusMessages.length;
-            setAiStatus(statusMessages[msgIdx]);
-        }, 600);
-
-        try {
-            // Hard timeout for AI - 10 seconds max
-            const aiPromise = analyzeAddressImage(imageSrc);
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI Timeout')), 10000));
-
-            const aiReading = await Promise.race([aiPromise, timeoutPromise]) as GeminiAddressExtraction | null;
-
-            if (aiReading) {
-                if (aiReading.address) setAddressInput(aiReading.address);
-                if (aiReading.neighborhood) setNeighborhoodInput(aiReading.neighborhood);
-                if (aiReading.city) setCityInput(aiReading.city);
-                if (aiReading.notes) setNotesInput(aiReading.notes);
-                if (aiReading.recipientName) setLocationNameInput(aiReading.recipientName);
-                if (aiReading.visualSignature) setVisualSignature(aiReading.visualSignature);
-            }
-        } catch (err) {
-            console.warn('AI analysis failed or timed out:', err);
-        } finally {
-            clearInterval(msgInterval);
-            setIsAiAnalyzing(false);
-            setAiStatus('');
-        }
-    };
 
     // Chamado pelo botão de digitar endereço no failsafe
     const handleManualEntry = () => {
@@ -161,8 +120,8 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
             console.log("📂 [Scanner] Lendo arquivo...");
             const base64 = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target?.result as string);
-                reader.onerror = (e) => reject(new Error("Erro ao ler arquivo"));
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
                 reader.readAsDataURL(file);
             });
 
@@ -317,7 +276,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                 isNaN(lng) ? null : lng,
                 image,
                 features,
-                { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput, deadline: deadlineInput, visualSignature: visualSignature }
+                { notes: notesInput, neighborhood: neighborhoodInput, city: cityInput, visualSignature: visualSignature }
             );
 
             await addToDailyRoute({
@@ -342,7 +301,6 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                 setNotesInput('');
                 setLatInput('');
                 setLngInput('');
-                setDeadlineInput('');
                 onNavigateToDailyRoute();
             }, 500);
         } catch (err) {
@@ -390,13 +348,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, onBack, initialViewMode = 
                                 <img src={capturedImage} className="w-full h-full object-cover" alt="Capture" />
                             )}
 
-                            {isAiAnalyzing && (
-                                <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center">
-                                    <div className="size-12 border-4 border-blue-50 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{aiStatus}</p>
-                                </div>
-                            )}
-                            {visualSignature && !isAiAnalyzing && (
+                            {visualSignature && (
                                 <div className="absolute top-4 right-4 bg-blue-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg animate-in zoom-in duration-300">
                                     <span className="material-symbols-outlined !text-[12px]">qr_code_2</span>
                                     <span className="text-[10px] font-black tracking-widest uppercase">ID: {visualSignature}</span>
