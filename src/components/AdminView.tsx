@@ -104,14 +104,8 @@ export const AdminView = ({ onBack }: AdminViewProps) => {
 
     if (isLoading) {
         return (
-            <div className="fixed inset-0 z-[300] bg-[#0F172A] flex flex-col items-center justify-center p-8">
-                <div className="relative size-32 flex items-center justify-center mb-8">
-                    <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-[ping_3s_infinite]" />
-                    <div className="absolute inset-0 border-t-4 border-primary rounded-full animate-spin" />
-                    <span className="material-symbols-outlined !text-[48px] text-primary">dashboard</span>
-                </div>
-                <h2 className="text-xl font-black italic uppercase tracking-[0.2em] text-white/90 mb-2">Protocolo Alpha</h2>
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em]">Autenticando Nível 5...</p>
+            <div className="w-full h-screen bg-[#f8fafc] flex items-center justify-center">
+                <div className="size-8 border-2 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
             </div>
         );
     }

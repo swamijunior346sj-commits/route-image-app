@@ -103,10 +103,8 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
     };
 
     if (!isLoaded) return (
-        <div className="w-full h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-12 text-center">
-            <div className="size-16 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-6"></div>
-            <h2 className="text-xl font-bold text-gray-800">Carregando Mapa...</h2>
-            <p className="text-gray-400 mt-2">Isso pode levar alguns segundos dependendo da conexão.</p>
+        <div className="w-full h-screen bg-[#f8fafc] flex items-center justify-center">
+            <div className="size-8 border-2 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
         </div>
     );
 

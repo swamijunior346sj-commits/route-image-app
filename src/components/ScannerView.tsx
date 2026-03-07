@@ -9,7 +9,6 @@ import {
 } from '../services/db';
 import { extractFeatures, cosineSimilarity } from '../services/imageProcessing';
 import { analyzeAddressImage } from '../services/geminiService';
-import { LoadingOverlay } from './LoadingOverlay';
 
 interface ScannerProps {
     onNavigateToDailyRoute: () => void;
@@ -21,7 +20,6 @@ interface ScannerProps {
 export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera', onShowPaywall, onRegisterImport }: ScannerProps) => {
     // --- State ---
     const [loading, setLoading] = useState(false);
-    const [isSendingToRoute, setIsSendingToRoute] = useState(false);
     const [viewMode, setViewMode] = useState<'camera' | 'confirm'>(initialViewMode === 'confirm' ? 'confirm' : 'camera');
     const [cameraMode, setCameraMode] = useState<'register' | 'scan'>('scan');
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,11 +165,9 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                                 isRecent: true
                             });
 
-                            setIsSendingToRoute(true);
                             setTimeout(() => {
-                                setIsSendingToRoute(false);
                                 onNavigateToDailyRoute();
-                            }, 2000);
+                            }, 500);
                         } else {
                             alert("Endereço não identificado no banco de dados.");
                         }
@@ -245,9 +241,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                 deadline: record.deadline
             });
 
-            setIsSendingToRoute(true);
             setTimeout(() => {
-                setIsSendingToRoute(false);
                 setCapturedImage(null);
                 setAddressInput('');
                 setLocationNameInput('');
@@ -259,7 +253,7 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                 setDeadlineInput('');
                 setViewMode('camera');
                 onNavigateToDailyRoute();
-            }, 2000);
+            }, 500);
         } catch (err) {
             console.error(err);
         } finally {
@@ -419,8 +413,6 @@ export const ScannerView = ({ onNavigateToDailyRoute, initialViewMode = 'camera'
                 Abrir Câmera Manualmente
             </button>
 
-            {isAiAnalyzing && <LoadingOverlay title="Protocolo RouteVision™" subtitle={aiStatus} />}
-            {isSendingToRoute && <LoadingOverlay title="Processando Rota" subtitle="Sincronizando com o motor de IA..." />}
 
             <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleNativeCapture} className="hidden" />
             <input type="file" accept="image/*" ref={importFileInputRef} onChange={handleImportImage} className="hidden" />

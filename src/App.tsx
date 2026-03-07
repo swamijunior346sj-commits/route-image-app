@@ -4,9 +4,9 @@ import { ScannerView } from './components/ScannerView';
 import { SideNav } from './components/SideNav';
 import { DailyRouteView } from './components/DailyRouteView';
 import { RecordsView } from './components/RecordsView';
+import { SettingsView } from './components/SettingsView';
 import { SubscriptionView } from './components/SubscriptionView';
 import { AdminView } from './components/AdminView';
-import { LoadingOverlay } from './components/LoadingOverlay';
 import { AuthView } from './components/AuthView';
 import { getSettings, defaultSettings, type AppSettings } from './services/db';
 import { supabase } from './services/supabase';
@@ -20,6 +20,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'home' | 'scanner' | 'records' | 'dailyRoute' | 'mapPicker'>('home');
   const [modelLoading, setModelLoading] = useState(true);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [scannerInitialMode, setScannerInitialMode] = useState<'camera' | 'confirm'>('camera');
@@ -107,7 +108,11 @@ export default function App() {
     alert(`Parabéns! Você agora é um usuário ${planId.toUpperCase()}!`);
   };
 
-  if (modelLoading) return <LoadingOverlay title="Carregando..." subtitle="Preparando interface premium" />;
+  if (modelLoading) return (
+    <div className="fixed inset-0 bg-white flex items-center justify-center">
+      <div className="size-8 border-2 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
+    </div>
+  );
   if (!isAuthenticated) return <AuthView onLogin={() => setIsAuthenticated(true)} />;
 
   return (
@@ -169,13 +174,24 @@ export default function App() {
         )}
       </div>
 
+      {isSettingsOpen && (
+        <SettingsView
+          onBack={() => setIsSettingsOpen(false)}
+          onNavigateToAdmin={() => {
+            setIsAdminOpen(true);
+            setIsSettingsOpen(false);
+          }}
+          onLogout={handleLogout}
+        />
+      )}
+
       {isAdminOpen && <AdminView onBack={() => setIsAdminOpen(false)} />}
 
       <SideNav
         isOpen={isSideNavOpen}
         onClose={() => setIsSideNavOpen(false)}
         onLogout={handleLogout}
-        onNavigateToAdmin={() => setIsAdminOpen(true)}
+        onNavigateToAdmin={() => setIsSettingsOpen(true)}
         onNavigateToRecords={() => changeTab('records')}
         onAddStops={() => changeTab('scanner')}
         onNavigateToHome={() => changeTab('home')}
