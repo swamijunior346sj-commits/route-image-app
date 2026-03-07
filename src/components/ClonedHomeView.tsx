@@ -162,68 +162,79 @@ export const ClonedHomeView = ({ googleMapsApiKey, onOpenMenu, onAddStops, onOpe
 
             {/* 4. Bottom Sheet Container */}
             <div
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
                 className={`absolute bottom-0 left-0 right-0 z-[150] bg-white flex flex-col px-6 pt-4 
                 ${!isDragging ? 'transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]' : ''}
-                ${isExpanded ? 'h-[95dvh] rounded-t-[32px] shadow-[0_-20px_80px_rgba(0,0,0,0.15)]' : 'h-auto rounded-t-[32px] shadow-[0_-20px_40px_rgba(0,0,0,0.1)] pb-12'}`}
+                ${isExpanded ? 'h-[95dvh] rounded-t-[32px] shadow-[0_-20px_80px_rgba(0,0,0,0.15)] shadow-black/20' : 'h-[180px] rounded-t-[32px] shadow-[0_-15px_40px_rgba(0,0,0,0.1)]'}`}
                 style={{
                     transform: isDragging ? `translateY(${dragY}px)` : 'translateY(0)',
                 }}
             >
-                {/* Drag Indicator */}
+                {/* Handle / Gesture Area - Only this part slides the sheet */}
                 <div
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 cursor-pointer hover:bg-gray-300 transition-colors"
-                />
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    className="flex flex-col select-none"
+                >
+                    {/* Drag Indicator */}
+                    <div
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 cursor-pointer hover:bg-gray-300 transition-colors"
+                    />
 
-                {/* Search Bar Row */}
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="flex-1 h-14 bg-[#f3f4f9] rounded-2xl flex items-center px-4 border border-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-                        <span className="material-symbols-outlined text-gray-400 mr-3">search</span>
-                        <Autocomplete className="flex-1" onLoad={setAutocomplete} onPlaceChanged={onPlaceChanged}>
-                            <input
-                                type="text"
-                                onClick={() => setIsExpanded(true)}
-                                placeholder={isExpanded ? "Digite para adicionar" : "Toque para adicionar"}
-                                className="w-full bg-transparent border-none p-0 text-gray-800 placeholder:text-gray-400 text-base outline-none focus:ring-0"
-                            />
-                        </Autocomplete>
-                        <div className="flex items-center gap-3 ml-2 border-l border-gray-200 pl-3">
-                            <span
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onAddStops();
-                                }}
-                                className="material-symbols-outlined text-gray-400 !text-[22px] cursor-pointer hover:text-blue-500"
-                            >
-                                barcode_scanner
-                            </span>
-                            <span
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onImport();
-                                }}
-                                className="material-symbols-outlined text-gray-400 !text-[22px] cursor-pointer hover:text-blue-500"
-                            >
-                                image
-                            </span>
+                    {/* Search Bar Row */}
+                    <div className="flex items-center gap-3 mb-8">
+                        <div className="flex-1 h-14 bg-[#f3f4f9] rounded-2xl flex items-center px-4 border border-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                            <span className="material-symbols-outlined text-gray-400 mr-3">search</span>
+                            <Autocomplete className="flex-1" onLoad={setAutocomplete} onPlaceChanged={onPlaceChanged}>
+                                <input
+                                    type="text"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsExpanded(true);
+                                    }}
+                                    placeholder={isExpanded ? "Digite para adicionar" : "Toque para adicionar"}
+                                    className="w-full bg-transparent border-none p-0 text-gray-800 placeholder:text-gray-400 text-base outline-none focus:ring-0"
+                                />
+                            </Autocomplete>
+                            <div className="flex items-center gap-3 ml-2 border-l border-gray-200 pl-3">
+                                <span
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAddStops();
+                                    }}
+                                    className="material-symbols-outlined text-gray-400 !text-[22px] cursor-pointer hover:text-blue-500"
+                                >
+                                    barcode_scanner
+                                </span>
+                                <span
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onImport();
+                                    }}
+                                    className="material-symbols-outlined text-gray-400 !text-[22px] cursor-pointer hover:text-blue-500"
+                                >
+                                    image
+                                </span>
+                            </div>
                         </div>
+                        {isExpanded && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsExpanded(false);
+                                }}
+                                className="size-10 flex items-center justify-center text-gray-400 hover:bg-gray-100 rounded-full transition-colors"
+                            >
+                                <span className="material-symbols-outlined !text-[24px]">close</span>
+                            </button>
+                        )}
+                        {!isExpanded && (
+                            <button className="size-10 flex items-center justify-center text-gray-400">
+                                <span className="material-symbols-outlined">more_vert</span>
+                            </button>
+                        )}
                     </div>
-                    {isExpanded && (
-                        <button
-                            onClick={() => setIsExpanded(false)}
-                            className="size-10 flex items-center justify-center text-gray-400 hover:bg-gray-100 rounded-full transition-colors"
-                        >
-                            <span className="material-symbols-outlined !text-[24px]">close</span>
-                        </button>
-                    )}
-                    {!isExpanded && (
-                        <button className="size-10 flex items-center justify-center text-gray-400">
-                            <span className="material-symbols-outlined">more_vert</span>
-                        </button>
-                    )}
                 </div>
 
                 {/* Content Area */}
